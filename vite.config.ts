@@ -15,6 +15,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       input: {
+        avatarMapping: page('diagnostics/avatar-mapping.html'),
         desktop: page('desktop/index.html'),
         handStability: page('diagnostics/no-broken-finger.html'),
         index: page('index.html'),

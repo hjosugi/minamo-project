@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minamo Avatar Mapping Diagnostics</title>
+  <link rel="stylesheet" href="../assets/minamo.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="wordmark">Minamo</span>
+    <span class="page-name">avatar mapping diagnostics</span>
+    <span class="spacer"></span>
+    <span class="status-chip" id="statusChip" data-state="open">ready</span>
+  </header>
+  <main class="layout">
+    <section class="panel">
+      <h2><span class="dot face"></span>VRM expressions</h2>
+      <pre id="vrmExpressions"></pre>
+    </section>
+    <section class="panel">
+      <h2><span class="dot pose"></span>VRM look-at / fingers</h2>
+      <pre id="vrmRig"></pre>
+    </section>
+    <section class="panel">
+      <h2><span class="dot hand"></span>Live2D parameters</h2>
+      <pre id="live2d"></pre>
+    </section>
+    <section class="panel">
+      <h2><span class="dot face"></span>Inochi2D parameters</h2>
+      <pre id="inochi2d"></pre>
+    </section>
+  </main>
+  <script type="module" src="./avatar-mapping.js"></script>
+</body>
+</html>

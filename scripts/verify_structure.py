@@ -60,6 +60,8 @@ REQUIRED = [
     'desktop/styles.css',
     'diagnostics/no-broken-finger.html',
     'diagnostics/no-broken-finger.js',
+    'diagnostics/avatar-mapping.html',
+    'diagnostics/avatar-mapping.js',
     'docs/benchmarks/hand-stability-report.md',
     'src-tauri/Cargo.toml',
     'src-tauri/Info.plist',
@@ -936,6 +938,43 @@ def validate_e2ee_contracts() -> None:
         add_error('docs/BACKLOG.md', 'KGM-037 acceptance criteria must remain checked after E2EE implementation')
 
 
+def validate_avatar_mapping_contracts() -> None:
+    vrm = read('src/adapters/vrm_mapper.ts')
+    live2d = read('src/adapters/live2d_mapper.ts')
+    inochi = read('src/adapters/inochi2d_mapper.ts')
+    tests = read('tests/adapters.test.ts')
+    diagnostic_html = read('diagnostics/avatar-mapping.html')
+    diagnostic_js = read('diagnostics/avatar-mapping.js')
+    vite = read('vite.config.ts')
+
+    for needle in ['mapKGM1ToVrmExpressions', 'mapKGM1ToVrmLookAt', 'mapKGM1HandsToVrmFingers', 'clampSigned']:
+        if needle not in vrm:
+            add_error('src/adapters/vrm_mapper.ts', f'missing VRM mapper contract: {needle}')
+    for needle in ['mapKGM1ToLive2D', 'mapKGM1HandsToLive2D', 'clamp01', 'clampSigned']:
+        if needle not in live2d:
+            add_error('src/adapters/live2d_mapper.ts', f'missing Live2D mapper contract: {needle}')
+    for needle in ['mapKGM1ToInochi2D', 'mouth_pucker', 'clamp01', 'clampSigned']:
+        if needle not in inochi:
+            add_error('src/adapters/inochi2d_mapper.ts', f'missing Inochi2D mapper contract: {needle}')
+    for needle in [
+        'maps VRM expressions, look-at, and fingers',
+        'maps Live2D and Inochi2D parameters',
+        'toBeLessThanOrEqual(1)',
+        'toBeGreaterThanOrEqual(-1)',
+        'toMatchInlineSnapshot',
+    ]:
+        if needle not in tests:
+            add_error('tests/adapters.test.ts', f'missing avatar mapper regression coverage: {needle}')
+    for needle in ['avatar mapping diagnostics', 'vrmExpressions', 'live2d', 'inochi2d']:
+        if needle not in diagnostic_html:
+            add_error('diagnostics/avatar-mapping.html', f'missing avatar mapping debug UI: {needle}')
+    for needle in ['mapKGM1ToVrmExpressions', 'mapKGM1ToLive2D', 'mapKGM1ToInochi2D', 'solveHandState']:
+        if needle not in diagnostic_js:
+            add_error('diagnostics/avatar-mapping.js', f'missing avatar mapping debug script contract: {needle}')
+    if "avatarMapping: page('diagnostics/avatar-mapping.html')" not in vite:
+        add_error('vite.config.ts', 'Vite build must include the avatar mapping diagnostic page')
+
+
 def validate_transport_contracts() -> None:
     transport = read('shared/transport.js')
     tests = read('tests/run-tests.mjs')
@@ -1213,6 +1252,7 @@ validate_face_selection_contracts()
 validate_body_hand_contracts()
 validate_protocol_v2_contracts()
 validate_e2ee_contracts()
+validate_avatar_mapping_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

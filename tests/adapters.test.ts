@@ -78,12 +78,28 @@ describe('avatar mapper snapshots', () => {
     const index = fingers.find((finger) => finger.finger === 'index');
     expect(index?.proximal).toBeGreaterThanOrEqual(index?.intermediate ?? 0);
     expect(index?.intermediate).toBeGreaterThanOrEqual(index?.distal ?? 0);
+    for (const output of mapKGM1ToVrmExpressions(frame)) {
+      expect(output.value).toBeGreaterThanOrEqual(0);
+      expect(output.value).toBeLessThanOrEqual(1);
+    }
+    for (const output of fingers) {
+      expect(output.proximal).toBeGreaterThanOrEqual(0);
+      expect(output.proximal).toBeLessThanOrEqual(1);
+      expect(output.spread).toBeGreaterThanOrEqual(-1);
+      expect(output.spread).toBeLessThanOrEqual(1);
+    }
   });
 
   it('maps Live2D and Inochi2D parameters', () => {
     const frame = frameWithFaceAndHand();
-    expect(mapKGM1ToLive2D(frame).map((p) => p.id)).toContain('ParamEyeBallX');
-    expect(mapKGM1HandsToLive2D(frame).some((p) => p.id === 'ParamHandRIndexCurl')).toBe(true);
-    expect(mapKGM1ToInochi2D(frame).map((p) => p.name)).toContain('mouth_pucker');
+    const live2d = [...mapKGM1ToLive2D(frame), ...mapKGM1HandsToLive2D(frame)];
+    const inochi = mapKGM1ToInochi2D(frame);
+    expect(live2d.map((p) => p.id)).toContain('ParamEyeBallX');
+    expect(live2d.some((p) => p.id === 'ParamHandRIndexCurl')).toBe(true);
+    expect(inochi.map((p) => p.name)).toContain('mouth_pucker');
+    for (const output of [...live2d.map((p) => p.value), ...inochi.map((p) => p.value)]) {
+      expect(output).toBeGreaterThanOrEqual(-1);
+      expect(output).toBeLessThanOrEqual(1);
+    }
   });
 });
