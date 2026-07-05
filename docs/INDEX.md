@@ -14,6 +14,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [PROTOCOL_V2_DRAFT.md](PROTOCOL_V2_DRAFT.md) — rich tracking schema draft (hands, drums, quality)
 - [ROADMAP.md](ROADMAP.md) — milestones M0–M6 + phase appendix
 - [GLOSSARY.md](GLOSSARY.md)
+- [../replay/](../replay/) — local KGM1 JSONL replay tool
 
 ## Backlogs and registration
 

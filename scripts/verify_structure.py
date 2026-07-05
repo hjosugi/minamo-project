@@ -22,6 +22,7 @@ REQUIRED = [
     'landing/index.html',
     'landing/app.js',
     'roadmap/index.html',
+    'replay/index.html',
     'src/core/types.ts',
     'src/core/oneEuroFilter.ts',
     'src/core/anatomy.ts',

@@ -90,6 +90,7 @@ LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).
 ```
 tracker/     webcam -> 52ch expressions + head pose -> KGM1 publisher
 viewer/      KGM1 receiver -> VRM / built-in bot rendering (OBS browser source)
+replay/      local KGM1 motion JSONL replay publisher
 shared/      canonical blendshapes, One Euro, KGM1 codec, transports (JS)
 src/         TypeScript core for the next-gen pipeline (types, filters,
              anatomy constraints, adapters for MediaPipe/VRM/Live2D/Inochi2D)

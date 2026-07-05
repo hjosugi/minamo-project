@@ -586,6 +586,7 @@ function recordFrame(frame) {
       weights: Array.from(frame.face.weights),
     } : null,
     pose: frame.pose ? { points: Array.from(frame.pose.points) } : null,
+    hands: frame.hands ?? null,
   }));
   if (state.recording.lines.length > 36_000) state.recording.lines.shift();
   $('btnDownloadRecording').disabled = state.recording.lines.length === 0;
