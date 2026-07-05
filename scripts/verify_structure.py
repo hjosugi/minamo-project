@@ -48,11 +48,13 @@ REQUIRED = [
     'shared/runtime.js',
     'shared/kgm1b.js',
     'shared/kgm2.js',
+    'shared/kgm-recording.js',
     'shared/e2ee.js',
     'shared/expression-mapping.js',
     'shared/layered-avatar.js',
     'shared/recording.js',
     'tests/fixtures/kgm1-synthetic.jsonl',
+    'tests/fixtures/kgm1-synthetic.kgm',
     'tests/fixtures/hand-golden-clip.json',
     'tsconfig.browser-js.json',
     'scripts/fetch-models.sh',
@@ -1421,6 +1423,41 @@ def validate_replay_validation_ui() -> None:
         add_error('replay/replay.js', 'replay playback must be disabled and explained when validation errors exist')
 
 
+def validate_kgm_recording_contracts() -> None:
+    kgm = read('shared/kgm-recording.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    viewer = read('viewer/viewer.js')
+    replay = read('replay/replay.js')
+    replay_html = read('replay/index.html')
+    tests = read('tests/run-tests.mjs')
+    dd = read('docs/design/DD-007-recording.md')
+
+    for needle in ['KGM_RECORDING_MAGIC', 'encodeKgmRecording', 'parseKgmRecording', 'tenMinuteKgmEstimateBytes', 'decodeFrame(frameBytes)']:
+        if needle not in kgm:
+            add_error('shared/kgm-recording.js', f'missing .kgm recording contract: {needle}')
+    for needle in ['encodeKgmRecording(state.recording.frames', 'KGM_RECORDING_MIME', 'btnDownloadJsonl', 'tenMinuteKgmEstimateBytes', 'recordFrame(frame, buf)']:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker .kgm recording contract: {needle}')
+    for needle in ['Record .kgm locally', 'Download .kgm', 'btnDownloadJsonl']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing tracker .kgm UI contract: {needle}')
+    for needle in ['parseKgmRecording(await file.arrayBuffer())', 'isKgmRecordingFile(file)', "endsWith('.kgm')"]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing viewer .kgm replay contract: {needle}')
+    for needle in ['parseKgmRecording', 'parseReplayFile', "endsWith('.kgm')"]:
+        if needle not in replay:
+            add_error('replay/replay.js', f'missing replay .kgm parser contract: {needle}')
+    if '.kgm,.jsonl,.ndjson' not in replay_html:
+        add_error('replay/index.html', 'replay file input must accept .kgm recordings')
+    for needle in ['encodeKgmRecording', 'parseKgmRecording', 'kgm1-synthetic.kgm', 'tenMinuteKgmEstimateBytes(60, 76) < 5_000_000']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing .kgm regression coverage: {needle}')
+    for needle in ['records both the compact `.kgm` container', 'viewer and replay page can load dropped `.kgm`']:
+        if needle not in dd:
+            add_error('docs/design/DD-007-recording.md', f'missing .kgm implementation documentation: {needle}')
+
+
 def validate_runtime_warning_taxonomy() -> None:
     runtime = read('shared/runtime.js')
     required_codes = [
@@ -1471,6 +1508,7 @@ validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()
+validate_kgm_recording_contracts()
 validate_runtime_warning_taxonomy()
 
 if errors:

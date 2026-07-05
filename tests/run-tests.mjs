@@ -18,6 +18,12 @@ import {
   encodeKgm1bPacket,
 } from '../shared/kgm1b.js';
 import {
+  KGM_RECORDING_MAGIC,
+  encodeKgmRecording,
+  parseKgmRecording,
+  tenMinuteKgmEstimateBytes,
+} from '../shared/kgm-recording.js';
+import {
   EXPRESSION_MAPPING_SCHEMA,
   createDefaultVrmExpressionMap,
   createPerfectSyncExpressionMap,
@@ -983,6 +989,23 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const fixture = parseRecordingJsonl(fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.jsonl'), 'utf8'));
   assert.equal(fixture.errors.length, 0);
   assert.equal(fixture.frames.length, 1);
+  const kgmBytes = encodeKgmRecording(fixture.frames.map((record) => ({
+    t: record.t,
+    bytes: new Uint8Array(encodeFrame({
+      t: Math.round(record.t),
+      seq: record.seq,
+      face: record.face,
+      pose: record.pose,
+      hands: record.hands,
+    })),
+  })), { source: fixture.records[0] });
+  assert.equal(String.fromCharCode(...kgmBytes.slice(0, 4)), KGM_RECORDING_MAGIC);
+  const parsedKgm = parseKgmRecording(kgmBytes);
+  assert.equal(parsedKgm.frames.length, 1);
+  assert.equal(parsedKgm.frames[0].seq, 0);
+  const fixtureKgm = parseKgmRecording(fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.kgm')));
+  assert.equal(fixtureKgm.frames.length, 1);
+  assert.ok(tenMinuteKgmEstimateBytes(60, 76) < 5_000_000, '10-minute .kgm session remains under 5 MB');
   for (const code of ['LOW_LIGHT', 'MOTION_BLUR', 'DROPPED_FRAMES', 'OCCLUSION', 'NON_FINITE_SIGNAL', 'SIGNAL_CLAMPED']) {
     assert.ok(Object.values(WARNING_TAXONOMY).includes(code), `warning taxonomy exposes ${code}`);
   }

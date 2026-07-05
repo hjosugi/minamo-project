@@ -2,10 +2,8 @@
 
 Status: design. Backlog: KGM-047, KGM-048.
 
-Implementation note: the current browser MVP records newline-delimited
-`minamo.kgm1.motion-jsonl.v1` frames and the viewer can replay dropped
-`.jsonl` / `.ndjson` files. The binary `.kgm` container below remains the
-target format for compact archives, fixtures, and VRMA export.
+Implementation note: the browser records both the compact `.kgm` container and
+newline-delimited `minamo.kgm1.motion-jsonl.v1` debug files. The viewer and replay page can load dropped `.kgm`, `.jsonl`, and `.ndjson` files.
 
 ## Motivation
 

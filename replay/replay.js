@@ -1,4 +1,5 @@
 import { encodeFrame } from '../shared/codec.js';
+import { parseKgmRecording } from '../shared/kgm-recording.js';
 import { parseRecordingJsonl } from '../shared/recording.js';
 
 /** @param {string} id @returns {any} */
@@ -19,7 +20,7 @@ $('fileReplay').addEventListener('change', async (event) => {
   playing = false;
   if (timer) clearTimeout(timer);
   timer = null;
-  const parsed = parseRecordingJsonl(await file.text());
+  const parsed = await parseReplayFile(file);
   frames = parsed.frames.sort((a, b) => a.t - b.t);
   validationErrors = parsed.errors;
   cursor = 0;
@@ -84,6 +85,18 @@ function pause(label) {
 
 function canReplay() {
   return frames.length > 0 && validationErrors.length === 0;
+}
+
+async function parseReplayFile(file) {
+  if (file.name.toLowerCase().endsWith('.kgm')) {
+    try {
+      return { frames: parseKgmRecording(await file.arrayBuffer()).frames, errors: [] };
+    } catch (error) {
+      return { frames: [], errors: [{ line: 1, errors: [error.message] }] };
+    }
+  }
+  const parsed = parseRecordingJsonl(await file.text());
+  return { frames: parsed.frames, errors: parsed.errors };
 }
 
 function renderReplayValidation(errors, frameCount) {

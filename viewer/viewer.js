@@ -20,6 +20,7 @@ import {
   parseExpressionMap,
   serializeExpressionMap,
 } from '../shared/expression-mapping.js';
+import { parseKgmRecording } from '../shared/kgm-recording.js';
 import {
   createLayeredAvatarManifest,
   classifyLayerName,
@@ -924,6 +925,10 @@ function isMotionJsonlFile(file) {
   return name.endsWith('.jsonl') || name.endsWith('.ndjson');
 }
 
+function isKgmRecordingFile(file) {
+  return file.name.toLowerCase().endsWith('.kgm');
+}
+
 async function loadLayeredFiles(files) {
   const list = Array.from(files || []);
   const psd = list.find((file) => file.name.toLowerCase().endsWith('.psd'));
@@ -942,7 +947,9 @@ async function loadLayeredFiles(files) {
 
 async function loadReplayFile(file) {
   try {
-    const frames = parseMotionJsonl(await file.text());
+    const frames = isKgmRecordingFile(file)
+      ? parseKgmRecording(await file.arrayBuffer()).frames
+      : parseMotionJsonl(await file.text());
     startReplay(frames, file.name);
   } catch (err) {
     chip.textContent = `replay error: ${err.message}`;
@@ -1003,7 +1010,7 @@ document.addEventListener('drop', async (e) => {
   const files = Array.from(e.dataTransfer.files);
   if (file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
   else if (files.some((entry) => entry.name.toLowerCase().endsWith('.psd')) || files.some((entry) => entry.name.toLowerCase().endsWith('.png'))) await loadLayeredFiles(files);
-  else if (isMotionJsonlFile(file)) await loadReplayFile(file);
+  else if (isMotionJsonlFile(file) || isKgmRecordingFile(file)) await loadReplayFile(file);
 });
 
 // ?vrm=<url> loads a model directly (must be CORS-accessible)

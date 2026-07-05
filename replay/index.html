@@ -16,7 +16,7 @@
 
   <main class="layout">
     <section class="panel">
-      <h2><span class="dot pose"></span>KGM1 motion JSONL</h2>
+      <h2><span class="dot pose"></span>KGM motion recording</h2>
       <div class="form-grid">
         <div class="field">
           <span>room</span>
@@ -28,7 +28,7 @@
         </div>
         <div class="field wide">
           <span>recording</span>
-          <input id="fileReplay" type="file" accept=".jsonl,application/x-ndjson,text/plain" />
+          <input id="fileReplay" type="file" accept=".kgm,.jsonl,.ndjson,application/x-ndjson,text/plain" />
         </div>
       </div>
       <div class="controls">
@@ -46,7 +46,7 @@
         <strong id="replayValidationSummary">No recording loaded.</strong>
         <ul class="error-list" id="replayErrors"></ul>
       </div>
-      <p class="note">Replays tracker JSONL locally through BroadcastChannel. No upload is performed.</p>
+      <p class="note">Replays tracker .kgm or JSONL locally through BroadcastChannel. No upload is performed.</p>
     </section>
   </main>
 

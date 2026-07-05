@@ -67,6 +67,7 @@ import {
   resolveGaze,
 } from '../shared/runtime.js';
 import { createMotionRecord, createRecordingMetadata } from '../shared/recording.js';
+import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } from '../shared/kgm-recording.js';
 
 const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -152,7 +153,7 @@ const state = {
   quality: { state: 'idle', score: 0, reasons: [], warnings: [] },
   lastFps: 0,
   qualityCanvas: document.createElement('canvas'),
-  recording: { enabled: false, lines: [] },
+  recording: { enabled: false, lines: [], frames: [], metadata: null },
   calibrationSession: null,
   gazeCalibrationSession: null,
   handCalibrationSession: null,
@@ -642,7 +643,7 @@ function loop() {
       const buf = encodeFrame(frame);
       state.lastPacketBytes = buf.byteLength;
       state.transport.send(buf);
-      recordFrame(frame);
+      recordFrame(frame, buf);
     }
 
     drawOverlay(faceRes, poseRes, handRes, faceIndex);
@@ -891,14 +892,17 @@ function sampleLuma() {
   }
 }
 
-function recordFrame(frame) {
+function recordFrame(frame, encodedBytes) {
   if (!state.recording.enabled) return;
   state.recording.lines.push(JSON.stringify(createMotionRecord(frame, {
     quality: state.quality,
     warnings: state.warnings,
   })));
+  state.recording.frames.push({ t: frame.t, bytes: new Uint8Array(encodedBytes) });
   if (state.recording.lines.length > 36_000) state.recording.lines.shift();
+  if (state.recording.frames.length > 36_000) state.recording.frames.shift();
   $('btnDownloadRecording').disabled = state.recording.lines.length === 0;
+  $('btnDownloadJsonl').disabled = state.recording.lines.length === 0;
 }
 
 function updateStats(nowMs) {
@@ -1426,6 +1430,15 @@ function downloadText(filename, content, type = 'application/json') {
   setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
+function downloadBytes(filename, bytes, type = 'application/octet-stream') {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
 function cameraErrorMessage(e) {
   if (e?.name === 'NotAllowedError') return 'Camera permission was denied. Allow camera access in the browser settings and try again.';
   if (e?.name === 'NotFoundError') return 'No camera device was found. Connect a camera and press refresh/start again.';
@@ -1652,17 +1665,29 @@ $('btnDisconnect').addEventListener('click', async () => {
 $('chkRecord').addEventListener('change', (e) => {
   state.recording.enabled = e.target.checked;
   if (state.recording.enabled) {
-    state.recording.lines = [JSON.stringify(createRecordingMetadata({
+    state.recording.metadata = createRecordingMetadata({
       version: '0.1.0',
       modelSource: resolvedAssets?.source || 'not loaded',
       settings,
       calibration: profile,
-    }))];
+    });
+    state.recording.lines = [JSON.stringify(state.recording.metadata)];
+    state.recording.frames = [];
   }
   $('btnDownloadRecording').disabled = state.recording.lines.length === 0;
+  $('btnDownloadJsonl').disabled = state.recording.lines.length === 0;
 });
 
 $('btnDownloadRecording').addEventListener('click', () => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const bytes = encodeKgmRecording(state.recording.frames, {
+    source: state.recording.metadata,
+    estimatedTenMinuteBytes: tenMinuteKgmEstimateBytes(Number(settings.fps) || 60),
+  });
+  downloadBytes(`minamo-motion-${stamp}.kgm`, bytes, KGM_RECORDING_MIME);
+});
+
+$('btnDownloadJsonl').addEventListener('click', () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   downloadText(`minamo-motion-${stamp}.jsonl`, `${state.recording.lines.join('\n')}\n`, 'application/x-ndjson');
 });
