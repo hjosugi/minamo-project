@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Compute finger curl for thumb/index/middle/ring/pinky"
-labels: ["type:feature", "tracking:hand", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

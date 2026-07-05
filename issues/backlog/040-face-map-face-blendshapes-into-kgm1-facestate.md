@@ -1,6 +1,6 @@
 ---
 title: "[Face] Map face blendshapes into KGM1 FaceState"
-labels: ["type:feature", "tracking:face", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

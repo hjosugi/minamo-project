@@ -1,6 +1,6 @@
 ---
 title: "[Transport] Add reliable keyframe stream design"
-labels: ["type:feature", "area:transport", "protocol:kgm1", "priority:P2"]
+labels: ["type/feature", "area/transport", "protocol/kgm1", "priority/P2"]
 milestone: "MVP-3"
 ---
 

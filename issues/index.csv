@@ -1,143 +1,143 @@
 id,file,title,labels,milestone
-1,001-foundation-define-kgm1-frame-loop-and-source-timestamps.md,[Foundation] Define KGM1 frame loop and source timestamps,"type:feature,priority:P0,area:core,protocol:kgm1",MVP-0
-2,002-foundation-build-webcam-capture-controller-with-camera-selection.md,[Foundation] Build webcam capture controller with camera selection,"type:feature,priority:P0,area:capture",MVP-0
-3,003-foundation-add-debug-overlay-for-landmarks-confidence-fps-warnings.md,"[Foundation] Add debug overlay for landmarks, confidence, FPS, warnings","type:feature,priority:P0,area:ui,area:debug",MVP-0
-4,004-foundation-add-local-only-privacy-mode-and-camera-permission-copy.md,[Foundation] Add local-only privacy mode and camera permission copy,"type:feature,priority:P0,area:privacy,area:ui",MVP-0
-5,005-foundation-add-kgm1-json-encoder-decoder-validation-tests.md,[Foundation] Add KGM1 JSON encoder/decoder validation tests,"type:test,priority:P0,protocol:kgm1,area:core",MVP-0
-6,006-foundation-add-tracking-warning-taxonomy-and-ui-panel.md,[Foundation] Add tracking warning taxonomy and UI panel,"type:feature,priority:P0,area:quality,area:ui",MVP-0
-7,007-foundation-add-calibration-profile-schema.md,[Foundation] Add calibration profile schema,"type:feature,priority:P1,area:calibration",MVP-1
-8,008-foundation-add-benchmark-recording-toggle-without-upload.md,[Foundation] Add benchmark recording toggle without upload,"type:feature,priority:P1,area:benchmark,area:privacy",MVP-1
-9,009-hand-integrate-mediapipe-hand-landmarker-adapter.md,[Hand] Integrate MediaPipe Hand Landmarker adapter,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-10,010-hand-convert-21-hand-landmarks-into-palm-basis.md,[Hand] Convert 21 hand landmarks into palm basis,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-11,011-hand-derive-per-finger-mcp-pip-dip-tip-chains.md,[Hand] Derive per-finger MCP/PIP/DIP/Tip chains,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-12,012-hand-compute-finger-curl-for-thumb-index-middle-ring-pinky.md,[Hand] Compute finger curl for thumb/index/middle/ring/pinky,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-13,013-hand-compute-finger-spread-and-abduction-values.md,[Hand] Compute finger spread and abduction values,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-14,014-hand-compute-thumb-index-pinch-and-per-finger-pinch-distance.md,[Hand] Compute thumb-index pinch and per-finger pinch distance,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-15,015-hand-compute-fingertip-velocity-with-timestamp-delta.md,[Hand] Compute fingertip velocity with timestamp delta,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-16,016-hand-add-confidence-decay-for-partially-occluded-fingers.md,[Hand] Add confidence decay for partially occluded fingers,"type:feature,tracking:hand,priority:P0,area:tracking",MVP-0
-17,017-hand-add-hand-left-right-swap-detector.md,[Hand] Add hand left/right swap detector,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-18,018-hand-add-finger-contact-state-with-hysteresis.md,[Hand] Add finger contact state with hysteresis,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-19,019-hand-add-drum-grip-gesture-detection.md,[Hand] Add drum grip gesture detection,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-20,020-hand-add-finger-counting-gesture-states.md,[Hand] Add finger counting gesture states,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-21,021-hand-add-hand-calibration-sequence.md,[Hand] Add hand calibration sequence,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-22,022-hand-add-low-light-warning-for-hands.md,[Hand] Add low-light warning for hands,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-23,023-hand-add-fast-motion-blur-warning-for-hands.md,[Hand] Add fast-motion blur warning for hands,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-24,024-hand-add-hand-outside-frame-recovery.md,[Hand] Add hand outside frame recovery,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-25,025-hand-add-per-finger-debug-graph.md,[Hand] Add per-finger debug graph,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-26,026-hand-add-golden-clip-benchmark-for-finger-jitter.md,[Hand] Add golden clip benchmark for finger jitter,"type:feature,tracking:hand,priority:P1,area:tracking",MVP-1
-27,027-stability-implement-one-euro-filter-presets-by-signal-type.md,[Stability] Implement One Euro Filter presets by signal type,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-28,028-stability-implement-finite-number-guard-for-every-tracking-frame.md,[Stability] Implement finite-number guard for every tracking frame,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-29,029-stability-implement-temporal-outlier-rejection-for-landmarks.md,[Stability] Implement temporal outlier rejection for landmarks,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-30,030-stability-implement-velocity-clamp-for-fingers-and-mouth.md,[Stability] Implement velocity clamp for fingers and mouth,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-31,031-stability-implement-acceleration-and-jerk-clamp-for-high-risk-signals.md,[Stability] Implement acceleration and jerk clamp for high-risk signals,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-32,032-stability-implement-anatomy-clamp-for-all-fingers.md,[Stability] Implement anatomy clamp for all fingers,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-33,033-stability-implement-quaternion-shortest-path-interpolation.md,[Stability] Implement quaternion shortest-path interpolation,"type:feature,tracking:stability,priority:P0,area:quality",MVP-0
-34,034-stability-implement-occlusion-state-machine.md,[Stability] Implement occlusion state machine,"type:feature,tracking:stability,priority:P1,area:quality",MVP-1
-35,035-stability-implement-confidence-weighted-blending-after-reacquisition.md,[Stability] Implement confidence-weighted blending after reacquisition,"type:feature,tracking:stability,priority:P1,area:quality",MVP-1
-36,036-stability-implement-avatar-rig-parameter-clamp.md,[Stability] Implement avatar rig parameter clamp,"type:feature,tracking:stability,priority:P1,area:quality",MVP-1
-37,037-stability-add-no-broken-finger-visual-test-page.md,[Stability] Add no-broken-finger visual test page,"type:feature,tracking:stability,priority:P1,area:quality",MVP-1
-38,038-stability-add-stability-regression-benchmark-report.md,[Stability] Add stability regression benchmark report,"type:feature,tracking:stability,priority:P1,area:quality",MVP-1
-39,039-face-integrate-mediapipe-face-landmarker-adapter.md,[Face] Integrate MediaPipe Face Landmarker adapter,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-40,040-face-map-face-blendshapes-into-kgm1-facestate.md,[Face] Map face blendshapes into KGM1 FaceState,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-41,041-face-stabilize-left-right-blink-with-hysteresis.md,[Face] Stabilize left/right blink with hysteresis,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-42,042-face-add-gaze-vector-smoothing-and-clamp.md,[Face] Add gaze vector smoothing and clamp,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-43,043-face-add-iris-center-support-when-available.md,[Face] Add iris center support when available,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-44,044-face-add-mouth-open-wide-pucker-decomposition.md,[Face] Add mouth open/wide/pucker decomposition,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-45,045-face-add-a-i-u-e-o-vowel-like-mouth-state.md,[Face] Add A/I/U/E/O vowel-like mouth state,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-46,046-face-add-smile-and-frown-left-right-separation.md,[Face] Add smile and frown left/right separation,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-47,047-face-add-head-yaw-compensation-for-expression-leakage.md,[Face] Add head-yaw compensation for expression leakage,"type:feature,tracking:face,priority:P0,area:tracking",MVP-0
-48,048-face-add-audio-assisted-mouth-smoothing-option.md,[Face] Add audio-assisted mouth smoothing option,"type:feature,tracking:face,priority:P1,area:tracking",MVP-1
-49,049-face-add-glasses-glare-warning.md,[Face] Add glasses glare warning,"type:feature,tracking:face,priority:P1,area:tracking",MVP-1
-50,050-face-add-face-calibration-sequence.md,[Face] Add face calibration sequence,"type:feature,tracking:face,priority:P1,area:tracking",MVP-1
-51,051-face-add-face-expression-debug-graph.md,[Face] Add face expression debug graph,"type:feature,tracking:face,priority:P1,area:tracking",MVP-1
-52,052-face-add-mouth-flicker-benchmark.md,[Face] Add mouth flicker benchmark,"type:feature,tracking:face,priority:P1,area:tracking",MVP-1
-53,053-face-add-blink-false-positive-benchmark.md,[Face] Add blink false-positive benchmark,"type:feature,tracking:face,priority:P1,area:tracking",MVP-1
-54,054-drum-add-drummer-mode-setup-screen.md,[Drum] Add drummer mode setup screen,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-55,055-drum-add-drum-kit-zone-calibration-ui.md,[Drum] Add drum kit zone calibration UI,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-56,056-drum-add-stick-detector-adapter-interface.md,[Drum] Add stick detector adapter interface,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-57,057-drum-add-stick-tip-trajectory-estimator.md,[Drum] Add stick tip trajectory estimator,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-58,058-drum-add-visual-drum-hit-candidate-detector.md,[Drum] Add visual drum hit candidate detector,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-59,059-drum-add-audio-onset-detector-for-hit-alignment.md,[Drum] Add audio onset detector for hit alignment,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-60,060-drum-fuse-visual-hit-and-audio-onset-into-drumhitevent.md,[Drum] Fuse visual hit and audio onset into DrumHitEvent,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-61,061-drum-add-per-zone-cooldown-to-prevent-false-rolls.md,[Drum] Add per-zone cooldown to prevent false rolls,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-62,062-drum-add-hand-assignment-for-drum-hits.md,[Drum] Add hand assignment for drum hits,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-63,063-drum-add-hit-velocity-estimation.md,[Drum] Add hit velocity estimation,"type:feature,tracking:drum,priority:P1,area:tracking",MVP-2
-64,064-drum-add-hi-hat-pedal-inference-design.md,[Drum] Add hi-hat pedal inference design,"type:feature,tracking:drum,priority:P2,area:tracking",MVP-2
-65,065-drum-add-kick-pedal-inference-design.md,[Drum] Add kick pedal inference design,"type:feature,tracking:drum,priority:P2,area:tracking",MVP-2
-66,066-drum-add-drum-overlay-for-obs.md,[Drum] Add drum overlay for OBS,"type:feature,tracking:drum,priority:P2,area:tracking",MVP-2
-67,067-drum-add-drum-benchmark-clips-and-metrics.md,[Drum] Add drum benchmark clips and metrics,"type:feature,tracking:drum,priority:P2,area:tracking",MVP-2
-68,068-drum-add-yolo-stick-drum-training-data-schema.md,[Drum] Add YOLO stick/drum training data schema,"type:feature,tracking:drum,priority:P2,area:tracking",MVP-2
-69,069-drum-add-fast-roll-stress-test.md,[Drum] Add fast roll stress test,"type:feature,tracking:drum,priority:P2,area:tracking",MVP-2
-70,070-avatar-implement-vrm-expression-mapper.md,[Avatar] Implement VRM expression mapper,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-71,071-avatar-implement-vrm-finger-curl-mapper.md,[Avatar] Implement VRM finger curl mapper,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-72,072-avatar-implement-vrm-look-at-mapper.md,[Avatar] Implement VRM look-at mapper,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-73,073-avatar-implement-live2d-basic-parameter-mapper.md,[Avatar] Implement Live2D basic parameter mapper,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-74,074-avatar-implement-live2d-custom-hand-parameter-mapping.md,[Avatar] Implement Live2D custom hand parameter mapping,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-75,075-avatar-implement-inochi2d-inox2d-parameter-mapping-design.md,[Avatar] Implement Inochi2D/Inox2D parameter mapping design,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-76,076-avatar-add-avatar-preset-profile-format.md,[Avatar] Add avatar preset profile format,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-77,077-avatar-add-obs-transparent-background-mode.md,[Avatar] Add OBS transparent background mode,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-78,078-avatar-add-avatar-rig-limit-editor.md,[Avatar] Add avatar rig limit editor,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-79,079-avatar-add-mapping-regression-snapshot-tests.md,[Avatar] Add mapping regression snapshot tests,"type:feature,area:avatar,priority:P1,integration:avatar",MVP-1
-80,080-transport-implement-kgm1b-binary-header-in-typescript.md,[Transport] Implement KGM1B binary header in TypeScript,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-81,081-transport-implement-rust-kgm1b-payload-framing.md,[Transport] Implement Rust KGM1B payload framing,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-82,082-transport-add-webtransport-sender-prototype.md,[Transport] Add WebTransport sender prototype,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-83,083-transport-add-webtransport-receiver-prototype.md,[Transport] Add WebTransport receiver prototype,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-84,084-transport-add-websocket-json-fallback.md,[Transport] Add WebSocket JSON fallback,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-85,085-transport-add-reliable-keyframe-stream-design.md,[Transport] Add reliable keyframe stream design,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-86,086-transport-add-datagram-delta-frame-design.md,[Transport] Add datagram delta frame design,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-87,087-transport-add-network-congestion-policy.md,[Transport] Add network congestion policy,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-88,088-transport-add-remote-viewer-page.md,[Transport] Add remote viewer page,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-89,089-transport-add-session-token-and-origin-checks.md,[Transport] Add session token and origin checks,"type:feature,area:transport,protocol:kgm1,priority:P2",MVP-3
-90,090-ml-evaluate-yolo-stick-detector-baseline.md,[ML] Evaluate YOLO stick detector baseline,"type:research,area:ml,priority:P2",MVP-4
-91,091-ml-create-stick-and-drum-dataset-labeling-guide.md,[ML] Create stick and drum dataset labeling guide,"type:research,area:ml,priority:P2",MVP-4
-92,092-ml-add-onnx-runtime-web-adapter-interface.md,[ML] Add ONNX Runtime Web adapter interface,"type:feature,area:ml,priority:P2",MVP-4
-93,093-ml-add-webgpu-backend-capability-detection.md,[ML] Add WebGPU backend capability detection,"type:feature,area:ml,priority:P2",MVP-4
-94,094-ml-add-wasm-fallback-for-custom-models.md,[ML] Add WASM fallback for custom models,"type:feature,area:ml,priority:P2",MVP-4
-95,095-ml-add-model-hash-verification.md,[ML] Add model hash verification,"type:feature,area:ml,priority:P2",MVP-4
-96,096-ml-add-low-light-quality-classifier-design.md,[ML] Add low-light quality classifier design,"type:feature,area:ml,priority:P2",MVP-4
-97,097-ml-add-motion-blur-detector-design.md,[ML] Add motion blur detector design,"type:feature,area:ml,priority:P2",MVP-4
-98,098-ml-add-hand-object-contact-classifier-design.md,[ML] Add hand-object contact classifier design,"type:feature,area:ml,priority:P2",MVP-4
-99,099-ml-add-model-benchmark-harness.md,[ML] Add model benchmark harness,"type:feature,area:ml,priority:P2",MVP-4
-100,100-ml-add-export-path-for-onnx-and-quantized-models.md,[ML] Add export path for ONNX and quantized models,"type:feature,area:ml,priority:P2",MVP-4
-101,101-ml-add-privacy-preserving-dataset-capture-ui.md,[ML] Add privacy-preserving dataset capture UI,"type:feature,area:ml,priority:P2",MVP-4
-102,102-compression-add-glb-inspection-script-design.md,[Compression] Add GLB inspection script design,"type:docs,area:compression,priority:P2",MVP-3
-103,103-compression-add-gltf-transform-optimization-guide.md,[Compression] Add glTF Transform optimization guide,"type:docs,area:compression,priority:P2",MVP-3
-104,104-compression-add-ktx2-texture-compression-guide.md,[Compression] Add KTX2 texture compression guide,"type:docs,area:compression,priority:P2",MVP-3
-105,105-compression-add-meshopt-vs-draco-decision-document.md,[Compression] Add meshopt vs Draco decision document,"type:docs,area:compression,priority:P2",MVP-3
-106,106-compression-add-2d-texture-atlas-compression-guide.md,[Compression] Add 2D texture atlas compression guide,"type:docs,area:compression,priority:P2",MVP-3
-107,107-compression-add-motion-delta-quantization-design.md,[Compression] Add motion delta quantization design,"type:docs,area:compression,priority:P2",MVP-3
-108,108-compression-add-avatar-visual-regression-checklist.md,[Compression] Add avatar visual regression checklist,"type:docs,area:compression,priority:P2",MVP-3
-109,109-compression-add-asset-license-checklist.md,[Compression] Add asset license checklist,"type:docs,area:compression,priority:P2",MVP-3
-110,110-product-add-first-run-onboarding-flow.md,[Product] Add first-run onboarding flow,"type:docs,area:product,priority:P1",MVP-1
-111,111-product-add-streamer-obs-setup-guide.md,[Product] Add streamer OBS setup guide,"type:docs,area:product,priority:P1",MVP-1
-112,112-product-add-drummer-setup-guide.md,[Product] Add drummer setup guide,"type:docs,area:product,priority:P1",MVP-1
-113,113-product-add-troubleshooting-guide-for-bad-tracking.md,[Product] Add troubleshooting guide for bad tracking,"type:docs,area:product,priority:P1",MVP-1
-114,114-product-add-privacy-explanation-page.md,[Product] Add privacy explanation page,"type:docs,area:product,priority:P1",MVP-1
-115,115-product-add-creator-preset-system.md,[Product] Add creator preset system,"type:docs,area:product,priority:P1",MVP-1
-116,116-product-add-japanese-landing-page-copy-polish.md,[Product] Add Japanese landing page copy polish,"type:docs,area:product,priority:P1",MVP-1
-117,117-product-add-english-landing-page-copy-draft.md,[Product] Add English landing page copy draft,"type:docs,area:product,priority:P1",MVP-1
-118,118-product-add-contribution-guide-for-tracking-issues.md,[Product] Add contribution guide for tracking issues,"type:docs,area:product,priority:P1",MVP-1
-119,119-product-add-public-roadmap-page.md,[Product] Add public roadmap page,"type:docs,area:product,priority:P1",MVP-1
-120,120-ops-add-ci-structure-verification.md,[Ops] Add CI structure verification,"type:chore,area:devex,priority:P1",MVP-1
-121,121-ops-add-typescript-strict-build-gate.md,[Ops] Add TypeScript strict build gate,"type:chore,area:devex,priority:P1",MVP-1
-122,122-ops-add-unit-tests-for-filters-and-clamps.md,[Ops] Add unit tests for filters and clamps,"type:chore,area:devex,priority:P1",MVP-1
-123,123-ops-add-issue-label-taxonomy.md,[Ops] Add issue label taxonomy,"type:chore,area:devex,priority:P1",MVP-1
-124,124-ops-add-release-checklist.md,[Ops] Add release checklist,"type:chore,area:devex,priority:P1",MVP-1
-125,125-ops-add-security-review-checklist.md,[Ops] Add security review checklist,"type:chore,area:devex,priority:P1",MVP-1
-126,126-ops-add-dependency-update-policy.md,[Ops] Add dependency update policy,"type:chore,area:devex,priority:P1",MVP-1
-127,127-ops-add-architecture-decision-record-template.md,[Ops] Add architecture decision record template,"type:chore,area:devex,priority:P1",MVP-1
-128,128-research-compare-mediapipe-tasks-vs-custom-onnx-pipeline-for-hand-trac.md,[Research] Compare MediaPipe Tasks vs custom ONNX pipeline for hand tracking,"type:research,area:ml,tracking:hand,priority:P2",Backlog
-129,129-research-evaluate-multi-camera-fusion-for-drummer-mode.md,[Research] Evaluate multi-camera fusion for drummer mode,"type:research,tracking:drum,priority:P3",Backlog
-130,130-research-evaluate-phone-camera-companion-app.md,[Research] Evaluate phone camera companion app,"type:research,area:capture,priority:P3",Backlog
-131,131-research-evaluate-imu-stick-optional-integration.md,[Research] Evaluate IMU stick optional integration,"type:research,tracking:drum,priority:P3",Backlog
-132,132-feature-add-keyboard-shortcut-to-reset-tracking.md,[Feature] Add keyboard shortcut to reset tracking,"type:feature,area:ui,priority:P2",Backlog
-133,133-feature-add-per-signal-smoothing-sliders.md,[Feature] Add per-signal smoothing sliders,"type:feature,area:ui,tracking:stability,priority:P1",Backlog
-134,134-feature-add-export-import-calibration-profile.md,[Feature] Add export/import calibration profile,"type:feature,area:calibration,priority:P1",Backlog
-135,135-feature-add-local-recording-of-kgm1-motion-jsonl.md,[Feature] Add local recording of KGM1 motion JSONL,"type:feature,protocol:kgm1,area:benchmark,priority:P1",Backlog
-136,136-feature-add-replay-viewer-for-kgm1-motion-jsonl.md,[Feature] Add replay viewer for KGM1 motion JSONL,"type:feature,protocol:kgm1,area:debug,priority:P1",Backlog
-137,137-feature-add-synthetic-landmark-generator-for-tests.md,[Feature] Add synthetic landmark generator for tests,"type:feature,area:test,priority:P1",Backlog
-138,138-feature-add-per-frame-quality-score-formula.md,[Feature] Add per-frame quality score formula,"type:feature,area:quality,priority:P0",Backlog
-139,139-feature-add-dropped-frame-detection.md,[Feature] Add dropped-frame detection,"type:feature,area:quality,priority:P0",Backlog
-140,140-feature-add-camera-exposure-lighting-checklist-ui.md,[Feature] Add camera exposure/lighting checklist UI,"type:feature,area:ui,area:capture,priority:P1",Backlog
-141,141-feature-add-mirror-mode-correctness-test.md,[Feature] Add mirror mode correctness test,"type:test,area:capture,priority:P1",Backlog
-142,142-docs-add-glossary-for-kgm1-terms.md,[Docs] Add glossary for KGM1 terms,"type:docs,priority:P2",Backlog
+1,001-foundation-define-kgm1-frame-loop-and-source-timestamps.md,[Foundation] Define KGM1 frame loop and source timestamps,"type/feature,priority/P0,area/core,protocol/kgm1",MVP-0
+2,002-foundation-build-webcam-capture-controller-with-camera-selection.md,[Foundation] Build webcam capture controller with camera selection,"type/feature,priority/P0,area/capture",MVP-0
+3,003-foundation-add-debug-overlay-for-landmarks-confidence-fps-warnings.md,"[Foundation] Add debug overlay for landmarks, confidence, FPS, warnings","type/feature,priority/P0,area/ui,area/debug",MVP-0
+4,004-foundation-add-local-only-privacy-mode-and-camera-permission-copy.md,[Foundation] Add local-only privacy mode and camera permission copy,"type/feature,priority/P0,area/privacy,area/ui",MVP-0
+5,005-foundation-add-kgm1-json-encoder-decoder-validation-tests.md,[Foundation] Add KGM1 JSON encoder/decoder validation tests,"type/test,priority/P0,protocol/kgm1,area/core",MVP-0
+6,006-foundation-add-tracking-warning-taxonomy-and-ui-panel.md,[Foundation] Add tracking warning taxonomy and UI panel,"type/feature,priority/P0,area/quality,area/ui",MVP-0
+7,007-foundation-add-calibration-profile-schema.md,[Foundation] Add calibration profile schema,"type/feature,priority/P1,area/calibration",MVP-1
+8,008-foundation-add-benchmark-recording-toggle-without-upload.md,[Foundation] Add benchmark recording toggle without upload,"type/feature,priority/P1,area/benchmark,area/privacy",MVP-1
+9,009-hand-integrate-mediapipe-hand-landmarker-adapter.md,[Hand] Integrate MediaPipe Hand Landmarker adapter,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+10,010-hand-convert-21-hand-landmarks-into-palm-basis.md,[Hand] Convert 21 hand landmarks into palm basis,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+11,011-hand-derive-per-finger-mcp-pip-dip-tip-chains.md,[Hand] Derive per-finger MCP/PIP/DIP/Tip chains,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+12,012-hand-compute-finger-curl-for-thumb-index-middle-ring-pinky.md,[Hand] Compute finger curl for thumb/index/middle/ring/pinky,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+13,013-hand-compute-finger-spread-and-abduction-values.md,[Hand] Compute finger spread and abduction values,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+14,014-hand-compute-thumb-index-pinch-and-per-finger-pinch-distance.md,[Hand] Compute thumb-index pinch and per-finger pinch distance,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+15,015-hand-compute-fingertip-velocity-with-timestamp-delta.md,[Hand] Compute fingertip velocity with timestamp delta,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+16,016-hand-add-confidence-decay-for-partially-occluded-fingers.md,[Hand] Add confidence decay for partially occluded fingers,"type/feature,tracking/hand,priority/P0,area/tracking",MVP-0
+17,017-hand-add-hand-left-right-swap-detector.md,[Hand] Add hand left/right swap detector,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+18,018-hand-add-finger-contact-state-with-hysteresis.md,[Hand] Add finger contact state with hysteresis,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+19,019-hand-add-drum-grip-gesture-detection.md,[Hand] Add drum grip gesture detection,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+20,020-hand-add-finger-counting-gesture-states.md,[Hand] Add finger counting gesture states,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+21,021-hand-add-hand-calibration-sequence.md,[Hand] Add hand calibration sequence,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+22,022-hand-add-low-light-warning-for-hands.md,[Hand] Add low-light warning for hands,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+23,023-hand-add-fast-motion-blur-warning-for-hands.md,[Hand] Add fast-motion blur warning for hands,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+24,024-hand-add-hand-outside-frame-recovery.md,[Hand] Add hand outside frame recovery,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+25,025-hand-add-per-finger-debug-graph.md,[Hand] Add per-finger debug graph,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+26,026-hand-add-golden-clip-benchmark-for-finger-jitter.md,[Hand] Add golden clip benchmark for finger jitter,"type/feature,tracking/hand,priority/P1,area/tracking",MVP-1
+27,027-stability-implement-one-euro-filter-presets-by-signal-type.md,[Stability] Implement One Euro Filter presets by signal type,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+28,028-stability-implement-finite-number-guard-for-every-tracking-frame.md,[Stability] Implement finite-number guard for every tracking frame,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+29,029-stability-implement-temporal-outlier-rejection-for-landmarks.md,[Stability] Implement temporal outlier rejection for landmarks,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+30,030-stability-implement-velocity-clamp-for-fingers-and-mouth.md,[Stability] Implement velocity clamp for fingers and mouth,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+31,031-stability-implement-acceleration-and-jerk-clamp-for-high-risk-signals.md,[Stability] Implement acceleration and jerk clamp for high-risk signals,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+32,032-stability-implement-anatomy-clamp-for-all-fingers.md,[Stability] Implement anatomy clamp for all fingers,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+33,033-stability-implement-quaternion-shortest-path-interpolation.md,[Stability] Implement quaternion shortest-path interpolation,"type/feature,tracking/stability,priority/P0,area/quality",MVP-0
+34,034-stability-implement-occlusion-state-machine.md,[Stability] Implement occlusion state machine,"type/feature,tracking/stability,priority/P1,area/quality",MVP-1
+35,035-stability-implement-confidence-weighted-blending-after-reacquisition.md,[Stability] Implement confidence-weighted blending after reacquisition,"type/feature,tracking/stability,priority/P1,area/quality",MVP-1
+36,036-stability-implement-avatar-rig-parameter-clamp.md,[Stability] Implement avatar rig parameter clamp,"type/feature,tracking/stability,priority/P1,area/quality",MVP-1
+37,037-stability-add-no-broken-finger-visual-test-page.md,[Stability] Add no-broken-finger visual test page,"type/feature,tracking/stability,priority/P1,area/quality",MVP-1
+38,038-stability-add-stability-regression-benchmark-report.md,[Stability] Add stability regression benchmark report,"type/feature,tracking/stability,priority/P1,area/quality",MVP-1
+39,039-face-integrate-mediapipe-face-landmarker-adapter.md,[Face] Integrate MediaPipe Face Landmarker adapter,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+40,040-face-map-face-blendshapes-into-kgm1-facestate.md,[Face] Map face blendshapes into KGM1 FaceState,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+41,041-face-stabilize-left-right-blink-with-hysteresis.md,[Face] Stabilize left/right blink with hysteresis,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+42,042-face-add-gaze-vector-smoothing-and-clamp.md,[Face] Add gaze vector smoothing and clamp,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+43,043-face-add-iris-center-support-when-available.md,[Face] Add iris center support when available,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+44,044-face-add-mouth-open-wide-pucker-decomposition.md,[Face] Add mouth open/wide/pucker decomposition,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+45,045-face-add-a-i-u-e-o-vowel-like-mouth-state.md,[Face] Add A/I/U/E/O vowel-like mouth state,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+46,046-face-add-smile-and-frown-left-right-separation.md,[Face] Add smile and frown left/right separation,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+47,047-face-add-head-yaw-compensation-for-expression-leakage.md,[Face] Add head-yaw compensation for expression leakage,"type/feature,tracking/face,priority/P0,area/tracking",MVP-0
+48,048-face-add-audio-assisted-mouth-smoothing-option.md,[Face] Add audio-assisted mouth smoothing option,"type/feature,tracking/face,priority/P1,area/tracking",MVP-1
+49,049-face-add-glasses-glare-warning.md,[Face] Add glasses glare warning,"type/feature,tracking/face,priority/P1,area/tracking",MVP-1
+50,050-face-add-face-calibration-sequence.md,[Face] Add face calibration sequence,"type/feature,tracking/face,priority/P1,area/tracking",MVP-1
+51,051-face-add-face-expression-debug-graph.md,[Face] Add face expression debug graph,"type/feature,tracking/face,priority/P1,area/tracking",MVP-1
+52,052-face-add-mouth-flicker-benchmark.md,[Face] Add mouth flicker benchmark,"type/feature,tracking/face,priority/P1,area/tracking",MVP-1
+53,053-face-add-blink-false-positive-benchmark.md,[Face] Add blink false-positive benchmark,"type/feature,tracking/face,priority/P1,area/tracking",MVP-1
+54,054-drum-add-drummer-mode-setup-screen.md,[Drum] Add drummer mode setup screen,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+55,055-drum-add-drum-kit-zone-calibration-ui.md,[Drum] Add drum kit zone calibration UI,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+56,056-drum-add-stick-detector-adapter-interface.md,[Drum] Add stick detector adapter interface,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+57,057-drum-add-stick-tip-trajectory-estimator.md,[Drum] Add stick tip trajectory estimator,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+58,058-drum-add-visual-drum-hit-candidate-detector.md,[Drum] Add visual drum hit candidate detector,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+59,059-drum-add-audio-onset-detector-for-hit-alignment.md,[Drum] Add audio onset detector for hit alignment,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+60,060-drum-fuse-visual-hit-and-audio-onset-into-drumhitevent.md,[Drum] Fuse visual hit and audio onset into DrumHitEvent,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+61,061-drum-add-per-zone-cooldown-to-prevent-false-rolls.md,[Drum] Add per-zone cooldown to prevent false rolls,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+62,062-drum-add-hand-assignment-for-drum-hits.md,[Drum] Add hand assignment for drum hits,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+63,063-drum-add-hit-velocity-estimation.md,[Drum] Add hit velocity estimation,"type/feature,tracking/drum,priority/P1,area/tracking",MVP-2
+64,064-drum-add-hi-hat-pedal-inference-design.md,[Drum] Add hi-hat pedal inference design,"type/feature,tracking/drum,priority/P2,area/tracking",MVP-2
+65,065-drum-add-kick-pedal-inference-design.md,[Drum] Add kick pedal inference design,"type/feature,tracking/drum,priority/P2,area/tracking",MVP-2
+66,066-drum-add-drum-overlay-for-obs.md,[Drum] Add drum overlay for OBS,"type/feature,tracking/drum,priority/P2,area/tracking",MVP-2
+67,067-drum-add-drum-benchmark-clips-and-metrics.md,[Drum] Add drum benchmark clips and metrics,"type/feature,tracking/drum,priority/P2,area/tracking",MVP-2
+68,068-drum-add-yolo-stick-drum-training-data-schema.md,[Drum] Add YOLO stick/drum training data schema,"type/feature,tracking/drum,priority/P2,area/tracking",MVP-2
+69,069-drum-add-fast-roll-stress-test.md,[Drum] Add fast roll stress test,"type/feature,tracking/drum,priority/P2,area/tracking",MVP-2
+70,070-avatar-implement-vrm-expression-mapper.md,[Avatar] Implement VRM expression mapper,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+71,071-avatar-implement-vrm-finger-curl-mapper.md,[Avatar] Implement VRM finger curl mapper,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+72,072-avatar-implement-vrm-look-at-mapper.md,[Avatar] Implement VRM look-at mapper,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+73,073-avatar-implement-live2d-basic-parameter-mapper.md,[Avatar] Implement Live2D basic parameter mapper,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+74,074-avatar-implement-live2d-custom-hand-parameter-mapping.md,[Avatar] Implement Live2D custom hand parameter mapping,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+75,075-avatar-implement-inochi2d-inox2d-parameter-mapping-design.md,[Avatar] Implement Inochi2D/Inox2D parameter mapping design,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+76,076-avatar-add-avatar-preset-profile-format.md,[Avatar] Add avatar preset profile format,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+77,077-avatar-add-obs-transparent-background-mode.md,[Avatar] Add OBS transparent background mode,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+78,078-avatar-add-avatar-rig-limit-editor.md,[Avatar] Add avatar rig limit editor,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+79,079-avatar-add-mapping-regression-snapshot-tests.md,[Avatar] Add mapping regression snapshot tests,"type/feature,area/avatar,priority/P1,integration/avatar",MVP-1
+80,080-transport-implement-kgm1b-binary-header-in-typescript.md,[Transport] Implement KGM1B binary header in TypeScript,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+81,081-transport-implement-rust-kgm1b-payload-framing.md,[Transport] Implement Rust KGM1B payload framing,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+82,082-transport-add-webtransport-sender-prototype.md,[Transport] Add WebTransport sender prototype,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+83,083-transport-add-webtransport-receiver-prototype.md,[Transport] Add WebTransport receiver prototype,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+84,084-transport-add-websocket-json-fallback.md,[Transport] Add WebSocket JSON fallback,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+85,085-transport-add-reliable-keyframe-stream-design.md,[Transport] Add reliable keyframe stream design,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+86,086-transport-add-datagram-delta-frame-design.md,[Transport] Add datagram delta frame design,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+87,087-transport-add-network-congestion-policy.md,[Transport] Add network congestion policy,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+88,088-transport-add-remote-viewer-page.md,[Transport] Add remote viewer page,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+89,089-transport-add-session-token-and-origin-checks.md,[Transport] Add session token and origin checks,"type/feature,area/transport,protocol/kgm1,priority/P2",MVP-3
+90,090-ml-evaluate-yolo-stick-detector-baseline.md,[ML] Evaluate YOLO stick detector baseline,"type/research,area/ml,priority/P2",MVP-4
+91,091-ml-create-stick-and-drum-dataset-labeling-guide.md,[ML] Create stick and drum dataset labeling guide,"type/research,area/ml,priority/P2",MVP-4
+92,092-ml-add-onnx-runtime-web-adapter-interface.md,[ML] Add ONNX Runtime Web adapter interface,"type/feature,area/ml,priority/P2",MVP-4
+93,093-ml-add-webgpu-backend-capability-detection.md,[ML] Add WebGPU backend capability detection,"type/feature,area/ml,priority/P2",MVP-4
+94,094-ml-add-wasm-fallback-for-custom-models.md,[ML] Add WASM fallback for custom models,"type/feature,area/ml,priority/P2",MVP-4
+95,095-ml-add-model-hash-verification.md,[ML] Add model hash verification,"type/feature,area/ml,priority/P2",MVP-4
+96,096-ml-add-low-light-quality-classifier-design.md,[ML] Add low-light quality classifier design,"type/feature,area/ml,priority/P2",MVP-4
+97,097-ml-add-motion-blur-detector-design.md,[ML] Add motion blur detector design,"type/feature,area/ml,priority/P2",MVP-4
+98,098-ml-add-hand-object-contact-classifier-design.md,[ML] Add hand-object contact classifier design,"type/feature,area/ml,priority/P2",MVP-4
+99,099-ml-add-model-benchmark-harness.md,[ML] Add model benchmark harness,"type/feature,area/ml,priority/P2",MVP-4
+100,100-ml-add-export-path-for-onnx-and-quantized-models.md,[ML] Add export path for ONNX and quantized models,"type/feature,area/ml,priority/P2",MVP-4
+101,101-ml-add-privacy-preserving-dataset-capture-ui.md,[ML] Add privacy-preserving dataset capture UI,"type/feature,area/ml,priority/P2",MVP-4
+102,102-compression-add-glb-inspection-script-design.md,[Compression] Add GLB inspection script design,"type/docs,area/compression,priority/P2",MVP-3
+103,103-compression-add-gltf-transform-optimization-guide.md,[Compression] Add glTF Transform optimization guide,"type/docs,area/compression,priority/P2",MVP-3
+104,104-compression-add-ktx2-texture-compression-guide.md,[Compression] Add KTX2 texture compression guide,"type/docs,area/compression,priority/P2",MVP-3
+105,105-compression-add-meshopt-vs-draco-decision-document.md,[Compression] Add meshopt vs Draco decision document,"type/docs,area/compression,priority/P2",MVP-3
+106,106-compression-add-2d-texture-atlas-compression-guide.md,[Compression] Add 2D texture atlas compression guide,"type/docs,area/compression,priority/P2",MVP-3
+107,107-compression-add-motion-delta-quantization-design.md,[Compression] Add motion delta quantization design,"type/docs,area/compression,priority/P2",MVP-3
+108,108-compression-add-avatar-visual-regression-checklist.md,[Compression] Add avatar visual regression checklist,"type/docs,area/compression,priority/P2",MVP-3
+109,109-compression-add-asset-license-checklist.md,[Compression] Add asset license checklist,"type/docs,area/compression,priority/P2",MVP-3
+110,110-product-add-first-run-onboarding-flow.md,[Product] Add first-run onboarding flow,"type/docs,area/product,priority/P1",MVP-1
+111,111-product-add-streamer-obs-setup-guide.md,[Product] Add streamer OBS setup guide,"type/docs,area/product,priority/P1",MVP-1
+112,112-product-add-drummer-setup-guide.md,[Product] Add drummer setup guide,"type/docs,area/product,priority/P1",MVP-1
+113,113-product-add-troubleshooting-guide-for-bad-tracking.md,[Product] Add troubleshooting guide for bad tracking,"type/docs,area/product,priority/P1",MVP-1
+114,114-product-add-privacy-explanation-page.md,[Product] Add privacy explanation page,"type/docs,area/product,priority/P1",MVP-1
+115,115-product-add-creator-preset-system.md,[Product] Add creator preset system,"type/docs,area/product,priority/P1",MVP-1
+116,116-product-add-japanese-landing-page-copy-polish.md,[Product] Add Japanese landing page copy polish,"type/docs,area/product,priority/P1",MVP-1
+117,117-product-add-english-landing-page-copy-draft.md,[Product] Add English landing page copy draft,"type/docs,area/product,priority/P1",MVP-1
+118,118-product-add-contribution-guide-for-tracking-issues.md,[Product] Add contribution guide for tracking issues,"type/docs,area/product,priority/P1",MVP-1
+119,119-product-add-public-roadmap-page.md,[Product] Add public roadmap page,"type/docs,area/product,priority/P1",MVP-1
+120,120-ops-add-ci-structure-verification.md,[Ops] Add CI structure verification,"type/chore,area/devex,priority/P1",MVP-1
+121,121-ops-add-typescript-strict-build-gate.md,[Ops] Add TypeScript strict build gate,"type/chore,area/devex,priority/P1",MVP-1
+122,122-ops-add-unit-tests-for-filters-and-clamps.md,[Ops] Add unit tests for filters and clamps,"type/chore,area/devex,priority/P1",MVP-1
+123,123-ops-add-issue-label-taxonomy.md,[Ops] Add issue label taxonomy,"type/chore,area/devex,priority/P1",MVP-1
+124,124-ops-add-release-checklist.md,[Ops] Add release checklist,"type/chore,area/devex,priority/P1",MVP-1
+125,125-ops-add-security-review-checklist.md,[Ops] Add security review checklist,"type/chore,area/devex,priority/P1",MVP-1
+126,126-ops-add-dependency-update-policy.md,[Ops] Add dependency update policy,"type/chore,area/devex,priority/P1",MVP-1
+127,127-ops-add-architecture-decision-record-template.md,[Ops] Add architecture decision record template,"type/chore,area/devex,priority/P1",MVP-1
+128,128-research-compare-mediapipe-tasks-vs-custom-onnx-pipeline-for-hand-trac.md,[Research] Compare MediaPipe Tasks vs custom ONNX pipeline for hand tracking,"type/research,area/ml,tracking/hand,priority/P2",Backlog
+129,129-research-evaluate-multi-camera-fusion-for-drummer-mode.md,[Research] Evaluate multi-camera fusion for drummer mode,"type/research,tracking/drum,priority/P3",Backlog
+130,130-research-evaluate-phone-camera-companion-app.md,[Research] Evaluate phone camera companion app,"type/research,area/capture,priority/P3",Backlog
+131,131-research-evaluate-imu-stick-optional-integration.md,[Research] Evaluate IMU stick optional integration,"type/research,tracking/drum,priority/P3",Backlog
+132,132-feature-add-keyboard-shortcut-to-reset-tracking.md,[Feature] Add keyboard shortcut to reset tracking,"type/feature,area/ui,priority/P2",Backlog
+133,133-feature-add-per-signal-smoothing-sliders.md,[Feature] Add per-signal smoothing sliders,"type/feature,area/ui,tracking/stability,priority/P1",Backlog
+134,134-feature-add-export-import-calibration-profile.md,[Feature] Add export/import calibration profile,"type/feature,area/calibration,priority/P1",Backlog
+135,135-feature-add-local-recording-of-kgm1-motion-jsonl.md,[Feature] Add local recording of KGM1 motion JSONL,"type/feature,protocol/kgm1,area/benchmark,priority/P1",Backlog
+136,136-feature-add-replay-viewer-for-kgm1-motion-jsonl.md,[Feature] Add replay viewer for KGM1 motion JSONL,"type/feature,protocol/kgm1,area/debug,priority/P1",Backlog
+137,137-feature-add-synthetic-landmark-generator-for-tests.md,[Feature] Add synthetic landmark generator for tests,"type/feature,area/test,priority/P1",Backlog
+138,138-feature-add-per-frame-quality-score-formula.md,[Feature] Add per-frame quality score formula,"type/feature,area/quality,priority/P0",Backlog
+139,139-feature-add-dropped-frame-detection.md,[Feature] Add dropped-frame detection,"type/feature,area/quality,priority/P0",Backlog
+140,140-feature-add-camera-exposure-lighting-checklist-ui.md,[Feature] Add camera exposure/lighting checklist UI,"type/feature,area/ui,area/capture,priority/P1",Backlog
+141,141-feature-add-mirror-mode-correctness-test.md,[Feature] Add mirror mode correctness test,"type/test,area/capture,priority/P1",Backlog
+142,142-docs-add-glossary-for-kgm1-terms.md,[Docs] Add glossary for KGM1 terms,"type/docs,priority/P2",Backlog

@@ -1,6 +1,6 @@
 ---
 title: "[Face] Add audio-assisted mouth smoothing option"
-labels: ["type:feature", "tracking:face", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P1", "area/tracking"]
 milestone: "MVP-1"
 ---
 

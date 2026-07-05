@@ -1,6 +1,6 @@
 ---
 title: "[Ops] Add security review checklist"
-labels: ["type:chore", "area:devex", "priority:P1"]
+labels: ["type/chore", "area/devex", "priority/P1"]
 milestone: "MVP-1"
 ---
 

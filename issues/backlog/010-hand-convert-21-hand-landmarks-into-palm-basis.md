@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Convert 21 hand landmarks into palm basis"
-labels: ["type:feature", "tracking:hand", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

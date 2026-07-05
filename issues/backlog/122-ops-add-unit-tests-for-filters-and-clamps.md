@@ -1,6 +1,6 @@
 ---
 title: "[Ops] Add unit tests for filters and clamps"
-labels: ["type:chore", "area:devex", "priority:P1"]
+labels: ["type/chore", "area/devex", "priority/P1"]
 milestone: "MVP-1"
 ---
 

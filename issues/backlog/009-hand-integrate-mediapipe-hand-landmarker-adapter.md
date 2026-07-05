@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Integrate MediaPipe Hand Landmarker adapter"
-labels: ["type:feature", "tracking:hand", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

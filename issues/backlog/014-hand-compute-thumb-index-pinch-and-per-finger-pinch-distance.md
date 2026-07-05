@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Compute thumb-index pinch and per-finger pinch distance"
-labels: ["type:feature", "tracking:hand", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

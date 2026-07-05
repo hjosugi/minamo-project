@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Build webcam capture controller with camera selection"
-labels: ["type:feature", "priority:P0", "area:capture"]
+labels: ["type/feature", "priority/P0", "area/capture"]
 milestone: "MVP-0"
 ---
 

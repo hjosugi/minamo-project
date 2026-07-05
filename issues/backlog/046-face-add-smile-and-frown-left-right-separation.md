@@ -1,6 +1,6 @@
 ---
 title: "[Face] Add smile and frown left/right separation"
-labels: ["type:feature", "tracking:face", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

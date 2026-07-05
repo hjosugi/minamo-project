@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Add KGM1 JSON encoder/decoder validation tests"
-labels: ["type:test", "priority:P0", "protocol:kgm1", "area:core"]
+labels: ["type/test", "priority/P0", "protocol/kgm1", "area/core"]
 milestone: "MVP-0"
 ---
 

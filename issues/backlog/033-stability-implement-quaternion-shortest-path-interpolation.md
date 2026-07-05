@@ -1,6 +1,6 @@
 ---
 title: "[Stability] Implement quaternion shortest-path interpolation"
-labels: ["type:feature", "tracking:stability", "priority:P0", "area:quality"]
+labels: ["type/feature", "tracking/stability", "priority/P0", "area/quality"]
 milestone: "MVP-0"
 ---
 

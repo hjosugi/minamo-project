@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Define KGM1 frame loop and source timestamps"
-labels: ["type:feature", "priority:P0", "area:core", "protocol:kgm1"]
+labels: ["type/feature", "priority/P0", "area/core", "protocol/kgm1"]
 milestone: "MVP-0"
 ---
 

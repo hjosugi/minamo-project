@@ -1,6 +1,6 @@
 ---
 title: "[Avatar] Add OBS transparent background mode"
-labels: ["type:feature", "area:avatar", "priority:P1", "integration:avatar"]
+labels: ["type/feature", "area/avatar", "priority/P1", "integration/avatar"]
 milestone: "MVP-1"
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Add fast roll stress test"
-labels: ["type:feature", "tracking:drum", "priority:P2", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P2", "area/tracking"]
 milestone: "MVP-2"
 ---
 

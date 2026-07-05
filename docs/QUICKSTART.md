@@ -52,8 +52,8 @@ Two complementary backlogs ship with the repo:
 ```bash
 python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run
 python3 scripts/create_github_issues.py --repo OWNER/REPO --apply
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0   # P0 only
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label tracking:hand # hands only
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority/P0   # P0 only
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label tracking/hand # hands only
 ```
 
 Requires `gh auth login` first.

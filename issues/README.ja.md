@@ -12,7 +12,7 @@
 
 ```bash
 python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority/P0
 ```
 
 ## 方針

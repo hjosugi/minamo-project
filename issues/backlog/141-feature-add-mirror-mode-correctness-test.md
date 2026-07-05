@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add mirror mode correctness test"
-labels: ["type:test", "area:capture", "priority:P1"]
+labels: ["type/test", "area/capture", "priority/P1"]
 milestone: "Backlog"
 ---
 

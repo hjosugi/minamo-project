@@ -1,6 +1,6 @@
 ---
 title: "[Transport] Add WebTransport sender prototype"
-labels: ["type:feature", "area:transport", "protocol:kgm1", "priority:P2"]
+labels: ["type/feature", "area/transport", "protocol/kgm1", "priority/P2"]
 milestone: "MVP-3"
 ---
 

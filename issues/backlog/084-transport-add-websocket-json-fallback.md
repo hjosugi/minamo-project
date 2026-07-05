@@ -1,6 +1,6 @@
 ---
 title: "[Transport] Add WebSocket JSON fallback"
-labels: ["type:feature", "area:transport", "protocol:kgm1", "priority:P2"]
+labels: ["type/feature", "area/transport", "protocol/kgm1", "priority/P2"]
 milestone: "MVP-3"
 ---
 

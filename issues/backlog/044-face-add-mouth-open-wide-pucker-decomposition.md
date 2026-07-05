@@ -1,6 +1,6 @@
 ---
 title: "[Face] Add mouth open/wide/pucker decomposition"
-labels: ["type:feature", "tracking:face", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

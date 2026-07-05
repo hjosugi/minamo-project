@@ -1,6 +1,6 @@
 ---
 title: "[Research] Evaluate IMU stick optional integration"
-labels: ["type:research", "tracking:drum", "priority:P3"]
+labels: ["type/research", "tracking/drum", "priority/P3"]
 milestone: "Backlog"
 ---
 

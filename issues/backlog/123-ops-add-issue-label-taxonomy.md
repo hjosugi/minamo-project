@@ -1,6 +1,6 @@
 ---
 title: "[Ops] Add issue label taxonomy"
-labels: ["type:chore", "area:devex", "priority:P1"]
+labels: ["type/chore", "area/devex", "priority/P1"]
 milestone: "MVP-1"
 ---
 

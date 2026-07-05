@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add replay viewer for KGM1 motion JSONL"
-labels: ["type:feature", "protocol:kgm1", "area:debug", "priority:P1"]
+labels: ["type/feature", "protocol/kgm1", "area/debug", "priority/P1"]
 milestone: "Backlog"
 ---
 

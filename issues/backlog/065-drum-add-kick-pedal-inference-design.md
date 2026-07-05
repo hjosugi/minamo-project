@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Add kick pedal inference design"
-labels: ["type:feature", "tracking:drum", "priority:P2", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P2", "area/tracking"]
 milestone: "MVP-2"
 ---
 

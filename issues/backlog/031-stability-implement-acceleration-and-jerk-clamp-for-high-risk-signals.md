@@ -1,6 +1,6 @@
 ---
 title: "[Stability] Implement acceleration and jerk clamp for high-risk signals"
-labels: ["type:feature", "tracking:stability", "priority:P0", "area:quality"]
+labels: ["type/feature", "tracking/stability", "priority/P0", "area/quality"]
 milestone: "MVP-0"
 ---
 

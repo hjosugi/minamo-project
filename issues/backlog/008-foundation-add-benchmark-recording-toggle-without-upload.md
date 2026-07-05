@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Add benchmark recording toggle without upload"
-labels: ["type:feature", "priority:P1", "area:benchmark", "area:privacy"]
+labels: ["type/feature", "priority/P1", "area/benchmark", "area/privacy"]
 milestone: "MVP-1"
 ---
 

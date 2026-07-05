@@ -1,6 +1,6 @@
 ---
 title: "[Avatar] Implement Live2D custom hand parameter mapping"
-labels: ["type:feature", "area:avatar", "priority:P1", "integration:avatar"]
+labels: ["type/feature", "area/avatar", "priority/P1", "integration/avatar"]
 milestone: "MVP-1"
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "[Face] Add blink false-positive benchmark"
-labels: ["type:feature", "tracking:face", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P1", "area/tracking"]
 milestone: "MVP-1"
 ---
 

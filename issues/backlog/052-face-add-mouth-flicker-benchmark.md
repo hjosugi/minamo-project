@@ -1,6 +1,6 @@
 ---
 title: "[Face] Add mouth flicker benchmark"
-labels: ["type:feature", "tracking:face", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P1", "area/tracking"]
 milestone: "MVP-1"
 ---
 

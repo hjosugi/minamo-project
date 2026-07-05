@@ -1,6 +1,6 @@
 ---
 title: "[Face] Add A/I/U/E/O vowel-like mouth state"
-labels: ["type:feature", "tracking:face", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

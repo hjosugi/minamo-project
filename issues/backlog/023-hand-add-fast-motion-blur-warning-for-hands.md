@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Add fast-motion blur warning for hands"
-labels: ["type:feature", "tracking:hand", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P1", "area/tracking"]
 milestone: "MVP-1"
 ---
 

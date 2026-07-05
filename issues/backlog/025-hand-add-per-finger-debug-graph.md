@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Add per-finger debug graph"
-labels: ["type:feature", "tracking:hand", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P1", "area/tracking"]
 milestone: "MVP-1"
 ---
 

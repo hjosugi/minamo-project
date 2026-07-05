@@ -6,7 +6,7 @@ Register the Markdown files in `issues/backlog/` as GitHub Issues under the foll
 
 ## Conditions
 
-- Register only `priority:P0` first.
+- Register only `priority/P0` first.
 - Do not register titles that duplicate existing issues.
 - Use `title`, `labels`, and `milestone` from the Markdown front matter.
 - Use the content excluding the front matter as the body.
@@ -16,17 +16,17 @@ Register the Markdown files in `issues/backlog/` as GitHub Issues under the foll
 ## Recommended commands
 
 ```bash
-python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run --label priority:P0
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0
+python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run --label priority/P0
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority/P0
 ```
 
 ## Registration order
 
-1. `priority:P0`
-2. `tracking:stability`
-3. `tracking:hand`
-4. `tracking:face`
-5. `area:avatar`
-6. `tracking:drum`
-7. `area:transport`
-8. `area:ml`
+1. `priority/P0`
+2. `tracking/stability`
+3. `tracking/hand`
+4. `tracking/face`
+5. `area/avatar`
+6. `tracking/drum`
+7. `area/transport`
+8. `area/ml`
