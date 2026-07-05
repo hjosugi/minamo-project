@@ -28,18 +28,19 @@ export class KagamiTransport extends EventTarget {
     this.dispatchEvent(new CustomEvent('frame', { detail: bytes }));
   }
 
-  async connect({ mode, room, role, wsUrl, wtUrl, certHashHex }) {
+  async connect({ mode, room, role, wsUrl, wtUrl, certHashHex, token = '' }) {
     await this.close();
     this.mode = mode;
     this.room = room;
     this.role = role;
+    this.token = token;
 
     if (mode === 'local') {
-      this._bc = new BroadcastChannel(`kagami:${room}`);
+      this._bc = new BroadcastChannel(`kagami:${room}:${token || 'open'}`);
       this._bc.onmessage = (ev) => {
         if (ev.data instanceof ArrayBuffer) this._frame(new Uint8Array(ev.data));
       };
-      this._status('open', `local channel "${room}"`);
+      this._status('open', `local channel "${room}"${token ? ' with token' : ''}`);
       return;
     }
 
@@ -47,18 +48,31 @@ export class KagamiTransport extends EventTarget {
       const url = new URL(wsUrl || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
       url.searchParams.set('room', room);
       url.searchParams.set('role', role);
+      if (token) url.searchParams.set('token', token);
       const ws = new WebSocket(url);
       ws.binaryType = 'arraybuffer';
       this._ws = ws;
       await new Promise((resolve, reject) => {
         ws.onopen = resolve;
-        ws.onerror = () => reject(new Error(`WebSocket failed: ${url}`));
+        ws.onerror = () => reject(new Error(`WebSocket failed: ${redactToken(url)}`));
+        ws.onclose = () => reject(new Error('WebSocket closed during authentication'));
       });
       ws.onmessage = (ev) => {
-        if (ev.data instanceof ArrayBuffer) this._frame(new Uint8Array(ev.data));
+        if (ev.data instanceof ArrayBuffer) {
+          this._frame(new Uint8Array(ev.data));
+          return;
+        }
+        if (typeof ev.data === 'string') {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'kgm1' && msg.payload) {
+              this._frame(base64ToBytes(msg.payload));
+            }
+          } catch {}
+        }
       };
-      ws.onclose = () => this._status('closed', 'WebSocket closed');
-      this._status('open', `ws relay "${room}" as ${role}`);
+      ws.onclose = (ev) => this._status('closed', ev.reason || `WebSocket closed (${ev.code})`);
+      this._status('open', `ws relay "${room}" as ${role}${token ? ' with token' : ''}`);
       return;
     }
 
@@ -67,7 +81,8 @@ export class KagamiTransport extends EventTarget {
         throw new Error('WebTransport is not supported in this browser.');
       }
       const base = (wtUrl || 'https://localhost:4433').replace(/\/+$/, '');
-      const url = `${base}/room/${encodeURIComponent(room)}/${role}`;
+      const tokenPath = token ? `/${encodeURIComponent(token)}` : '';
+      const url = `${base}/room/${encodeURIComponent(room)}${tokenPath}/${role}`;
       const opts = {};
       const hex = (certHashHex || '').replace(/[^0-9a-fA-F]/g, '');
       if (hex.length === 64) {
@@ -83,7 +98,7 @@ export class KagamiTransport extends EventTarget {
       wt.closed
         .then(() => this._status('closed', 'WebTransport closed'))
         .catch((e) => this._status('closed', `WebTransport error: ${e.message}`));
-      this._status('open', `wt relay "${room}" as ${role}`);
+      this._status('open', `wt relay "${room}" as ${role}${token ? ' with token' : ''}`);
       return;
     }
 
@@ -122,4 +137,17 @@ export class KagamiTransport extends EventTarget {
     if (this._wt) { try { this._wt.close(); } catch {} this._wt = null; this._wtWriter = null; }
     this.mode = null;
   }
+}
+
+function redactToken(url) {
+  const safe = new URL(url);
+  if (safe.searchParams.has('token')) safe.searchParams.set('token', '***');
+  return safe.toString();
+}
+
+function base64ToBytes(value) {
+  const bin = atob(value);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }

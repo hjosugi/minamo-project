@@ -34,10 +34,9 @@ export class DrumHitDetector {
       const cooledDown = sample.timeMs - last >= zone.cooldownMs;
       if (dist <= zone.radius && downstroke && speed > 0.02 && cooledDown) {
         this.lastHitMs.set(zone.id, sample.timeMs);
-        hits.push({
+        const hit: DrumHitEvent = {
           eventId: `${sample.id}:${zone.id}:${Math.round(sample.timeMs)}`,
           timeNs: Math.round(sample.timeMs * 1_000_000),
-          hand: sample.hand,
           stickId: sample.id,
           zoneId: zone.id,
           zoneType: zone.type,
@@ -46,7 +45,9 @@ export class DrumHitDetector {
           speed,
           confidence: Math.min(1, 0.5 + speed * 10),
           audioAligned: false,
-        });
+        };
+        if (sample.hand) hit.hand = sample.hand;
+        hits.push(hit);
       }
     }
     return hits;

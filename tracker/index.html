@@ -27,18 +27,87 @@
         <button id="btnStop" disabled>Stop</button>
         <label class="check"><input type="checkbox" id="chkMirror" checked />Mirror view</label>
         <label class="check"><input type="checkbox" id="chkPose" />Upper-body pose (experimental)</label>
+        <label class="check"><input type="checkbox" id="chkPrivacy" checked />Local-only privacy</label>
+      </div>
+      <div class="form-grid compact">
+        <div class="field">
+          <span>camera</span>
+          <select id="selCamera">
+            <option value="">default camera</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>resolution</span>
+          <select id="selResolution">
+            <option value="480p">480p</option>
+            <option value="720p" selected>720p</option>
+            <option value="1080p">1080p</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>target fps</span>
+          <select id="selFps">
+            <option value="30">30</option>
+            <option value="60" selected>60</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>quality</span>
+          <output id="qualityChip" class="mini-chip" data-state="idle">waiting</output>
+        </div>
       </div>
       <div class="stats">
         <span>fps <b id="statFps">--</b></span>
         <span>inference <b id="statInfer">--</b> ms</span>
         <span>packet <b id="statPacket">--</b> B</span>
         <span>out <b id="statRate">--</b> KB/s</span>
+        <span>camera <b id="statCamera">--</b></span>
+        <span>dropped <b id="statDropped">0</b></span>
       </div>
+      <ul class="warning-list" id="warningList"></ul>
     </section>
 
     <section class="panel">
       <h2><span class="dot face"></span>Blendshape mixer / 52ch</h2>
       <canvas id="meters" class="meters-canvas"></canvas>
+      <div class="form-grid compact">
+        <div class="field">
+          <span>selected channel</span>
+          <output id="outChannel">jawOpen</output>
+        </div>
+        <div class="field">
+          <span>gain</span>
+          <input type="range" id="rngGain" min="0" max="2" step="0.01" value="1" />
+        </div>
+        <div class="field">
+          <span>deadzone</span>
+          <input type="range" id="rngDeadzone" min="0" max="0.2" step="0.005" value="0" />
+        </div>
+        <div class="field">
+          <span>smoothing</span>
+          <select id="selFilterPreset">
+            <option value="responsive">responsive</option>
+            <option value="balanced" selected>balanced</option>
+            <option value="smooth">smooth</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>min cutoff</span>
+          <input type="range" id="rngMinCutoff" min="0.2" max="4" step="0.05" value="1.6" />
+        </div>
+        <div class="field">
+          <span>beta</span>
+          <input type="range" id="rngBeta" min="0" max="1.5" step="0.01" value="0.4" />
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btnMuteChannel">Mute channel</button>
+        <button id="btnCalibrateNeutral">Capture neutral</button>
+        <button id="btnExportProfile">Export profile</button>
+        <button id="btnImportProfile">Import profile</button>
+        <button id="btnResetSettings">Reset settings</button>
+        <input type="file" id="fileProfile" accept="application/json,.json" hidden />
+      </div>
     </section>
 
     <section class="panel" style="grid-column: 1 / -1;">
@@ -56,6 +125,10 @@
           <span>room</span>
           <input type="text" id="inpRoom" value="demo" />
         </div>
+        <div class="field">
+          <span>room token</span>
+          <input type="password" id="inpToken" autocomplete="off" />
+        </div>
         <div class="field" id="fieldWtUrl" hidden>
           <span>wt url</span>
           <input type="text" id="inpWtUrl" value="https://localhost:4433" />
@@ -68,6 +141,8 @@
       <div class="controls">
         <button id="btnConnect">Connect</button>
         <button id="btnDisconnect" disabled>Disconnect</button>
+        <label class="check"><input type="checkbox" id="chkRecord" />Record KGM1 JSONL locally</label>
+        <button id="btnDownloadRecording" disabled>Download recording</button>
         <a id="lnkViewer" href="../viewer/?room=demo" target="_blank">Open viewer in a new tab →</a>
       </div>
       <p class="note">In local mode no server is needed. Just open the viewer from the link above in the same browser and it works.</p>

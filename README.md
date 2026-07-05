@@ -1,5 +1,7 @@
 # KAGAMI
 
+[![ci](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml)
+
 > 日本語版: [README.ja.md](README.ja.md)
 
 High-precision avatar tracking that anyone can use with a single ordinary
@@ -23,8 +25,11 @@ webcam — free, low-latency, and local-first.
 
 - In-browser inference (MediaPipe Face Landmarker, GPU/WASM); 52 expression
   channels + head pose + experimental upper body, smoothed with One Euro filters
+- Camera device/resolution/fps controls, persisted tracker/viewer settings,
+  calibration profiles, local JSONL recording, signal quality warnings, and
+  wrap-safe viewer jitter handling
 - Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
-  WebTransport datagrams (lowest latency, Rust relay)
+  WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
 - VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
 - A landing hub with a mock tracking visualization demo under [landing/](landing/)
 
@@ -48,6 +53,15 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
 
 The landing hub and mock demo are at http://localhost:8000/landing/.
 
+For offline model serving:
+
+```sh
+./scripts/fetch-models.sh
+```
+
+The tracker will prefer `vendor/mediapipe/` and fall back to the pinned CDN
+URLs when local assets are absent.
+
 ### 2. WebSocket relay (viewer on another machine)
 
 ```sh
@@ -55,6 +69,7 @@ cd relay-node && npm install && npm start   # serves the site + relays on :8787
 ```
 
 Set mode: ws on both tracker and viewer, use the same room name, Connect.
+Set `KAGAMI_RELAY_TOKEN` to require the room token field.
 
 ### 3. WebTransport relay (lowest latency)
 
@@ -68,6 +83,7 @@ limit) and regenerates on restart. relay-rs follows the wtransport 0.7 API
 docs but CI compilation is tracked in KGM-009.
 
 More setup detail: [docs/QUICKSTART.md](docs/QUICKSTART.md).
+LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).
 
 ## Repository layout
 
@@ -105,6 +121,12 @@ The plan lives in two complementary backlogs, both registered as GitHub issues:
 Bulk registration prompts:
 [docs/ISSUE_REGISTRATION_PROMPT.md](docs/ISSUE_REGISTRATION_PROMPT.md) and
 [issues/register-prompt.md](issues/register-prompt.md).
+
+Contributor and release docs:
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md),
+[docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md),
+[docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), and
+[docs/DEPENDENCY_POLICY.md](docs/DEPENDENCY_POLICY.md).
 
 ## Related projects
 

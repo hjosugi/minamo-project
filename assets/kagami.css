@@ -176,7 +176,7 @@ label.check {
   cursor: pointer;
 }
 
-input[type='text'], select {
+input[type='text'], input[type='password'], select {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink);
@@ -185,6 +185,18 @@ input[type='text'], select {
   border-radius: 8px;
   padding: 7px 10px;
   min-width: 0;
+}
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--face);
+}
+output {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .field { display: grid; gap: 4px; }
@@ -197,6 +209,10 @@ input[type='text'], select {
 }
 
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 12px;
+}
 .form-grid .wide { grid-column: 1 / -1; }
 
 .stats {
@@ -211,6 +227,31 @@ input[type='text'], select {
 .stats b { color: var(--ink); font-weight: 600; }
 
 .meters-canvas { width: 100%; height: 460px; display: block; border-radius: 6px; background: #0b0e1a; }
+
+.mini-chip {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px 8px;
+}
+.mini-chip[data-state='good'] { color: var(--ok); border-color: var(--ok); }
+.mini-chip[data-state='degraded'] { color: var(--warn); border-color: var(--warn); }
+.mini-chip[data-state='poor'] { color: var(--err); border-color: var(--err); }
+
+.warning-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.warning-list li {
+  border-left: 3px solid var(--warn);
+  padding: 4px 8px;
+  background: rgba(255, 196, 107, 0.08);
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
 
 .note { font-size: 13px; color: var(--ink-dim); margin-top: 10px; }
 .note code { font-family: var(--font-mono); color: var(--ink); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }

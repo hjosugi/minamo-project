@@ -14,10 +14,30 @@ import { ARKIT_52, NUM_CHANNELS, MIRROR_INDEX, POSE_POINTS, NUM_POSE_POINTS } fr
 import { OneEuroArray, OneEuroQuat } from '../shared/filters.js';
 import { encodeFrame } from '../shared/codec.js';
 import { KagamiTransport } from '../shared/transport.js';
+import {
+  DEFAULT_TRACKER_SETTINGS,
+  FILTER_PRESETS,
+  PROFILE_STORAGE_KEY,
+  RESOLUTION_CONSTRAINTS,
+  TRACKER_STORAGE_KEY,
+  WARNING_TAXONOMY,
+  DroppedFrameDetector,
+  applyCalibrationProfile,
+  computeQualityScore,
+  createCalibrationProfile,
+  loadJson,
+  normalizeProfile,
+  sanitizeWeights,
+  saveJson,
+} from '../shared/runtime.js';
 
-const WASM_ROOT = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
-const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
-const POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const MEDIAPIPE_VERSION = '0.10.35';
+const CDN_WASM_ROOT = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
+const CDN_FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+const CDN_POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const LOCAL_WASM_ROOT = `../vendor/mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
+const LOCAL_FACE_MODEL = '../vendor/mediapipe/models/face_landmarker.task';
+const LOCAL_POSE_MODEL = '../vendor/mediapipe/models/pose_landmarker_lite.task';
 
 const $ = (id) => document.getElementById(id);
 const video = $('video');
@@ -26,6 +46,8 @@ const overlayCtx = overlay.getContext('2d');
 const meters = $('meters');
 const metersCtx = meters.getContext('2d');
 const chip = $('statusChip');
+const qualityChip = $('qualityChip');
+const warningList = $('warningList');
 
 const css = getComputedStyle(document.documentElement);
 const COLOR_FACE = css.getPropertyValue('--face').trim();
@@ -33,10 +55,14 @@ const COLOR_POSE = css.getPropertyValue('--pose').trim();
 const COLOR_DIM = css.getPropertyValue('--ink-dim').trim();
 const COLOR_INK = css.getPropertyValue('--ink').trim();
 
+const settings = loadJson(localStorage, TRACKER_STORAGE_KEY, DEFAULT_TRACKER_SETTINGS);
+let profile = normalizeProfile(loadJson(localStorage, PROFILE_STORAGE_KEY, createCalibrationProfile('default')));
+let resolvedAssets = null;
+
 const state = {
   running: false,
-  mirror: true,
-  poseEnabled: false,
+  mirror: Boolean(settings.mirror),
+  poseEnabled: Boolean(settings.pose),
   faceLandmarker: null,
   poseLandmarker: null,
   transport: new KagamiTransport(),
@@ -49,10 +75,17 @@ const state = {
   hasPose: false,
   nameToIndex: null, // built from the first MediaPipe result
   // filters
-  weightFilter: new OneEuroArray(NUM_CHANNELS, { minCutoff: 1.6, beta: 0.4 }),
+  weightFilter: new OneEuroArray(NUM_CHANNELS, filterOptions()),
   quatFilter: new OneEuroQuat({ minCutoff: 1.2, beta: 0.8, dCutoff: 1.0 }),
   posFilter: new OneEuroArray(3, { minCutoff: 1.0, beta: 0.3 }),
   poseFilter: new OneEuroArray(NUM_POSE_POINTS * 3, { minCutoff: 0.8, beta: 0.2 }),
+  dropDetector: new DroppedFrameDetector(Number(settings.fps) || 60),
+  selectedChannel: ARKIT_52.indexOf('jawOpen'),
+  warnings: [],
+  quality: { state: 'idle', score: 0, reasons: [], warnings: [] },
+  lastFps: 0,
+  qualityCanvas: document.createElement('canvas'),
+  recording: { enabled: false, lines: [] },
   // stats
   frames: 0,
   lastStats: performance.now(),
@@ -103,9 +136,10 @@ function mat4ToQuat(m) {
 
 async function loadModels() {
   chip.textContent = 'loading models...';
-  const fileset = await FilesetResolver.forVisionTasks(WASM_ROOT);
+  const assets = await resolveModelAssets();
+  const fileset = await FilesetResolver.forVisionTasks(assets.wasmRoot);
   state.faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: FACE_MODEL, delegate: 'GPU' },
+    baseOptions: { modelAssetPath: assets.faceModel, delegate: 'GPU' },
     runningMode: 'VIDEO',
     numFaces: 1,
     outputFaceBlendshapes: true,
@@ -113,7 +147,7 @@ async function loadModels() {
   });
   if (state.poseEnabled && !state.poseLandmarker) {
     state.poseLandmarker = await PoseLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
+      baseOptions: { modelAssetPath: assets.poseModel, delegate: 'GPU' },
       runningMode: 'VIDEO',
       numPoses: 1,
     });
@@ -122,8 +156,25 @@ async function loadModels() {
 }
 
 async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Camera API is unavailable. Use HTTPS or localhost in a modern browser.');
+  }
+  if (video.srcObject) {
+    for (const t of video.srcObject.getTracks()) t.stop();
+    video.srcObject = null;
+  }
+  const res = RESOLUTION_CONSTRAINTS[$('selResolution').value] || RESOLUTION_CONSTRAINTS['720p'];
+  const deviceId = $('selCamera').value;
+  const fps = Number($('selFps').value) || 60;
+  state.dropDetector = new DroppedFrameDetector(fps);
+  const videoConstraints = {
+    width: { ideal: res.width },
+    height: { ideal: res.height },
+    frameRate: { ideal: fps },
+  };
+  if (deviceId) videoConstraints.deviceId = { exact: deviceId };
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } },
+    video: videoConstraints,
     audio: false,
   });
   video.srcObject = stream;
@@ -131,6 +182,81 @@ async function startCamera() {
   await video.play();
   overlay.width = video.videoWidth;
   overlay.height = video.videoHeight;
+  const track = stream.getVideoTracks()[0];
+  const trackSettings = track?.getSettings?.() || {};
+  $('statCamera').textContent = `${trackSettings.width || video.videoWidth}x${trackSettings.height || video.videoHeight}@${Math.round(trackSettings.frameRate || fps)}`;
+  await refreshCameras();
+}
+
+async function resolveModelAssets() {
+  if (resolvedAssets) return resolvedAssets;
+  const hasLocalModels = await assetExists(LOCAL_FACE_MODEL) && await assetExists(LOCAL_POSE_MODEL);
+  resolvedAssets = hasLocalModels
+    ? { wasmRoot: LOCAL_WASM_ROOT, faceModel: LOCAL_FACE_MODEL, poseModel: LOCAL_POSE_MODEL, source: 'local vendor' }
+    : { wasmRoot: CDN_WASM_ROOT, faceModel: CDN_FACE_MODEL, poseModel: CDN_POSE_MODEL, source: 'cdn fallback' };
+  return resolvedAssets;
+}
+
+async function assetExists(url) {
+  try {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function refreshCameras() {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  const selected = $('selCamera').value || settings.cameraId || '';
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+  $('selCamera').replaceChildren(new Option('default camera', ''));
+  devices.forEach((device, index) => {
+    const label = device.label || `camera ${index + 1}`;
+    $('selCamera').append(new Option(label, device.deviceId));
+  });
+  if ([...$('selCamera').options].some((opt) => opt.value === selected)) $('selCamera').value = selected;
+}
+
+function filterOptions() {
+  const preset = FILTER_PRESETS[settings.filterPreset] || FILTER_PRESETS.balanced;
+  return {
+    minCutoff: Number(settings.minCutoff || preset.minCutoff),
+    beta: Number(settings.beta || preset.beta),
+    dCutoff: preset.dCutoff,
+  };
+}
+
+function resetFilters() {
+  state.weightFilter = new OneEuroArray(NUM_CHANNELS, filterOptions());
+  state.quatFilter.reset();
+  state.posFilter.reset();
+  state.poseFilter.reset();
+}
+
+function checkCapabilities() {
+  const warnings = [];
+  if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    warnings.push({
+      code: WARNING_TAXONOMY.insecureContext,
+      text: 'Camera access requires HTTPS or localhost. See docs/DEV_HTTPS.md.',
+    });
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    warnings.push({ code: WARNING_TAXONOMY.noCameraApi, text: 'Camera API unavailable in this browser/context.' });
+  }
+  const gl = document.createElement('canvas').getContext('webgl2');
+  if (!gl) warnings.push({ code: WARNING_TAXONOMY.noWebgl2, text: 'WebGL2 unavailable; GPU MediaPipe will not start.' });
+  const wtOption = [...$('selMode').options].find((opt) => opt.value === 'wt');
+  if (typeof WebTransport === 'undefined') {
+    warnings.push({ code: WARNING_TAXONOMY.noWebtransport, text: 'WebTransport unsupported; wt mode is disabled.' });
+    if (wtOption) wtOption.disabled = true;
+    if ($('selMode').value === 'wt') $('selMode').value = 'local';
+  } else if (wtOption) {
+    wtOption.disabled = false;
+  }
+  renderWarnings(warnings.map((w) => w.text));
+  return warnings;
 }
 
 // ---------------------------------------------------------------- loop
@@ -144,6 +270,7 @@ function loop() {
   if (video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
     const t0 = performance.now();
+    state.dropDetector.sample(nowMs);
 
     const faceRes = state.faceLandmarker.detectForVideo(video, nowMs);
     let poseRes = null;
@@ -154,6 +281,7 @@ function loop() {
 
     const tSec = nowMs / 1000;
     const hasFace = faceRes.faceBlendshapes && faceRes.faceBlendshapes.length > 0;
+    const frameWarnings = [];
 
     if (hasFace) {
       // --- blendshapes, mapped by name into the canonical KGM1 order
@@ -189,8 +317,10 @@ function loop() {
         state.raw.set(tmp);
       }
 
-      // --- One Euro filtering
-      state.weights.set(state.raw);
+      // --- safety, calibration, and One Euro filtering
+      const sanitized = sanitizeWeights(state.raw);
+      frameWarnings.push(...sanitized.warnings);
+      state.weights.set(applyCalibrationProfile(sanitized.weights, profile));
       state.weightFilter.filter(state.weights, tSec);
       state.quat = state.quatFilter.filter(quat, tSec);
       const p = new Float32Array(pos);
@@ -213,16 +343,27 @@ function loop() {
       state.hasPose = true;
     }
 
+    state.quality = computeQualityScore({
+      meanLuma: sampleLuma(),
+      confidence: hasFace ? 1 : 0,
+      inferenceMs: state.inferMs,
+      fps: state.lastFps || Number($('selFps').value) || 60,
+      droppedFrames: state.dropDetector.dropped,
+    });
+    state.warnings = [...new Set([...frameWarnings, ...state.quality.warnings])];
+
     // --- encode and send
     if (hasFace) {
-      const buf = encodeFrame({
+      const frame = {
         t: Math.round(nowMs),
         seq: state.seq++,
         face: { quat: state.quat, pos: state.pos, weights: state.weights },
         pose: state.hasPose ? { points: state.posePoints } : null,
-      });
+      };
+      const buf = encodeFrame(frame);
       state.lastPacketBytes = buf.byteLength;
       state.transport.send(buf);
+      recordFrame(frame);
     }
 
     drawOverlay(faceRes, poseRes);
@@ -288,12 +429,18 @@ function drawMeters() {
   for (let i = 0; i < NUM_CHANNELS; i++) {
     const y = i * rowH + rowH / 2;
     const v = state.weights[i];
-    ctx.fillStyle = COLOR_DIM;
+    const selected = i === state.selectedChannel;
+    const muted = profile.muted[i];
+    if (selected) {
+      ctx.fillStyle = 'rgba(111,227,255,0.12)';
+      ctx.fillRect(0, i * rowH, cw, rowH);
+    }
+    ctx.fillStyle = muted ? 'rgba(138,144,184,0.35)' : COLOR_DIM;
     ctx.fillText(ARKIT_52[i], 4, y);
     ctx.fillStyle = 'rgba(255,255,255,0.06)';
     ctx.fillRect(labelW, y - 2, barW, 4);
-    ctx.fillStyle = COLOR_FACE;
-    ctx.globalAlpha = 0.35 + v * 0.65;
+    ctx.fillStyle = muted ? COLOR_DIM : COLOR_FACE;
+    ctx.globalAlpha = muted ? 0.25 : 0.35 + v * 0.65;
     ctx.fillRect(labelW, y - 2, barW * v, 4);
     ctx.globalAlpha = 1;
     if (v > 0.02) {
@@ -303,25 +450,190 @@ function drawMeters() {
   }
 }
 
+function sampleLuma() {
+  const canvas = state.qualityCanvas;
+  canvas.width = 32;
+  canvas.height = 18;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  try {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    }
+    return sum / (data.length / 4);
+  } catch {
+    return 128;
+  }
+}
+
+function recordFrame(frame) {
+  if (!state.recording.enabled) return;
+  state.recording.lines.push(JSON.stringify({
+    schema: 'kagami.kgm1.motion-jsonl.v1',
+    t: frame.t,
+    seq: frame.seq,
+    quality: state.quality,
+    warnings: state.warnings,
+    face: frame.face ? {
+      quat: frame.face.quat,
+      pos: frame.face.pos,
+      weights: Array.from(frame.face.weights),
+    } : null,
+    pose: frame.pose ? { points: Array.from(frame.pose.points) } : null,
+  }));
+  if (state.recording.lines.length > 36_000) state.recording.lines.shift();
+  $('btnDownloadRecording').disabled = state.recording.lines.length === 0;
+}
+
 function updateStats(nowMs) {
   if (nowMs - state.lastStats < 500) return;
   const dt = (nowMs - state.lastStats) / 1000;
-  $('statFps').textContent = (state.frames / dt).toFixed(0);
+  state.lastFps = state.frames / dt;
+  $('statFps').textContent = state.lastFps.toFixed(0);
   $('statInfer').textContent = state.inferMs.toFixed(1);
   $('statPacket').textContent = state.lastPacketBytes || '--';
+  $('statDropped').textContent = String(state.dropDetector.dropped);
   const rate = (state.transport.bytesOut - state.lastBytesOut) / dt / 1024;
   $('statRate').textContent = rate.toFixed(1);
+  qualityChip.textContent = `${state.quality.state} ${Math.round((state.quality.score || 0) * 100)}%`;
+  qualityChip.dataset.state = state.quality.state;
+  const visibleWarnings = [
+    ...state.quality.reasons,
+    ...state.warnings.filter((w) => typeof w === 'string').slice(0, 4),
+  ];
+  renderWarnings([...new Set(visibleWarnings)]);
   state.lastBytesOut = state.transport.bytesOut;
   state.frames = 0;
   state.lastStats = nowMs;
 }
 
+function renderWarnings(messages) {
+  warningList.replaceChildren(...messages.slice(0, 6).map((message) => {
+    const li = document.createElement('li');
+    li.textContent = message;
+    return li;
+  }));
+}
+
 // ---------------------------------------------------------------- ui
+
+function applySettingsToUi() {
+  $('selMode').value = settings.mode;
+  $('inpRoom').value = settings.room;
+  $('inpToken').value = settings.token;
+  $('inpWtUrl').value = settings.wtUrl;
+  $('inpWtHash').value = settings.wtHash;
+  $('chkMirror').checked = Boolean(settings.mirror);
+  $('chkPose').checked = Boolean(settings.pose);
+  $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
+  $('selResolution').value = settings.resolution;
+  $('selFps').value = settings.fps;
+  $('selFilterPreset').value = settings.filterPreset;
+  $('rngMinCutoff').value = settings.minCutoff;
+  $('rngBeta').value = settings.beta;
+  state.mirror = Boolean(settings.mirror);
+  state.poseEnabled = Boolean(settings.pose);
+  video.classList.toggle('mirrored', state.mirror);
+  updateModeFields();
+  updateViewerLink();
+  updateChannelControls();
+}
+
+function readSettingsFromUi() {
+  settings.mode = $('selMode').value;
+  settings.room = $('inpRoom').value || 'demo';
+  settings.token = $('inpToken').value;
+  settings.wtUrl = $('inpWtUrl').value;
+  settings.wtHash = $('inpWtHash').value;
+  settings.mirror = $('chkMirror').checked;
+  settings.pose = $('chkPose').checked;
+  settings.privacyLocalOnly = $('chkPrivacy').checked;
+  settings.cameraId = $('selCamera').value;
+  settings.resolution = $('selResolution').value;
+  settings.fps = $('selFps').value;
+  settings.filterPreset = $('selFilterPreset').value;
+  settings.minCutoff = Number($('rngMinCutoff').value);
+  settings.beta = Number($('rngBeta').value);
+  return settings;
+}
+
+function persistSettings() {
+  readSettingsFromUi();
+  saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
+  updateViewerLink();
+}
+
+function updateModeFields() {
+  const wt = $('selMode').value === 'wt';
+  $('fieldWtUrl').hidden = !wt;
+  $('fieldWtHash').hidden = !wt;
+}
+
+function updateViewerLink() {
+  const params = new URLSearchParams({ room: $('inpRoom').value || 'demo' });
+  if ($('inpToken').value) params.set('token', $('inpToken').value);
+  $('lnkViewer').href = `../viewer/?${params.toString()}`;
+}
+
+function updateChannelControls() {
+  const i = state.selectedChannel;
+  $('outChannel').textContent = `${i + 1}. ${ARKIT_52[i]}${profile.muted[i] ? ' (muted)' : ''}`;
+  $('rngGain').value = profile.gains[i];
+  $('rngDeadzone').value = profile.deadzones[i];
+  $('btnMuteChannel').textContent = profile.muted[i] ? 'Unmute channel' : 'Mute channel';
+  drawMeters();
+}
+
+function saveProfile() {
+  profile = normalizeProfile(profile);
+  saveJson(localStorage, PROFILE_STORAGE_KEY, profile);
+  updateChannelControls();
+}
+
+async function restartCameraIfRunning() {
+  persistSettings();
+  if (state.running) {
+    await startCamera();
+  }
+}
+
+function applyFilterControls() {
+  persistSettings();
+  resetFilters();
+}
+
+function selectMeterChannel(ev) {
+  const rect = meters.getBoundingClientRect();
+  const y = ev.clientY - rect.top;
+  state.selectedChannel = Math.max(0, Math.min(NUM_CHANNELS - 1, Math.floor((y / rect.height) * NUM_CHANNELS)));
+  updateChannelControls();
+}
+
+function downloadText(filename, content, type = 'application/json') {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+function cameraErrorMessage(e) {
+  if (e?.name === 'NotAllowedError') return 'Camera permission was denied. Allow camera access in the browser settings and try again.';
+  if (e?.name === 'NotFoundError') return 'No camera device was found. Connect a camera and press refresh/start again.';
+  if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    return 'Camera requires HTTPS or localhost. See docs/DEV_HTTPS.md for local HTTPS setup.';
+  }
+  return e?.message || 'Camera startup failed.';
+}
 
 $('btnStart').addEventListener('click', async () => {
   $('btnStart').disabled = true;
   try {
-    await loadModels();
+    checkCapabilities();
+    if (!state.faceLandmarker) await loadModels();
     await startCamera();
     $('stageHint').hidden = true;
     state.running = true;
@@ -330,8 +642,11 @@ $('btnStart').addEventListener('click', async () => {
     $('btnStop').disabled = false;
     requestAnimationFrame(loop);
   } catch (e) {
-    chip.textContent = `error: ${e.message}`;
+    const message = cameraErrorMessage(e);
+    chip.textContent = `error: ${message}`;
     chip.dataset.state = 'error';
+    $('stageHint').textContent = message;
+    $('stageHint').hidden = false;
     $('btnStart').disabled = false;
   }
 });
@@ -352,37 +667,109 @@ $('btnStop').addEventListener('click', () => {
 $('chkMirror').addEventListener('change', (e) => {
   state.mirror = e.target.checked;
   video.classList.toggle('mirrored', state.mirror);
+  persistSettings();
 });
 
 $('chkPose').addEventListener('change', async (e) => {
   state.poseEnabled = e.target.checked;
+  persistSettings();
   if (state.poseEnabled && state.running && !state.poseLandmarker && state._fileset) {
+    const assets = await resolveModelAssets();
     state.poseLandmarker = await PoseLandmarker.createFromOptions(state._fileset, {
-      baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
+      baseOptions: { modelAssetPath: assets.poseModel, delegate: 'GPU' },
       runningMode: 'VIDEO',
       numPoses: 1,
     });
   }
 });
 
+$('chkPrivacy').addEventListener('change', persistSettings);
+$('selCamera').addEventListener('change', restartCameraIfRunning);
+$('selResolution').addEventListener('change', restartCameraIfRunning);
+$('selFps').addEventListener('change', restartCameraIfRunning);
+
 $('selMode').addEventListener('change', () => {
-  const wt = $('selMode').value === 'wt';
-  $('fieldWtUrl').hidden = !wt;
-  $('fieldWtHash').hidden = !wt;
+  updateModeFields();
+  persistSettings();
 });
 
-$('inpRoom').addEventListener('input', () => {
-  $('lnkViewer').href = `../viewer/?room=${encodeURIComponent($('inpRoom').value || 'demo')}`;
+$('inpRoom').addEventListener('input', persistSettings);
+$('inpToken').addEventListener('input', persistSettings);
+$('inpWtUrl').addEventListener('input', persistSettings);
+$('inpWtHash').addEventListener('input', persistSettings);
+
+$('selFilterPreset').addEventListener('change', () => {
+  const preset = FILTER_PRESETS[$('selFilterPreset').value] || FILTER_PRESETS.balanced;
+  $('rngMinCutoff').value = preset.minCutoff;
+  $('rngBeta').value = preset.beta;
+  applyFilterControls();
+});
+$('rngMinCutoff').addEventListener('input', () => {
+  $('selFilterPreset').value = 'balanced';
+  applyFilterControls();
+});
+$('rngBeta').addEventListener('input', () => {
+  $('selFilterPreset').value = 'balanced';
+  applyFilterControls();
+});
+
+meters.addEventListener('pointerdown', selectMeterChannel);
+meters.addEventListener('contextmenu', (ev) => {
+  ev.preventDefault();
+  selectMeterChannel(ev);
+  profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
+  saveProfile();
+});
+$('rngGain').addEventListener('input', (e) => {
+  profile.gains[state.selectedChannel] = Number(e.target.value);
+  saveProfile();
+});
+$('rngDeadzone').addEventListener('input', (e) => {
+  profile.deadzones[state.selectedChannel] = Number(e.target.value);
+  saveProfile();
+});
+$('btnMuteChannel').addEventListener('click', () => {
+  profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
+  saveProfile();
+});
+$('btnCalibrateNeutral').addEventListener('click', () => {
+  profile.offsets = Array.from(state.raw);
+  profile.createdAt = new Date().toISOString();
+  saveProfile();
+  chip.textContent = 'neutral captured';
+  chip.dataset.state = 'open';
+});
+$('btnExportProfile').addEventListener('click', () => {
+  downloadText('kagami-calibration-profile.json', `${JSON.stringify(profile, null, 2)}\n`);
+});
+$('btnImportProfile').addEventListener('click', () => $('fileProfile').click());
+$('fileProfile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  profile = normalizeProfile(JSON.parse(await file.text()));
+  saveProfile();
+});
+$('btnResetSettings').addEventListener('click', () => {
+  Object.assign(settings, DEFAULT_TRACKER_SETTINGS);
+  profile = createCalibrationProfile('default');
+  saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
+  saveProfile();
+  applySettingsToUi();
+  resetFilters();
+  chip.textContent = 'settings reset';
+  chip.dataset.state = 'idle';
 });
 
 $('btnConnect').addEventListener('click', async () => {
   try {
+    persistSettings();
     await state.transport.connect({
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'pub',
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
+      token: $('inpToken').value,
     });
     chip.textContent = `tracking + ${$('selMode').value}:${$('inpRoom').value}`;
     chip.dataset.state = 'open';
@@ -399,3 +786,27 @@ $('btnDisconnect').addEventListener('click', async () => {
   $('btnConnect').disabled = false;
   $('btnDisconnect').disabled = true;
 });
+
+$('chkRecord').addEventListener('change', (e) => {
+  state.recording.enabled = e.target.checked;
+  if (state.recording.enabled) state.recording.lines = [];
+  $('btnDownloadRecording').disabled = state.recording.lines.length === 0;
+});
+
+$('btnDownloadRecording').addEventListener('click', () => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  downloadText(`kagami-motion-${stamp}.jsonl`, `${state.recording.lines.join('\n')}\n`, 'application/x-ndjson');
+});
+
+window.addEventListener('keydown', (ev) => {
+  if (ev.key.toLowerCase() !== 'r' || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  resetFilters();
+  state.nameToIndex = null;
+  chip.textContent = 'tracking reset';
+  chip.dataset.state = state.running ? 'open' : 'idle';
+});
+
+applySettingsToUi();
+checkCapabilities();
+refreshCameras().catch(() => {});
+navigator.mediaDevices?.addEventListener?.('devicechange', refreshCameras);

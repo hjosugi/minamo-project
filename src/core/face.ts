@@ -32,7 +32,7 @@ export function defaultMouth(): MouthState {
   };
 }
 
-export function inferVowel(open: number, wide: number, pucker: number): MouthState['vowel'] {
+export function inferVowel(open: number, wide: number, pucker: number): NonNullable<MouthState['vowel']> {
   if (open > 0.68 && wide < 0.45) return 'A';
   if (wide > 0.68 && open < 0.45) return 'I';
   if (pucker > 0.62 && open < 0.55) return 'U';

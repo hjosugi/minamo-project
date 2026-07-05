@@ -69,45 +69,61 @@ export function encodeFrame(frame) {
 }
 
 /**
- * @param {ArrayBuffer|Uint8Array} data
- * @returns {object|null} decoded frame, or null if the packet is not KGM1
+ * The decoder is deliberately non-throwing: hostile, truncated, future-version,
+ * or malformed packets return null. Callers can pass network datagrams straight
+ * into this function without wrapping it in try/catch.
+ *
+ * @param {ArrayBuffer|ArrayBufferView} data
+ * @returns {object|null} decoded frame, or null if the packet is not valid KGM1
  */
 export function decodeFrame(data) {
-  const buf = data instanceof Uint8Array
-    ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-    : data;
-  if (buf.byteLength < HEADER_BYTES) return null;
-  const dv = new DataView(buf);
-  let o = 0;
+  try {
+    const buf = normalizeBuffer(data);
+    if (!buf || buf.byteLength < HEADER_BYTES) return null;
+    const dv = new DataView(buf);
+    let o = 0;
 
-  if (dv.getUint16(o, true) !== MAGIC) return null; o += 2;
-  const version = dv.getUint8(o); o += 1;
-  if (version !== VERSION) return null;
-  const blocks = dv.getUint8(o); o += 1;
-  const t = dv.getUint32(o, true); o += 4;
-  const seq = dv.getUint16(o, true); o += 2;
+    if (dv.getUint16(o, true) !== MAGIC) return null; o += 2;
+    const version = dv.getUint8(o); o += 1;
+    if (version !== VERSION) return null;
+    const blocks = dv.getUint8(o); o += 1;
+    if ((blocks & ~(BLOCK_FACE | BLOCK_POSE)) !== 0) return null;
+    const t = dv.getUint32(o, true); o += 4;
+    const seq = dv.getUint16(o, true); o += 2;
 
-  const frame = { t, seq, face: null, pose: null };
+    const frame = { t, seq, face: null, pose: null };
 
-  if (blocks & BLOCK_FACE) {
-    if (buf.byteLength < o + FACE_BYTES) return null;
-    const quat = new Array(4);
-    for (let i = 0; i < 4; i++) { quat[i] = dv.getInt16(o, true) / QUAT_SCALE; o += 2; }
-    const pos = new Array(3);
-    for (let i = 0; i < 3; i++) { pos[i] = dv.getInt16(o, true) / POS_SCALE; o += 2; }
-    const weights = new Float32Array(NUM_CHANNELS);
-    for (let i = 0; i < NUM_CHANNELS; i++) { weights[i] = dv.getUint8(o) / 255; o += 1; }
-    frame.face = { quat, pos, weights };
+    if (blocks & BLOCK_FACE) {
+      if (buf.byteLength < o + FACE_BYTES) return null;
+      const quat = new Array(4);
+      for (let i = 0; i < 4; i++) { quat[i] = dv.getInt16(o, true) / QUAT_SCALE; o += 2; }
+      const pos = new Array(3);
+      for (let i = 0; i < 3; i++) { pos[i] = dv.getInt16(o, true) / POS_SCALE; o += 2; }
+      const weights = new Float32Array(NUM_CHANNELS);
+      for (let i = 0; i < NUM_CHANNELS; i++) { weights[i] = dv.getUint8(o) / 255; o += 1; }
+      frame.face = { quat, pos, weights };
+    }
+
+    if (blocks & BLOCK_POSE) {
+      if (buf.byteLength < o + 1) return null;
+      const count = dv.getUint8(o); o += 1;
+      if (count !== NUM_POSE_POINTS) return null;
+      if (buf.byteLength < o + count * 6) return null;
+      const points = new Float32Array(count * 3);
+      for (let i = 0; i < count * 3; i++) { points[i] = dv.getInt16(o, true) / POS_SCALE; o += 2; }
+      frame.pose = { points };
+    }
+
+    return frame;
+  } catch {
+    return null;
   }
+}
 
-  if (blocks & BLOCK_POSE) {
-    if (buf.byteLength < o + 1) return null;
-    const count = dv.getUint8(o); o += 1;
-    if (buf.byteLength < o + count * 6) return null;
-    const points = new Float32Array(count * 3);
-    for (let i = 0; i < count * 3; i++) { points[i] = dv.getInt16(o, true) / POS_SCALE; o += 2; }
-    frame.pose = { points };
+function normalizeBuffer(data) {
+  if (data instanceof ArrayBuffer) return data;
+  if (ArrayBuffer.isView(data)) {
+    return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
   }
-
-  return frame;
+  return null;
 }

@@ -24,7 +24,12 @@ use wtransport::{Endpoint, Identity, ServerConfig};
 const PORT: u16 = 4433;
 const ROOM_CAPACITY: usize = 512; // frames buffered per room before lagging subs drop
 
-type Rooms = Arc<Mutex<HashMap<String, broadcast::Sender<Vec<u8>>>>>;
+struct Room {
+    tx: broadcast::Sender<Vec<u8>>,
+    participants: usize,
+}
+
+type Rooms = Arc<Mutex<HashMap<String, Room>>>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,6 +44,11 @@ async fn main() -> anyhow::Result<()> {
 
     let endpoint = Endpoint::server(config)?;
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+    let relay_token = Arc::new(
+        std::env::var("KAGAMI_RELAY_TOKEN")
+            .or_else(|_| std::env::var("ROOM_TOKEN"))
+            .unwrap_or_default(),
+    );
 
     println!("KAGAMI relay-rs (WebTransport)");
     println!("  url  : https://localhost:{PORT}/room/<room>/<pub|sub>");
@@ -49,47 +59,61 @@ async fn main() -> anyhow::Result<()> {
     loop {
         let incoming = endpoint.accept().await;
         let rooms = rooms.clone();
+        let relay_token = relay_token.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_session(incoming, rooms).await {
+            if let Err(e) = handle_session(incoming, rooms, relay_token).await {
                 eprintln!("[session] {e}");
             }
         });
     }
 }
 
-async fn handle_session(incoming: IncomingSession, rooms: Rooms) -> anyhow::Result<()> {
+async fn handle_session(
+    incoming: IncomingSession,
+    rooms: Rooms,
+    relay_token: Arc<String>,
+) -> anyhow::Result<()> {
     let request = incoming.await?;
     let path = request.path().to_string();
 
     // expected path: /room/<room>/<pub|sub>
+    // authenticated path: /room/<room>/<token>/<pub|sub>
     let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
-    if parts.len() != 3 || parts[0] != "room" {
+    let (room, token, role) = match parts.as_slice() {
+        ["room", room, role] => ((*room).to_string(), "", (*role).to_string()),
+        ["room", room, token, role] => ((*room).to_string(), *token, (*role).to_string()),
+        _ => {
+            request.not_found().await;
+            return Ok(());
+        }
+    };
+    if !relay_token.is_empty() && !constant_time_equal(token, relay_token.as_str()) {
         request.not_found().await;
         return Ok(());
     }
-    let room = parts[1].to_string();
-    let role = parts[2].to_string();
+    if role != "pub" && role != "sub" {
+        request.not_found().await;
+        return Ok(());
+    }
 
     let connection = request.accept().await?;
     println!("[join] room={room} role={role}");
 
     let tx = {
         let mut map = rooms.lock().await;
-        map.entry(room.clone())
-            .or_insert_with(|| broadcast::channel(ROOM_CAPACITY).0)
-            .clone()
+        let entry = map.entry(room.clone()).or_insert_with(|| Room {
+            tx: broadcast::channel(ROOM_CAPACITY).0,
+            participants: 0,
+        });
+        entry.participants += 1;
+        entry.tx.clone()
     };
 
     match role.as_str() {
         "pub" => {
             // Publisher: every received datagram fans out to the room.
-            loop {
-                match connection.receive_datagram().await {
-                    Ok(dgram) => {
-                        let _ = tx.send(dgram.to_vec());
-                    }
-                    Err(_) => break, // connection closed
-                }
+            while let Ok(dgram) = connection.receive_datagram().await {
+                let _ = tx.send(dgram.to_vec());
             }
         }
         "sub" => {
@@ -118,5 +142,29 @@ async fn handle_session(incoming: IncomingSession, rooms: Rooms) -> anyhow::Resu
     }
 
     println!("[leave] room={room} role={role}");
+    gc_room(&rooms, &room).await;
     Ok(())
+}
+
+async fn gc_room(rooms: &Rooms, room: &str) {
+    let mut map = rooms.lock().await;
+    if let Some(state) = map.get_mut(room) {
+        state.participants = state.participants.saturating_sub(1);
+        if state.participants == 0 {
+            map.remove(room);
+        }
+    }
+}
+
+fn constant_time_equal(a: &str, b: &str) -> bool {
+    let left = a.as_bytes();
+    let right = b.as_bytes();
+    let max = left.len().max(right.len()).max(1);
+    let mut diff = (left.len() ^ right.len()) as u8;
+    for i in 0..max {
+        let l = *left.get(i).unwrap_or(&0);
+        let r = *right.get(i).unwrap_or(&0);
+        diff |= l ^ r;
+    }
+    diff == 0
 }

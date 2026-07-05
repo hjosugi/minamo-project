@@ -19,17 +19,15 @@ export class MediaPipeTasksAdapter {
   constructor(private readonly options: MediaPipeAdapterOptions) {}
 
   async init(): Promise<void> {
-    // TODO: Import @mediapipe/tasks-vision and initialize FilesetResolver,
-    // HandLandmarker, and FaceLandmarker in VIDEO or LIVE_STREAM mode.
-    // Keep this file as the integration boundary so the rest of KGM1 does not
-    // depend directly on MediaPipe-specific result objects.
+    // Browser-facing pages use direct MediaPipe Tasks imports today. This class
+    // keeps the next-gen TypeScript pipeline independent from vendor result
+    // objects until the adapter is wired into that pipeline.
     void this.options;
     this.initialized = true;
   }
 
   async detect(_video: HTMLVideoElement, _timeMs: number): Promise<MediaPipeAdapterResult> {
     if (!this.initialized) throw new Error('MediaPipeTasksAdapter is not initialized');
-    // TODO: Convert MediaPipe landmarks and blendshapes into KGM1 states.
     return { hands: [] };
   }
 }

@@ -7,15 +7,18 @@ Primary language is English; documents that originated in Japanese keep a
 
 - [../README.md](../README.md) ([日本語](../README.ja.md))
 - [QUICKSTART.md](QUICKSTART.md) ([日本語](QUICKSTART.ja.md))
+- [DEV_HTTPS.md](DEV_HTTPS.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — as implemented today
 - [ARCHITECTURE_TARGET.md](ARCHITECTURE_TARGET.md) — target-state pipeline
 - [PROTOCOL.md](PROTOCOL.md) — implemented KGM1 v1 wire format
 - [PROTOCOL_V2_DRAFT.md](PROTOCOL_V2_DRAFT.md) — rich tracking schema draft (hands, drums, quality)
 - [ROADMAP.md](ROADMAP.md) — milestones M0–M6 + phase appendix
+- [GLOSSARY.md](GLOSSARY.md)
 
 ## Backlogs and registration
 
 - [BACKLOG.md](BACKLOG.md) — 53 curated issues `[KGM-001..053]`
+- [ISSUE_CLOSURE.md](ISSUE_CLOSURE.md)
 - [ISSUE_REGISTRATION_PROMPT.md](ISSUE_REGISTRATION_PROMPT.md) ([日本語](ISSUE_REGISTRATION_PROMPT.ja.md))
 - [../issues/README.md](../issues/README.md) — 142 granular issue files ([日本語](../issues/README.ja.md))
 - [../issues/register-prompt.md](../issues/register-prompt.md) ([日本語](../issues/register-prompt-ja.md))
@@ -55,6 +58,11 @@ Primary language is English; documents that originated in Japanese keep a
 ## Engineering references
 
 - [adr/](adr/) — architecture decision records
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [ISSUE_LABELS.md](ISSUE_LABELS.md)
+- [DEPENDENCY_POLICY.md](DEPENDENCY_POLICY.md)
+- [SECURITY_REVIEW.md](SECURITY_REVIEW.md)
+- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 - [benchmarks/quality-gates.md](benchmarks/quality-gates.md)
 - [dev/implementation-order.md](dev/implementation-order.md)
 - [ml/model-roadmap-yolo-edge.md](ml/model-roadmap-yolo-edge.md)

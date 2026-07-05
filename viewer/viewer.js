@@ -10,21 +10,29 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
 import { decodeFrame } from '../shared/codec.js';
 import { KagamiTransport } from '../shared/transport.js';
+import {
+  DEFAULT_VIEWER_SETTINGS,
+  VIEWER_STORAGE_KEY,
+  FrameOrderGate,
+  loadJson,
+  saveJson,
+} from '../shared/runtime.js';
 
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
+const settings = loadJson(localStorage, VIEWER_STORAGE_KEY, DEFAULT_VIEWER_SETTINGS);
 
 // ---------------------------------------------------------------- scene
 
 const container = $('scene');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0f1220);
+scene.background = settings.transparent ? null : new THREE.Color(0x0f1220);
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 30);
 camera.position.set(0, 1.42, 1.4);
@@ -273,6 +281,7 @@ function gazeY(w) {
 // ---------------------------------------------------------------- receive
 
 const transport = new KagamiTransport();
+const orderGate = new FrameOrderGate();
 let recvFrames = 0;
 let lastBytesIn = 0;
 let lastStats = performance.now();
@@ -280,6 +289,8 @@ let lastStats = performance.now();
 transport.addEventListener('frame', (ev) => {
   const frame = decodeFrame(ev.detail);
   if (!frame || !frame.face) return;
+  const accepted = orderGate.accept(frame);
+  if (!accepted.ok) return;
   const q = frame.face.quat;
   tmpQ.set(q[0], q[1], q[2], q[3]);
   if (!hasRef) {
@@ -303,7 +314,7 @@ transport.addEventListener('status', (ev) => {
 const clock = new THREE.Clock();
 function render() {
   const dt = Math.min(clock.getDelta(), 0.1);
-  const k = 1 - Math.exp(-dt * 24); // easing toward network targets
+  const k = 1 - Math.exp(-dt * orderGate.easingPerSecond()); // adapts to inbound source fps
 
   current.quat.slerp(target.quat, k);
   for (let i = 0; i < NUM_CHANNELS; i++) {
@@ -320,6 +331,8 @@ function render() {
     const dts = (now - lastStats) / 1000;
     $('statFps').textContent = (recvFrames / dts).toFixed(0);
     $('statRate').textContent = ((transport.bytesIn - lastBytesIn) / dts / 1024).toFixed(1);
+    $('statLoss').textContent = String(orderGate.lost);
+    $('statReorder').textContent = String(orderGate.reordered);
     recvFrames = 0;
     lastBytesIn = transport.bytesIn;
     lastStats = now;
@@ -331,22 +344,68 @@ render();
 // ---------------------------------------------------------------- ui
 
 const params = new URLSearchParams(location.search);
-if (params.get('room')) $('inpRoom').value = params.get('room');
+if (params.get('room')) settings.room = params.get('room');
+if (params.get('token')) settings.token = params.get('token');
 
-$('selMode').addEventListener('change', () => {
+function applySettingsToUi() {
+  $('selMode').value = settings.mode;
+  $('inpRoom').value = settings.room;
+  $('inpToken').value = settings.token;
+  $('inpWtUrl').value = settings.wtUrl;
+  $('inpWtHash').value = settings.wtHash;
+  $('chkTransparent').checked = Boolean(settings.transparent);
+  updateModeFields();
+  applyBackground();
+}
+
+function readSettingsFromUi() {
+  settings.mode = $('selMode').value;
+  settings.room = $('inpRoom').value || 'demo';
+  settings.token = $('inpToken').value;
+  settings.wtUrl = $('inpWtUrl').value;
+  settings.wtHash = $('inpWtHash').value;
+  settings.transparent = $('chkTransparent').checked;
+  return settings;
+}
+
+function persistSettings() {
+  saveJson(localStorage, VIEWER_STORAGE_KEY, readSettingsFromUi());
+}
+
+function updateModeFields() {
   const wt = $('selMode').value === 'wt';
   $('fieldWtUrl').hidden = !wt;
   $('fieldWtHash').hidden = !wt;
+}
+
+function applyBackground() {
+  renderer.setClearColor(0x000000, settings.transparent ? 0 : 1);
+  scene.background = settings.transparent ? null : new THREE.Color(0x0f1220);
+}
+
+$('selMode').addEventListener('change', () => {
+  updateModeFields();
+  persistSettings();
+});
+$('inpRoom').addEventListener('input', persistSettings);
+$('inpToken').addEventListener('input', persistSettings);
+$('inpWtUrl').addEventListener('input', persistSettings);
+$('inpWtHash').addEventListener('input', persistSettings);
+$('chkTransparent').addEventListener('change', () => {
+  persistSettings();
+  applyBackground();
 });
 
 $('btnConnect').addEventListener('click', async () => {
   try {
+    persistSettings();
     await transport.connect({
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'sub',
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
+      token: $('inpToken').value,
     });
   } catch (e) {
     chip.textContent = `connect error: ${e.message}`;
@@ -398,6 +457,7 @@ if (params.get('vrm')) {
 }
 
 // auto-connect local mode when opened from the tracker link
+applySettingsToUi();
 if (params.get('room')) {
-  transport.connect({ mode: 'local', room: params.get('room'), role: 'sub' }).catch(() => {});
+  transport.connect({ mode: 'local', room: settings.room, role: 'sub', token: settings.token }).catch(() => {});
 }

@@ -51,6 +51,10 @@
           <span>room</span>
           <input type="text" id="inpRoom" value="demo" />
         </div>
+        <div class="field">
+          <span>room token</span>
+          <input type="password" id="inpToken" autocomplete="off" />
+        </div>
         <div class="field" id="fieldWtUrl" hidden>
           <span>wt url</span>
           <input type="text" id="inpWtUrl" value="https://localhost:4433" />
@@ -64,11 +68,14 @@
         <button id="btnConnect" class="primary">Connect</button>
         <button id="btnCenter">Center</button>
         <button id="btnLoadVrm">Open VRM</button>
+        <label class="check"><input type="checkbox" id="chkTransparent" />Transparent</label>
         <input type="file" id="fileVrm" accept=".vrm" hidden />
       </div>
       <div class="stats">
         <span>recv <b id="statFps">--</b> fps</span>
         <span>in <b id="statRate">--</b> KB/s</span>
+        <span>loss <b id="statLoss">0</b></span>
+        <span>reorder <b id="statReorder">0</b></span>
         <span>avatar <b id="statAvatar">built-in bot</b></span>
       </div>
       <p class="note">Drop a VRM file to swap the avatar. Without a VRM, the built-in bot still works.</p>
