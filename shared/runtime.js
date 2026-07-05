@@ -391,7 +391,7 @@ export function parseMotionJsonl(text, { maxFrames = MAX_MOTION_JSONL_FRAMES } =
     } catch (error) {
       throw new Error(`Invalid motion JSONL at line ${i + 1}: ${error.message}`);
     }
-    if (value?.schema === 'minamo.kgm1.recording-metadata.v1' || value?.schema === 'kagami.kgm1.recording-metadata.v1') continue;
+    if (value?.schema === 'minamo.kgm1.recording-metadata.v1') continue;
     frames.push(parseMotionRecord(value, i + 1));
     if (frames.length >= limit) break;
   }
