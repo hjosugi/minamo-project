@@ -6,7 +6,8 @@
   "packageManager": "pnpm@11.0.0",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build",
     "lint": "node scripts/lint.mjs",
     "preview": "vite preview",
     "test": "node tests/run-tests.mjs && vitest run",

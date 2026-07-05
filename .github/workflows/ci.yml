@@ -12,11 +12,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm run lint
-      - run: npm test
-      - run: npm run verify
-      - run: npm run build
+      - name: Install dependencies
+        run: npm install
+      - name: Lint source and docs
+        run: npm run lint
+      - name: Run unit and structure smoke tests
+        run: npm test
+      - name: Verify repository structure
+        run: npm run verify
+      - name: TypeScript strict gate
+        run: npm run typecheck
+      - name: Build production bundle
+        run: npm run build
 
   rust:
     runs-on: ubuntu-latest
