@@ -56,6 +56,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [product/troubleshooting.md](product/troubleshooting.md)
 - [product/creator-presets.schema.json](product/creator-presets.schema.json)
 - [product/avatar-preset-profile.schema.json](product/avatar-preset-profile.schema.json)
+- [product/expression-mapping.schema.json](product/expression-mapping.schema.json)
 
 ## Integrations, transport, compression
 

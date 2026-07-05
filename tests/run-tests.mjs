@@ -18,6 +18,15 @@ import {
   encodeKgm1bPacket,
 } from '../shared/kgm1b.js';
 import {
+  EXPRESSION_MAPPING_SCHEMA,
+  createDefaultVrmExpressionMap,
+  createPerfectSyncExpressionMap,
+  detectPerfectSyncExpressions,
+  evaluateExpressionMap,
+  parseExpressionMap,
+  serializeExpressionMap,
+} from '../shared/expression-mapping.js';
+import {
   ClockOffsetEstimator,
   KGM2_FACE_CHANNELS,
   KGM2_FACE_MASK_BYTES,
@@ -986,4 +995,30 @@ function kgm2FaceFrame(seq, overrides = {}) {
 }
 
 assert.equal(ARKIT_52.length, NUM_CHANNELS);
+
+{
+  const perfectNames = ARKIT_52.slice(0, 45);
+  const perfect = detectPerfectSyncExpressions(perfectNames);
+  assert.equal(perfect.active, true);
+  assert.equal(perfect.matched.length, 45);
+  const notPerfect = detectPerfectSyncExpressions(ARKIT_52.slice(0, 44));
+  assert.equal(notPerfect.active, false);
+
+  const identityMap = createPerfectSyncExpressionMap(perfectNames);
+  assert.equal(identityMap.schema, EXPRESSION_MAPPING_SCHEMA);
+  assert.equal(identityMap.targets.length, 45);
+  const weights = new Float32Array(NUM_CHANNELS);
+  weights[CHANNEL_INDEX.browDownLeft] = 0.7;
+  weights[CHANNEL_INDEX.jawOpen] = 0.6;
+  const identityOutputs = evaluateExpressionMap(identityMap, weights);
+  assert.ok(Math.abs(identityOutputs.find((target) => target.out === 'browDownLeft').value - 0.7) < 1e-6);
+
+  const fallbackMap = createDefaultVrmExpressionMap(['aa', 'happy', 'blink']);
+  const roundTripped = parseExpressionMap(serializeExpressionMap(fallbackMap));
+  assert.equal(roundTripped.schema, EXPRESSION_MAPPING_SCHEMA);
+  assert.deepEqual(roundTripped.targets.map((target) => target.out).sort(), ['aa', 'blink', 'happy']);
+  const fallbackOutputs = evaluateExpressionMap(roundTripped, weights);
+  assert.ok(Math.abs(fallbackOutputs.find((target) => target.out === 'aa').value - 0.84) < 1e-6);
+}
+
 console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, and shortcut tests passed.`);

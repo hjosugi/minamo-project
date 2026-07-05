@@ -24,7 +24,12 @@
       width: min(340px, calc(100vw - 28px));
       z-index: 10;
     }
-    .hud .panel { backdrop-filter: blur(6px); background: rgba(22, 26, 44, 0.88); }
+    .hud .panel {
+      max-height: calc(100vh - 28px);
+      overflow: auto;
+      backdrop-filter: blur(6px);
+      background: rgba(22, 26, 44, 0.88);
+    }
     .hud .stats { margin-top: 8px; }
     body.hud-hidden .hud { display: none; }
     .dropveil {
@@ -108,6 +113,17 @@
         <span>reorder <b id="statReorder">0</b></span>
         <span>avatar <b id="statAvatar">built-in bot</b></span>
       </div>
+      <details class="mapping-editor" open>
+        <summary>Mapping <b id="statMapping">fallback</b></summary>
+        <textarea id="txtExpressionMap" rows="8" spellcheck="false"></textarea>
+        <div class="controls">
+          <button id="btnApplyMapping">Apply</button>
+          <button id="btnImportMapping">Load</button>
+          <button id="btnExportMapping">Save</button>
+          <button id="btnResetMapping">Reset</button>
+          <input type="file" id="fileExpressionMap" accept=".json,application/json" hidden />
+        </div>
+      </details>
       <p class="note">Drop a VRM file to swap the avatar, or drop a tracker JSONL recording to replay motion.</p>
     </div>
   </div>

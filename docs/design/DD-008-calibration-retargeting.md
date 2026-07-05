@@ -36,7 +36,9 @@ data model is one struct with two UIs.
 Mapping document per avatar:
 
 ```
-{ "targets": [
+{ "schema": "minamo.expression-map.v1",
+  "name": "Creator rig",
+  "targets": [
     { "out": "happy",           // VRM expression or Inochi2D param
       "expr": [ ["mouthSmileLeft", 0.5], ["mouthSmileRight", 0.5] ],
       "curve": "easeIn", "clamp": [0, 1] } ] }
@@ -48,6 +50,7 @@ Mapping document per avatar:
   live. Export/import JSON; community-shareable per avatar.
 - The same document format drives VRM expressions and Inochi2D parameters
   (DD-004); only the output namespace differs.
+- Schema: [../product/expression-mapping.schema.json](../product/expression-mapping.schema.json).
 
 ## Why normalize before the wire
 

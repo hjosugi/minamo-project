@@ -34,6 +34,7 @@ REQUIRED = [
     'docs/product/troubleshooting.md',
     'docs/product/creator-presets.schema.json',
     'docs/product/avatar-preset-profile.schema.json',
+    'docs/product/expression-mapping.schema.json',
     'landing/index.html',
     'landing/app.js',
     'roadmap/index.html',
@@ -46,6 +47,7 @@ REQUIRED = [
     'shared/kgm1b.js',
     'shared/kgm2.js',
     'shared/e2ee.js',
+    'shared/expression-mapping.js',
     'shared/recording.js',
     'tests/fixtures/kgm1-synthetic.jsonl',
     'tests/fixtures/hand-golden-clip.json',
@@ -1074,6 +1076,61 @@ def validate_scene_preset_contracts() -> None:
             add_error('README.md', f'missing README scene preset URL detail: {needle}')
 
 
+def validate_perfect_sync_mapping_contracts() -> None:
+    mapping = read('shared/expression-mapping.js')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    schema = read('docs/product/expression-mapping.schema.json')
+    tests = read('tests/run-tests.mjs')
+    dd = read('docs/design/DD-008-calibration-retargeting.md')
+    integrations = read('docs/integrations/avatar-integrations.md')
+
+    for needle in [
+        'EXPRESSION_MAPPING_SCHEMA',
+        'PERFECT_SYNC_MIN_MATCHES = 45',
+        'detectPerfectSyncExpressions',
+        'createPerfectSyncExpressionMap',
+        'createDefaultVrmExpressionMap',
+        'parseExpressionMap',
+        'serializeExpressionMap',
+        'evaluateExpressionMap',
+        'applyExpressionCurve',
+    ]:
+        if needle not in mapping:
+            add_error('shared/expression-mapping.js', f'missing expression mapping contract: {needle}')
+    for needle in [
+        'configureExpressionMapping',
+        'listVrmExpressionNames',
+        'perfectSyncState.active',
+        'applyVrmExpressionMap',
+        'queueExpressionMapApply',
+        'exportExpressionMap',
+        'parseExpressionMap(await file.text())',
+    ]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing Perfect Sync viewer contract: {needle}')
+    for needle in ['mapping-editor', 'statMapping', 'txtExpressionMap', 'btnApplyMapping', 'btnImportMapping', 'btnExportMapping', 'btnResetMapping', 'fileExpressionMap']:
+        if needle not in viewer_html:
+            add_error('viewer/index.html', f'missing mapping editor UI contract: {needle}')
+    for needle in ['minamo.expression-map.v1', 'targets', 'expr', 'easeIn', 'easeOut']:
+        if needle not in schema:
+            add_error('docs/product/expression-mapping.schema.json', f'missing expression mapping schema contract: {needle}')
+    for needle in [
+        'detectPerfectSyncExpressions(perfectNames)',
+        'createPerfectSyncExpressionMap(perfectNames)',
+        'parseExpressionMap(serializeExpressionMap(fallbackMap))',
+        'evaluateExpressionMap(roundTripped, weights)',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing expression mapping regression coverage: {needle}')
+    for needle in ['minamo.expression-map.v1', 'expression-mapping.schema.json', '>= 45 of the ARKit names']:
+        if needle not in dd:
+            add_error('docs/design/DD-008-calibration-retargeting.md', f'missing retargeting documentation: {needle}')
+    for needle in ['minamo.expression-map.v1', 'Perfect Sync VRMs are auto-detected', 'edited live and exported as JSON']:
+        if needle not in integrations:
+            add_error('docs/integrations/avatar-integrations.md', f'missing integration Perfect Sync documentation: {needle}')
+
+
 def validate_transport_contracts() -> None:
     transport = read('shared/transport.js')
     tests = read('tests/run-tests.mjs')
@@ -1354,6 +1411,7 @@ validate_e2ee_contracts()
 validate_avatar_mapping_contracts()
 validate_obs_viewer_contracts()
 validate_scene_preset_contracts()
+validate_perfect_sync_mapping_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

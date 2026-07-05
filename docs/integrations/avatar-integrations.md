@@ -63,6 +63,12 @@ target into a custom target expected by a creator rig.
 }
 ```
 
+Expression retargeting uses the shareable
+[`minamo.expression-map.v1`](../product/expression-mapping.schema.json) format.
+Perfect Sync VRMs are auto-detected when at least 45 ARKit expression names are
+present; the viewer then drives the matching expressions 1:1. Other rigs use
+weighted source-channel mappings that can be edited live and exported as JSON.
+
 ## 5. OBS
 
 OBS path:

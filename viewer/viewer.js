@@ -10,8 +10,16 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-import { CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
+import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
 import { decodeFrame } from '../shared/codec.js';
+import {
+  createDefaultVrmExpressionMap,
+  createPerfectSyncExpressionMap,
+  detectPerfectSyncExpressions,
+  evaluateExpressionMap,
+  parseExpressionMap,
+  serializeExpressionMap,
+} from '../shared/expression-mapping.js';
 import { MinamoTransport } from '../shared/transport.js';
 import {
   DEFAULT_VIEWER_SETTINGS,
@@ -147,6 +155,10 @@ const BONE_DOWN = new THREE.Vector3(0, -1, 0);
 let vrm = null;
 let bot = buildBot();
 scene.add(bot.group);
+let expressionMap = createDefaultVrmExpressionMap();
+let availableExpressionNames = [];
+let perfectSyncState = detectPerfectSyncExpressions([]);
+let mappingEditTimer = null;
 
 // ---------------------------------------------------------------- built-in bot
 
@@ -266,6 +278,7 @@ async function loadVrmFromUrl(url, label) {
   vrm.scene.position.set(0, 0, 0);
   scene.add(vrm.scene);
   if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
+  configureExpressionMapping(label);
   bot.group.visible = false;
   $('statAvatar').textContent = label;
 }
@@ -275,6 +288,75 @@ const expr = (name, v) => {
   if (em && em.getExpressionTrackName(name) !== null) em.setValue(name, v);
 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+function listVrmExpressionNames(model = vrm) {
+  if (!model?.expressionManager) return [];
+  const em = model.expressionManager;
+  const known = new Set([
+    ...ARKIT_52,
+    'aa', 'ih', 'ou', 'ee', 'oh',
+    'blink', 'blinkLeft', 'blinkRight',
+    'happy', 'angry', 'sad', 'relaxed', 'surprised', 'neutral',
+  ]);
+  const found = [];
+  for (const name of known) {
+    if (em.getExpressionTrackName(name) !== null) found.push(name);
+  }
+  return found;
+}
+
+function configureExpressionMapping(label = 'avatar') {
+  availableExpressionNames = listVrmExpressionNames();
+  perfectSyncState = detectPerfectSyncExpressions(availableExpressionNames);
+  expressionMap = perfectSyncState.active
+    ? createPerfectSyncExpressionMap(availableExpressionNames)
+    : createDefaultVrmExpressionMap(availableExpressionNames);
+  expressionMap.name = `${label} ${perfectSyncState.active ? 'Perfect Sync' : 'fallback'} map`;
+  refreshExpressionMapEditor();
+}
+
+function refreshExpressionMapEditor() {
+  $('txtExpressionMap').value = serializeExpressionMap(expressionMap);
+  $('statMapping').textContent = perfectSyncState.active
+    ? `Perfect Sync ${perfectSyncState.matched.length}/52`
+    : `fallback ${expressionMap.targets.length} targets`;
+}
+
+function applyExpressionMapFromEditor() {
+  try {
+    expressionMap = parseExpressionMap($('txtExpressionMap').value);
+    $('statMapping').textContent = `${expressionMap.targets.length} mapped targets`;
+    chip.textContent = 'mapping applied';
+    chip.dataset.state = 'open';
+  } catch (err) {
+    chip.textContent = `mapping error: ${err.message}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+function queueExpressionMapApply() {
+  if (mappingEditTimer !== null) clearTimeout(mappingEditTimer);
+  mappingEditTimer = setTimeout(() => {
+    mappingEditTimer = null;
+    applyExpressionMapFromEditor();
+  }, 250);
+}
+
+function applyVrmExpressionMap(weights) {
+  for (const targetExpression of evaluateExpressionMap(expressionMap, weights)) {
+    expr(targetExpression.out, targetExpression.value);
+  }
+}
+
+function exportExpressionMap() {
+  const blob = new Blob([serializeExpressionMap(expressionMap)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${(expressionMap.name || 'minamo-expression-map').replace(/[^a-z0-9._-]+/gi, '-')}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 function applyVrm(dt) {
   const w = current.weights;
@@ -288,32 +370,10 @@ function applyVrm(dt) {
   if (head) head.quaternion.copy(IDENT).slerp(current.quat, 0.65);
   if (neck) neck.quaternion.copy(IDENT).slerp(current.quat, 0.35);
 
-  // Eyes
-  const blinkL = w[C.eyeBlinkLeft];
-  const blinkR = w[C.eyeBlinkRight];
-  const em = vrm.expressionManager;
-  const hasPerEye = em && em.getExpressionTrackName('blinkLeft') !== null;
-  if (hasPerEye) {
-    expr('blinkLeft', blinkL);
-    expr('blinkRight', blinkR);
-  } else {
-    expr('blink', Math.max(blinkL, blinkR));
-  }
+  // Expressions are retargeted through the editable mapping profile. Perfect
+  // Sync avatars use ARKit 52 names 1:1; other VRMs use a curated fallback map.
+  applyVrmExpressionMap(w);
   lookAtTarget.position.set(gazeX(w) * 0.6, gazeY(w) * 0.4, 0);
-
-  // Mouth: visemes from jaw and lip channels.
-  const aa = clamp01(w[C.jawOpen] * 1.4);
-  const damp = 1 - aa * 0.6; // keep vowels from stacking on a wide-open jaw
-  expr('aa', aa);
-  expr('oh', clamp01(w[C.mouthFunnel] * 1.2) * damp);
-  expr('ou', clamp01(w[C.mouthPucker] * 1.2) * damp);
-  expr('ee', clamp01((w[C.mouthStretchLeft] + w[C.mouthStretchRight]) * 0.6) * damp);
-  expr('ih', clamp01((w[C.mouthLowerDownLeft] + w[C.mouthLowerDownRight]) * 0.55) * damp);
-
-  // Emotions, kept conservative so they read as accents.
-  expr('happy', clamp01((w[C.mouthSmileLeft] + w[C.mouthSmileRight]) * 0.6));
-  expr('angry', clamp01((w[C.browDownLeft] + w[C.browDownRight]) * 0.4));
-  expr('surprised', clamp01(w[C.browInnerUp] * 0.6 + (w[C.eyeWideLeft] + w[C.eyeWideRight]) * 0.25));
 
   if (target.posePoints) {
     applyVrmUpperBodyPose(h, target.posePoints, dt);
@@ -667,6 +727,31 @@ $('chkVignette').addEventListener('change', () => {
   applySceneState();
 });
 $('btnCopySceneUrl').addEventListener('click', copySceneUrl);
+$('txtExpressionMap').addEventListener('input', queueExpressionMapApply);
+$('btnApplyMapping').addEventListener('click', applyExpressionMapFromEditor);
+$('btnExportMapping').addEventListener('click', exportExpressionMap);
+$('btnImportMapping').addEventListener('click', () => $('fileExpressionMap').click());
+$('btnResetMapping').addEventListener('click', () => {
+  expressionMap = perfectSyncState.active
+    ? createPerfectSyncExpressionMap(availableExpressionNames)
+    : createDefaultVrmExpressionMap(availableExpressionNames);
+  refreshExpressionMapEditor();
+});
+$('fileExpressionMap').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    expressionMap = parseExpressionMap(await file.text());
+    refreshExpressionMapEditor();
+    chip.textContent = `mapping loaded: ${file.name}`;
+    chip.dataset.state = 'open';
+  } catch (err) {
+    chip.textContent = `mapping error: ${err.message}`;
+    chip.dataset.state = 'error';
+  } finally {
+    e.target.value = '';
+  }
+});
 
 $('btnConnect').addEventListener('click', async () => {
   try {
@@ -788,6 +873,7 @@ if (params.get('vrm')) {
 
 // auto-connect local mode when opened from the tracker link
 applySettingsToUi();
+refreshExpressionMapEditor();
 if (params.get('room')) {
   transport.connectAuto({
     mode: settings.mode,
