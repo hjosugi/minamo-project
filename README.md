@@ -52,6 +52,8 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
 4. Drop a `.vrm` file onto the viewer to swap in your own avatar
 
 The landing hub and mock demo are at http://localhost:8000/landing/.
+The repository also ships a GitHub Pages workflow that publishes the static
+tracker/viewer/replay/landing files from `main`.
 
 For offline model serving:
 

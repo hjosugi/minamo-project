@@ -34,6 +34,7 @@ REQUIRED = [
     'shared/runtime.js',
     'scripts/fetch-models.sh',
     '.github/workflows/ci.yml',
+    '.github/workflows/pages.yml',
     'docker-compose.yml',
     'issues/index.csv',
 ]
