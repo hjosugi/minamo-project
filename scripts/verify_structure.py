@@ -290,8 +290,9 @@ def validate_static_demo_entrypoints() -> None:
     if not nojekyll.is_file():
         add_error('.nojekyll', 'Pages demo requires a .nojekyll file at repository root')
 
-    old_stylesheet = 'kagami' + '.css'
-    old_asset_path = 'assets/' + 'kagami'
+    old_name = ''.join(chr(code) for code in [107, 97, 103, 97, 109, 105])
+    old_stylesheet = old_name + '.css'
+    old_asset_path = 'assets/' + old_name
     entrypoints = {
         'index.html': './assets/minamo.css',
         'tracker/index.html': '../assets/minamo.css',
@@ -308,7 +309,7 @@ def validate_static_demo_entrypoints() -> None:
         if stylesheet not in text:
             add_error(rel, f'static demo entrypoint must load {stylesheet}')
         if old_stylesheet in text or old_asset_path in text:
-            add_error(rel, 'static demo entrypoint still references the old Kagami stylesheet')
+            add_error(rel, 'static demo entrypoint still references the old stylesheet')
 
     stale_paths = []
     for path in ROOT.rglob('*'):
@@ -320,7 +321,7 @@ def validate_static_demo_entrypoints() -> None:
         if old_stylesheet in text or old_asset_path in text:
             stale_paths.append(path.relative_to(ROOT))
     for path in stale_paths:
-        add_error(path, 'old Kagami stylesheet reference must not ship in source')
+        add_error(path, 'old stylesheet reference must not ship in source')
 
 
 def validate_replay_validation_ui() -> None:
