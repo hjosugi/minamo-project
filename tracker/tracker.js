@@ -23,6 +23,7 @@ import {
   TRACKER_STORAGE_KEY,
   WARNING_TAXONOMY,
   DroppedFrameDetector,
+  MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
   computeQualityScore,
   createCalibrationProfile,
@@ -575,7 +576,7 @@ function sampleLuma() {
 function recordFrame(frame) {
   if (!state.recording.enabled) return;
   state.recording.lines.push(JSON.stringify({
-    schema: 'kagami.kgm1.motion-jsonl.v1',
+    schema: MOTION_JSONL_SCHEMA,
     t: frame.t,
     seq: frame.seq,
     quality: state.quality,

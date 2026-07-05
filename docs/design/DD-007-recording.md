@@ -2,6 +2,11 @@
 
 Status: design. Backlog: KGM-047, KGM-048.
 
+Implementation note: the current browser MVP records newline-delimited
+`kagami.kgm1.motion-jsonl.v1` frames and the viewer can replay dropped
+`.jsonl` / `.ndjson` files. The binary `.kgm` container below remains the
+target format for compact archives, fixtures, and VRMA export.
+
 ## Motivation
 
 Three consumers of the same feature:
@@ -36,9 +41,10 @@ irrelevant.
 ## Viewer replay
 
 Drop a .kgm file: a transport-like source replays records on their dt
-schedule (with a speed control), feeding the same 'frame' event path.
-Loop toggle. Scrub bar is v2 (needs a keyframe index; trivial once KGM2
-keyframes exist).
+schedule (with a speed control), feeding the same frame application path.
+The JSONL MVP uses the same path after parsing recorded face, pose, and
+hand fields. Loop toggle. Scrub bar is v2 (needs a keyframe index; trivial
+once KGM2 keyframes exist).
 
 ## VRMA export (KGM-048)
 

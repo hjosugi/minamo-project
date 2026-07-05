@@ -1,4 +1,5 @@
 import { encodeFrame } from '../shared/codec.js';
+import { parseMotionJsonl } from '../shared/runtime.js';
 
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
@@ -13,7 +14,20 @@ let baseT = 0;
 $('fileReplay').addEventListener('change', async (event) => {
   const file = event.target.files[0];
   if (!file) return;
-  frames = parseJsonl(await file.text());
+  try {
+    frames = parseMotionJsonl(await file.text()).sort((a, b) => a.t - b.t);
+  } catch (error) {
+    frames = [];
+    cursor = 0;
+    $('statFrames').textContent = '0';
+    $('statCursor').textContent = '0';
+    $('statDuration').textContent = '0.0';
+    $('btnPlay').disabled = true;
+    $('btnReset').disabled = true;
+    chip.textContent = `error: ${error.message}`;
+    chip.dataset.state = 'error';
+    return;
+  }
   cursor = 0;
   baseT = frames[0]?.t ?? 0;
   $('statFrames').textContent = String(frames.length);
@@ -76,29 +90,19 @@ function publish(record) {
   const room = $('inpRoom').value || 'demo';
   const token = $('inpToken').value || 'open';
   const channel = new BroadcastChannel(`kagami:${room}:${token}`);
-  const weights = new Float32Array(record.face?.weights ?? []);
   const frame = {
     t: Math.round(record.t),
     seq: record.seq,
     face: record.face ? {
       quat: record.face.quat,
       pos: record.face.pos,
-      weights,
+      weights: record.face.weights,
     } : null,
-    pose: record.pose?.points ? { points: new Float32Array(record.pose.points) } : null,
+    pose: record.pose?.points ? { points: record.pose.points } : null,
     hands: record.hands ?? null,
   };
   channel.postMessage(encodeFrame(frame));
   channel.close();
-}
-
-function parseJsonl(text) {
-  return text
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => JSON.parse(line))
-    .filter((record) => record.face && Number.isFinite(record.t))
-    .sort((a, b) => a.t - b.t);
 }
 
 function updateViewerLink() {

@@ -7,10 +7,12 @@ import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../share
 import {
   FrameOrderGate,
   DroppedFrameDetector,
+  MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
   computeQualityScore,
   createCalibrationProfile,
   mirrorWeights,
+  parseMotionJsonl,
   sanitizeWeights,
   semanticFaceControls,
   syntheticBlendshapeFrame,
@@ -25,6 +27,8 @@ const required = [
   'docs/ARCHITECTURE.md',
   'docs/ARCHITECTURE_TARGET.md',
   'landing/index.html',
+  'replay/index.html',
+  'replay/replay.js',
   'src/core/types.ts',
   'issues/index.csv',
 ];
@@ -82,6 +86,32 @@ function roundTrip(frame) {
   assert.equal(emptyBlocks.face, null);
   assert.equal(emptyBlocks.pose, null);
   assert.equal(emptyBlocks.hands, null);
+}
+
+{
+  const frame = syntheticBlendshapeFrame(42);
+  const posePoints = new Float32Array(NUM_POSE_POINTS * 3);
+  for (let i = 0; i < posePoints.length; i++) posePoints[i] = i / 10;
+  const line = JSON.stringify({
+    schema: MOTION_JSONL_SCHEMA,
+    t: frame.t,
+    seq: frame.seq,
+    warnings: ['LOW_LIGHT'],
+    face: {
+      quat: frame.face.quat,
+      pos: frame.face.pos,
+      weights: Array.from(frame.face.weights),
+    },
+    pose: { points: Array.from(posePoints) },
+  });
+  const parsed = parseMotionJsonl(`${line}\n\n${line}\n`);
+  assert.equal(parsed.length, 2);
+  assert.ok(parsed[0].face.weights instanceof Float32Array);
+  assert.equal(parsed[0].face.weights.length, NUM_CHANNELS);
+  assert.equal(parsed[0].pose.points.length, NUM_POSE_POINTS * 3);
+  assert.equal(parsed[0].warnings[0], 'LOW_LIGHT');
+  assert.throws(() => parseMotionJsonl(''), /No motion frames/);
+  assert.throws(() => parseMotionJsonl('{"schema":"unknown","t":1,"seq":1,"face":{}}'), /unsupported schema/);
 }
 
 {

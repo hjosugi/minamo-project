@@ -15,6 +15,7 @@ import {
   VIEWER_STORAGE_KEY,
   FrameOrderGate,
   loadJson,
+  parseMotionJsonl,
   saveJson,
 } from '../shared/runtime.js';
 
@@ -317,12 +318,22 @@ const orderGate = new FrameOrderGate();
 let recvFrames = 0;
 let lastBytesIn = 0;
 let lastStats = performance.now();
+let replayTimer = null;
+let replayToken = 0;
 
-transport.addEventListener('frame', (ev) => {
-  const frame = decodeFrame(ev.detail);
-  if (!frame || !frame.face) return;
+function resetOrderGate() {
+  orderGate.lastSeq = null;
+  orderGate.accepted = 0;
+  orderGate.reordered = 0;
+  orderGate.lost = 0;
+  orderGate.lastAcceptedAt = null;
+  orderGate.sourceFps = 0;
+}
+
+function applyIncomingFrame(frame) {
+  if (!frame || !frame.face) return false;
   const accepted = orderGate.accept(frame);
-  if (!accepted.ok) return;
+  if (!accepted.ok) return false;
   const q = frame.face.quat;
   tmpQ.set(q[0], q[1], q[2], q[3]);
   if (!hasRef) {
@@ -335,6 +346,12 @@ transport.addEventListener('frame', (ev) => {
   target.hands = frame.hands;
   target.fresh = true;
   recvFrames++;
+  return true;
+}
+
+transport.addEventListener('frame', (ev) => {
+  const frame = decodeFrame(ev.detail);
+  applyIncomingFrame(frame);
 });
 
 transport.addEventListener('status', (ev) => {
@@ -432,6 +449,8 @@ $('chkTransparent').addEventListener('change', () => {
 $('btnConnect').addEventListener('click', async () => {
   try {
     persistSettings();
+    stopReplay();
+    resetOrderGate();
     await transport.connect({
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
@@ -468,6 +487,60 @@ async function loadVrmFile(file) {
   }
 }
 
+function isMotionJsonlFile(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.jsonl') || name.endsWith('.ndjson');
+}
+
+async function loadReplayFile(file) {
+  try {
+    const frames = parseMotionJsonl(await file.text());
+    startReplay(frames, file.name);
+  } catch (err) {
+    chip.textContent = `replay error: ${err.message}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+function stopReplay() {
+  replayToken++;
+  if (replayTimer !== null) {
+    clearTimeout(replayTimer);
+    replayTimer = null;
+  }
+}
+
+function startReplay(frames, label) {
+  stopReplay();
+  transport.close().catch(() => {});
+  resetOrderGate();
+  hasRef = false;
+  recvFrames = 0;
+  lastBytesIn = transport.bytesIn;
+  lastStats = performance.now();
+  const token = replayToken;
+  let index = 0;
+  chip.textContent = `replay ${label}`;
+  chip.dataset.state = 'open';
+
+  const step = () => {
+    if (token !== replayToken) return;
+    const frame = frames[index];
+    applyIncomingFrame(frame);
+    index++;
+    if (index >= frames.length) {
+      replayTimer = null;
+      chip.textContent = `replay complete: ${label}`;
+      chip.dataset.state = 'idle';
+      return;
+    }
+    const dt = Number(frames[index].t) - Number(frame.t);
+    const delay = Number.isFinite(dt) && dt > 0 ? Math.min(dt, 250) : 1000 / 60;
+    replayTimer = setTimeout(step, delay);
+  };
+  step();
+}
+
 // drag and drop
 let dragDepth = 0;
 document.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
@@ -478,7 +551,9 @@ document.addEventListener('drop', async (e) => {
   dragDepth = 0;
   document.body.classList.remove('dragging');
   const file = e.dataTransfer.files[0];
-  if (file && file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
+  if (!file) return;
+  if (file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
+  else if (isMotionJsonlFile(file)) await loadReplayFile(file);
 });
 
 // ?vrm=<url> loads a model directly (must be CORS-accessible)

@@ -2,7 +2,7 @@
 // These are intentionally browser-light so the core tracking contracts can be
 // tested in CI without a camera or GPU.
 
-import { ARKIT_52, CHANNEL_INDEX, MIRROR_INDEX, NUM_CHANNELS } from './blendshapes.js';
+import { ARKIT_52, CHANNEL_INDEX, MIRROR_INDEX, NUM_CHANNELS, NUM_POSE_POINTS } from './blendshapes.js';
 
 export const WARNING_TAXONOMY = Object.freeze({
   insecureContext: 'INSECURE_CONTEXT',
@@ -62,6 +62,8 @@ export const RESOLUTION_CONSTRAINTS = Object.freeze({
 export const TRACKER_STORAGE_KEY = 'kagami.tracker.settings.v2';
 export const VIEWER_STORAGE_KEY = 'kagami.viewer.settings.v2';
 export const PROFILE_STORAGE_KEY = 'kagami.calibration.profile.v1';
+export const MOTION_JSONL_SCHEMA = 'kagami.kgm1.motion-jsonl.v1';
+export const MAX_MOTION_JSONL_FRAMES = 36_000;
 
 export function clamp(value, min = 0, max = 1) {
   if (!Number.isFinite(value)) return min;
@@ -280,6 +282,93 @@ export function syntheticBlendshapeFrame(seed = 1) {
     },
     pose: null,
   };
+}
+
+export function parseMotionJsonl(text, { maxFrames = MAX_MOTION_JSONL_FRAMES } = {}) {
+  if (typeof text !== 'string') throw new TypeError('Motion JSONL input must be text.');
+  const limit = Math.max(1, Number(maxFrames) || MAX_MOTION_JSONL_FRAMES);
+  const frames = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i].trim();
+    if (!raw) continue;
+    let value;
+    try {
+      value = JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`Invalid motion JSONL at line ${i + 1}: ${error.message}`);
+    }
+    frames.push(parseMotionRecord(value, i + 1));
+    if (frames.length >= limit) break;
+  }
+  if (frames.length === 0) throw new Error('No motion frames found in JSONL recording.');
+  return frames;
+}
+
+function parseMotionRecord(value, lineNo) {
+  if (!value || typeof value !== 'object') {
+    throw new Error(`Invalid motion JSONL at line ${lineNo}: record must be an object.`);
+  }
+  if (value.schema && value.schema !== MOTION_JSONL_SCHEMA) {
+    throw new Error(`Invalid motion JSONL at line ${lineNo}: unsupported schema "${value.schema}".`);
+  }
+  const seq = Number(value.seq);
+  const t = Number(value.t);
+  if (!Number.isInteger(seq)) throw new Error(`Invalid motion JSONL at line ${lineNo}: seq must be an integer.`);
+  if (!Number.isFinite(t)) throw new Error(`Invalid motion JSONL at line ${lineNo}: t must be finite.`);
+  if (!value.face) throw new Error(`Invalid motion JSONL at line ${lineNo}: face is required.`);
+
+  const face = {
+    quat: readNumberArray(value.face.quat, 4, 'face.quat', lineNo),
+    pos: readNumberArray(value.face.pos, 3, 'face.pos', lineNo),
+    weights: readFloat32Array(value.face.weights, NUM_CHANNELS, 'face.weights', lineNo),
+  };
+  const pose = value.pose
+    ? { points: readFloat32Array(value.pose.points, NUM_POSE_POINTS * 3, 'pose.points', lineNo) }
+    : null;
+  return {
+    t,
+    seq,
+    quality: value.quality || null,
+    warnings: Array.isArray(value.warnings) ? value.warnings.slice() : [],
+    face,
+    pose,
+    hands: Array.isArray(value.hands) ? value.hands.map(normalizeHand) : null,
+  };
+}
+
+function readNumberArray(value, length, field, lineNo) {
+  if (!Array.isArray(value) || value.length < length) {
+    throw new Error(`Invalid motion JSONL at line ${lineNo}: ${field} must contain ${length} numbers.`);
+  }
+  const out = [];
+  for (let i = 0; i < length; i++) {
+    const n = Number(value[i]);
+    if (!Number.isFinite(n)) {
+      throw new Error(`Invalid motion JSONL at line ${lineNo}: ${field}[${i}] must be finite.`);
+    }
+    out.push(n);
+  }
+  return out;
+}
+
+function readFloat32Array(value, length, field, lineNo) {
+  const numbers = readNumberArray(value, length, field, lineNo);
+  return new Float32Array(numbers);
+}
+
+function normalizeHand(hand) {
+  return {
+    handedness: hand?.handedness === 'Right' ? 'Right' : 'Left',
+    confidence: clampOptionalNumber(hand?.confidence, 1),
+    curls: Array.isArray(hand?.curls) ? hand.curls.slice(0, 5).map((v) => clampOptionalNumber(v, 0)) : [],
+    spreads: Array.isArray(hand?.spreads) ? hand.spreads.slice(0, 5).map((v) => clampOptionalNumber(v, 0, -1, 1)) : [],
+  };
+}
+
+function clampOptionalNumber(value, fallback, min = 0, max = 1) {
+  const n = Number(value);
+  return Number.isFinite(n) ? clamp(n, min, max) : fallback;
 }
 
 export function loadJson(storage, key, fallback) {

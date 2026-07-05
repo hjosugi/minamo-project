@@ -26,8 +26,8 @@ webcam — free, low-latency, and local-first.
 - In-browser inference (MediaPipe Face Landmarker, GPU/WASM); 52 expression
   channels + head pose + experimental upper body, smoothed with One Euro filters
 - Camera device/resolution/fps controls, persisted tracker/viewer settings,
-  calibration profiles, local JSONL recording, signal quality warnings, and
-  wrap-safe viewer jitter handling
+  calibration profiles, local JSONL recording and replay, signal quality
+  warnings, and wrap-safe viewer jitter handling
 - Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
   WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
 - VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
@@ -49,7 +49,9 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
 1. Open http://localhost:8000/tracker/ and press **Start tracking**
 2. Keep mode: local and press **Connect**
 3. "Open viewer in another tab" — it works via BroadcastChannel in the same browser
-4. Drop a `.vrm` file onto the viewer to swap in your own avatar
+4. Drop a `.vrm` file onto the viewer to swap in your own avatar. For recorded
+   motion, drop a tracker `.jsonl` onto the viewer or open `/replay/` and publish
+   it to the same local room.
 
 The landing hub and mock demo are at http://localhost:8000/landing/.
 The repository also ships a GitHub Pages workflow that publishes the static
