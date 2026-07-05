@@ -6,6 +6,7 @@ import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
 import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
 import {
   CALIBRATION_GUIDE_TOTAL_MS,
+  BlinkWinkStabilizer,
   FrameOrderGate,
   DroppedFrameDetector,
   HeadPositionStabilizer,
@@ -379,6 +380,40 @@ function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, inne
   const gazeProfile = buildGazeCalibrationProfile(gazeSession.samples);
   const calibratedRight = estimateIrisGaze(syntheticIrisLandmarks(rawByTarget.right), { calibration: gazeProfile });
   assert.ok(gazeAngularErrorDegrees(calibratedRight, { x: 0.8, y: 0 }) < 5);
+}
+
+{
+  let winkHits = 0;
+  for (let trial = 0; trial < 50; trial++) {
+    const stabilizer = new BlinkWinkStabilizer({ winkFrames: 3 });
+    const weights = new Float32Array(NUM_CHANNELS);
+    let out = weights;
+    for (let frame = 0; frame < 4; frame++) {
+      weights[CHANNEL_INDEX.eyeBlinkLeft] = 0.72;
+      weights[CHANNEL_INDEX.eyeBlinkRight] = 0.4;
+      out = stabilizer.filter(weights);
+    }
+    if (out[CHANNEL_INDEX.eyeBlinkLeft] === 1 && out[CHANNEL_INDEX.eyeBlinkRight] === 0) winkHits++;
+  }
+  assert.ok(winkHits / 50 > 0.9, `deliberate wink hit rate ${winkHits}/50`);
+
+  const blink = new BlinkWinkStabilizer();
+  const blinkWeights = new Float32Array(NUM_CHANNELS);
+  blinkWeights[CHANNEL_INDEX.eyeBlinkLeft] = 0.82;
+  blinkWeights[CHANNEL_INDEX.eyeBlinkRight] = 0.76;
+  const symmetric = blink.filter(blinkWeights);
+  assert.equal(symmetric[CHANNEL_INDEX.eyeBlinkLeft], symmetric[CHANNEL_INDEX.eyeBlinkRight]);
+
+  const half = new BlinkWinkStabilizer();
+  const halfWeights = new Float32Array(NUM_CHANNELS);
+  const outputs = [];
+  for (const value of [0.48, 0.52, 0.49, 0.51, 0.5]) {
+    halfWeights[CHANNEL_INDEX.eyeBlinkLeft] = value;
+    halfWeights[CHANNEL_INDEX.eyeBlinkRight] = value;
+    const out = half.filter(halfWeights);
+    outputs.push(out[CHANNEL_INDEX.eyeBlinkLeft], out[CHANNEL_INDEX.eyeBlinkRight]);
+  }
+  assert.equal(new Set(outputs).size, 1, 'half-closed eye positions do not flicker across thresholds');
 }
 
 {

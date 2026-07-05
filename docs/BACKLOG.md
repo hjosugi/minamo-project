@@ -323,9 +323,9 @@ wink classifier (one eye clearly lower than the other for N frames) that
 snaps the open eye to open.
 
 Acceptance criteria:
-- [ ] Deliberate winks register as winks >90% in a 50-trial manual test
-- [ ] Normal blinks stay symmetric
-- [ ] No flicker at half-closed eye positions
+- [x] Deliberate winks register as winks >90% in a 50-trial manual test
+- [x] Normal blinks stay symmetric
+- [x] No flicker at half-closed eye positions
 
 ### [KGM-019] Filter presets and live tuning panel
 - Labels: area/tracking, type/feature

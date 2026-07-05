@@ -20,6 +20,7 @@ import {
   SMOOTHING_GROUPS,
   TRACKER_STORAGE_KEY,
   WARNING_TAXONOMY,
+  BlinkWinkStabilizer,
   DroppedFrameDetector,
   HeadPositionStabilizer,
   LandmarkConfidenceTracker,
@@ -116,6 +117,7 @@ const state = {
   poseFilter: new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose')),
   handCurlFilter: new OneEuroArray(10, filterOptions('hands')),
   handSpreadFilter: new OneEuroArray(10, filterOptions('hands')),
+  blinkWinkStabilizer: new BlinkWinkStabilizer(),
   dropDetector: new DroppedFrameDetector(Number(settings.fps) || 60),
   confidenceTracker: new LandmarkConfidenceTracker(),
   cameraControls: { supported: [], attempted: [], unavailable: true, lowLightNudged: false },
@@ -373,6 +375,7 @@ function resetFilters() {
   state.quatFilter = new OneEuroQuat(filterOptions('headRotation'));
   state.posFilter = new OneEuroArray(3, filterOptions('headPosition'));
   state.headPositionStabilizer.reset();
+  state.blinkWinkStabilizer.reset();
   state.poseFilter = new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose'));
   state.handCurlFilter = new OneEuroArray(10, filterOptions('hands'));
   state.handSpreadFilter = new OneEuroArray(10, filterOptions('hands'));
@@ -479,6 +482,7 @@ function loop() {
 
       const gaze = resolveGaze(state.raw, faceRes.faceLandmarks?.[0], { mirror: state.mirror, calibration: profile.gaze });
       state.raw.set(applyGazeToWeights(state.raw, gaze));
+      state.raw.set(state.blinkWinkStabilizer.filter(state.raw));
       sampleGazeCalibration(faceRes.faceLandmarks?.[0]);
 
       // --- safety, calibration, and One Euro filtering

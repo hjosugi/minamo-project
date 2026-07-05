@@ -559,6 +559,36 @@ def validate_head_position_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing head position regression coverage: {needle}')
 
 
+def validate_blink_wink_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in [
+        'export class BlinkWinkStabilizer',
+        'openThreshold = 0.38',
+        'closeThreshold = 0.62',
+        'winkFrames = 3',
+        'hysteresisClosed',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing blink/wink runtime contract: {needle}')
+    for needle in [
+        'blinkWinkStabilizer: new BlinkWinkStabilizer()',
+        'state.blinkWinkStabilizer.filter(state.raw)',
+        'state.blinkWinkStabilizer.reset()',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing blink/wink tracker contract: {needle}')
+    for needle in [
+        'deliberate wink hit rate',
+        'symmetric[CHANNEL_INDEX.eyeBlinkLeft]',
+        'half-closed eye positions do not flicker',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing blink/wink regression coverage: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -710,6 +740,7 @@ validate_mixer_contracts()
 validate_quality_contracts()
 validate_gaze_contracts()
 validate_head_position_contracts()
+validate_blink_wink_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

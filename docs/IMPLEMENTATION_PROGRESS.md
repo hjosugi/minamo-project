@@ -49,7 +49,7 @@ node --check relay-node/server.mjs
 - Runtime helpers now cover sequence ordering, dropped-frame detection, quality
   scoring, calibration profile normalization/application, mirror tests,
   synthetic frame generation, warning taxonomy, iris-gaze calibration/fallback,
-  and semantic face controls.
+  blink/wink hysteresis, and semantic face controls.
 - Tracker UI now has camera selection, resolution/FPS controls, settings
   persistence, privacy mode copy, quality warnings, a 30-second guided
   calibration flow, calibration profile import/export, per-channel

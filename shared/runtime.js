@@ -256,6 +256,67 @@ export class HeadPositionStabilizer {
   }
 }
 
+export class BlinkWinkStabilizer {
+  constructor({ openThreshold = 0.38, closeThreshold = 0.62, winkMargin = 0.22, winkFrames = 3 } = {}) {
+    this.openThreshold = openThreshold;
+    this.closeThreshold = closeThreshold;
+    this.winkMargin = winkMargin;
+    this.winkFrames = winkFrames;
+    this.leftClosed = false;
+    this.rightClosed = false;
+    this.winkSide = null;
+    this.winkCount = 0;
+  }
+
+  reset() {
+    this.leftClosed = false;
+    this.rightClosed = false;
+    this.winkSide = null;
+    this.winkCount = 0;
+  }
+
+  filter(weights) {
+    const out = new Float32Array(weights);
+    const left = clamp(out[CHANNEL_INDEX.eyeBlinkLeft]);
+    const right = clamp(out[CHANNEL_INDEX.eyeBlinkRight]);
+    this.leftClosed = hysteresisClosed(left, this.leftClosed, this.openThreshold, this.closeThreshold);
+    this.rightClosed = hysteresisClosed(right, this.rightClosed, this.openThreshold, this.closeThreshold);
+
+    const candidate = left - right > this.winkMargin && left >= this.closeThreshold && right < this.closeThreshold
+      ? 'left'
+      : right - left > this.winkMargin && right >= this.closeThreshold && left < this.closeThreshold
+        ? 'right'
+        : null;
+    if (candidate && candidate === this.winkSide) this.winkCount++;
+    else {
+      this.winkSide = candidate;
+      this.winkCount = candidate ? 1 : 0;
+    }
+
+    if (this.winkSide === 'left' && this.winkCount >= this.winkFrames) {
+      out[CHANNEL_INDEX.eyeBlinkLeft] = 1;
+      out[CHANNEL_INDEX.eyeBlinkRight] = 0;
+      return out;
+    }
+    if (this.winkSide === 'right' && this.winkCount >= this.winkFrames) {
+      out[CHANNEL_INDEX.eyeBlinkLeft] = 0;
+      out[CHANNEL_INDEX.eyeBlinkRight] = 1;
+      return out;
+    }
+
+    if (this.leftClosed && this.rightClosed) {
+      const symmetric = Math.max(left, right, this.closeThreshold);
+      out[CHANNEL_INDEX.eyeBlinkLeft] = symmetric;
+      out[CHANNEL_INDEX.eyeBlinkRight] = symmetric;
+      return out;
+    }
+
+    out[CHANNEL_INDEX.eyeBlinkLeft] = this.leftClosed ? Math.max(left, this.closeThreshold) : Math.min(left, this.openThreshold);
+    out[CHANNEL_INDEX.eyeBlinkRight] = this.rightClosed ? Math.max(right, this.closeThreshold) : Math.min(right, this.openThreshold);
+    return out;
+  }
+}
+
 export function normalizeHeadLeanRangeCm(value) {
   return Math.round(clamp(Number(value ?? DEFAULT_TRACKER_SETTINGS.headLeanRangeCm), 0, 20) * 10) / 10;
 }
@@ -887,6 +948,12 @@ function finitePoint(point) {
 
 function distance2d(a, b) {
   return Math.hypot(Number(a.x) - Number(b.x), Number(a.y) - Number(b.y));
+}
+
+function hysteresisClosed(value, previous, openThreshold, closeThreshold) {
+  if (value >= closeThreshold) return true;
+  if (value <= openThreshold) return false;
+  return previous;
 }
 
 function clampProfileNumber(value, min, max, name, warnings) {
