@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KAGAMI Viewer</title>
+  <link rel="stylesheet" href="../assets/kagami.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    #scene { position: fixed; inset: 0; }
+    .hud {
+      position: fixed;
+      top: 14px; left: 14px;
+      width: min(340px, calc(100vw - 28px));
+      z-index: 10;
+    }
+    .hud .panel { backdrop-filter: blur(6px); background: rgba(22, 26, 44, 0.88); }
+    .hud .stats { margin-top: 8px; }
+    .dropveil {
+      position: fixed; inset: 0; z-index: 20;
+      display: none; place-items: center;
+      background: rgba(15, 18, 32, 0.8);
+      border: 2px dashed var(--pose);
+      font-family: var(--font-mono);
+      color: var(--pose);
+    }
+    body.dragging .dropveil { display: grid; }
+  </style>
+</head>
+<body>
+  <div id="scene"></div>
+
+  <div class="hud">
+    <div class="panel">
+      <div class="topbar" style="padding: 0 0 10px; border: none;">
+        <span class="wordmark" style="font-size:16px;">KAGAM<span class="mirror">I</span></span>
+        <span class="page-name">viewer</span>
+        <span class="spacer"></span>
+        <span class="status-chip" id="statusChip" data-state="idle">idle</span>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <span>mode</span>
+          <select id="selMode">
+            <option value="local">local</option>
+            <option value="ws">ws</option>
+            <option value="wt">wt</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>room</span>
+          <input type="text" id="inpRoom" value="demo" />
+        </div>
+        <div class="field" id="fieldWtUrl" hidden>
+          <span>wt url</span>
+          <input type="text" id="inpWtUrl" value="https://localhost:4433" />
+        </div>
+        <div class="field wide" id="fieldWtHash" hidden>
+          <span>cert sha-256 (hex)</span>
+          <input type="text" id="inpWtHash" />
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btnConnect" class="primary">Connect</button>
+        <button id="btnCenter">Center</button>
+        <button id="btnLoadVrm">VRMを開く</button>
+        <input type="file" id="fileVrm" accept=".vrm" hidden />
+      </div>
+      <div class="stats">
+        <span>recv <b id="statFps">--</b> fps</span>
+        <span>in <b id="statRate">--</b> KB/s</span>
+        <span>avatar <b id="statAvatar">built-in bot</b></span>
+      </div>
+      <p class="note">VRMファイルをドロップすると差し替わります。VRMが無くても内蔵ボットが動きます。</p>
+    </div>
+  </div>
+
+  <div class="dropveil">drop .vrm to load</div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js"
+    }
+  }
+  </script>
+  <script type="module" src="./viewer.js"></script>
+</body>
+</html>

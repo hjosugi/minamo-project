@@ -1,0 +1,233 @@
+/* KAGAMI design system.
+   Concept: a broadcast signal chain. Every tracked data channel has a color,
+   and that color is used consistently in overlays, meters, and status text:
+     face channel = pink, pose channel = cyan.
+   Type: Zen Dots for the wordmark only, IBM Plex Sans JP for body,
+   IBM Plex Mono for live data. */
+
+@import url('https://fonts.googleapis.com/css2?family=Zen+Dots&family=IBM+Plex+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg: #0f1220;
+  --panel: #161a2c;
+  --panel-2: #1c2138;
+  --line: #272e4e;
+  --ink: #e9ebf8;
+  --ink-dim: #8a90b8;
+  --face: #ff7aa2;   /* face channel */
+  --pose: #6fe3ff;   /* pose channel */
+  --ok: #7ce7a9;
+  --warn: #ffc46b;
+  --err: #ff8d7a;
+  --font-body: 'IBM Plex Sans JP', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mark: 'Zen Dots', var(--font-body);
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+a { color: var(--pose); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--pose);
+  outline-offset: 2px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wordmark {
+  font-family: var(--font-mark);
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+.wordmark .mirror { color: var(--face); }
+
+.topbar .page-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.topbar .spacer { flex: 1; }
+
+.status-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-dim);
+}
+.status-chip[data-state='open'] { color: var(--ok); border-color: var(--ok); }
+.status-chip[data-state='error'], .status-chip[data-state='closed'] { color: var(--err); border-color: var(--err); }
+
+.layout {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 32px;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.layout.tracker { grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); }
+@media (max-width: 900px) { .layout.tracker { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--ink-dim);
+}
+.panel h2 .dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+.dot.face { background: var(--face); }
+.dot.pose { background: var(--pose); }
+
+.stage {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #05060c;
+  aspect-ratio: 16 / 9;
+}
+.stage video, .stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.stage video.mirrored { transform: scaleX(-1); }
+.stage .hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+button {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--ink-dim); }
+button.primary { background: var(--face); border-color: var(--face); color: #21060f; font-weight: 700; }
+button.primary:hover { filter: brightness(1.08); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+label.check {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+input[type='text'], select {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+
+.field { display: grid; gap: 4px; }
+.field span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-grid .wide { grid-column: 1 / -1; }
+
+.stats {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+}
+.stats b { color: var(--ink); font-weight: 600; }
+
+.meters-canvas { width: 100%; height: 460px; display: block; border-radius: 6px; background: #0b0e1a; }
+
+.note { font-size: 13px; color: var(--ink-dim); margin-top: 10px; }
+.note code { font-family: var(--font-mono); color: var(--ink); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+/* landing page */
+.hero { text-align: left; padding: 56px 20px 8px; max-width: 900px; margin: 0 auto; }
+.hero .wordmark { font-size: 44px; }
+.hero p.lead { font-size: 17px; color: var(--ink-dim); max-width: 620px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; padding: 24px 20px 48px; max-width: 900px; margin: 0 auto; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: block; color: var(--ink); }
+.card:hover { border-color: var(--ink-dim); text-decoration: none; }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 0; font-size: 13px; color: var(--ink-dim); }
+.card .tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+.tag.face { color: var(--face); }
+.tag.pose { color: var(--pose); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

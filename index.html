@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KAGAMI — webcam avatar tracking</title>
+  <link rel="stylesheet" href="./assets/kagami.css" />
+</head>
+<body>
+  <div class="hero">
+    <span class="wordmark">KAGAM<span class="mirror">I</span></span>
+    <p class="lead">普通のwebcamひとつで、誰でも無料でアバター配信のトラッキングを。推論はすべてブラウザ内。ネットワークに出るのは1フレーム約76バイトの動きデータだけ。</p>
+  </div>
+  <div class="cards">
+    <a class="card" href="./tracker/">
+      <span class="tag face">signal in</span>
+      <h3>Tracker</h3>
+      <p>webcam → 52ch表情 + 頭部姿勢。One Euroフィルタで平滑化してKGM1バイナリで送出。</p>
+    </a>
+    <a class="card" href="./viewer/">
+      <span class="tag pose">signal out</span>
+      <h3>Viewer</h3>
+      <p>KGM1を受信してVRMアバター(または内蔵ボット)を駆動。OBSのブラウザソースにそのまま載る。</p>
+    </a>
+    <a class="card" href="./docs/PROTOCOL.md">
+      <span class="tag">spec</span>
+      <h3>Docs</h3>
+      <p>KGM1プロトコル仕様、アーキテクチャ、ロードマップ。docs/ ディレクトリ参照。</p>
+    </a>
+  </div>
+  <div class="cards" style="padding-top:0;">
+    <div class="card">
+      <span class="tag">quick start</span>
+      <h3>最速の試し方(サーバ不要)</h3>
+      <p>このサイトを静的配信(<code>scripts/dev.sh</code> か <code>npx serve</code>)→ Trackerで「Start tracking」→ localモードでConnect → 「ビューアを別タブで開く」。同一ブラウザ内でBroadcastChannel経由で動きます。</p>
+    </div>
+  </div>
+</body>
+</html>

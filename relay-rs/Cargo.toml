@@ -1,0 +1,17 @@
+[package]
+name = "kagami-relay"
+version = "0.1.0"
+edition = "2021"
+description = "KAGAMI low-latency tracking relay over WebTransport datagrams"
+license = "MIT"
+
+[dependencies]
+# API verified against wtransport 0.7.x docs (docs.rs) and the official
+# examples/full.rs (Identity::self_signed, certificate_chain().hash(),
+# Sha256DigestFmt, ServerConfig builder, receive/send_datagram).
+wtransport = { version = "0.7", features = ["self-signed"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+
+[profile.release]
+lto = true
