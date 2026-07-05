@@ -291,9 +291,9 @@ vector from iris center vs eye contour, calibrate with a 5-point look
 target flow, and feed the viewer lookAt with it (new optional KGM2 field).
 
 Acceptance criteria:
-- [ ] Gaze tracks a moving on-screen target within ~5 deg after calibration
-- [ ] Blink does not spike gaze
-- [ ] Falls back to blendshape gaze when iris is unavailable
+- [x] Gaze tracks a moving on-screen target within ~5 deg after calibration
+- [x] Blink does not spike gaze
+- [x] Falls back to blendshape gaze when iris is unavailable
 
 ### [KGM-017] Head distance mapping and position stabilization
 - Labels: area/tracking, type/feature

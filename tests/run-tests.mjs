@@ -11,17 +11,25 @@ import {
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
+  applyGazeToWeights,
   buildCalibrationProfileFromSamples,
+  buildGazeCalibrationProfile,
   calibrationGuideProgress,
+  blendshapeGaze,
+  collectGazeCalibrationSample,
   computeQualityScore,
   createCalibrationProfile,
+  createGazeCalibrationSession,
   createGuidedCalibrationSession,
   collectGuidedCalibrationSample,
+  estimateIrisGaze,
   estimateLandmarkConfidence,
+  gazeAngularErrorDegrees,
   isEditableTarget,
   mirrorFacePayload,
   mirrorWeights,
   parseMotionJsonl,
+  resolveGaze,
   sanitizeWeights,
   semanticFaceControls,
   syntheticBlendshapeFrame,
@@ -65,6 +73,56 @@ function roundTrip(frame) {
   assert.equal(decoded.seq, frame.seq & 0xffff);
   assert.equal(decoded.t, frame.t >>> 0);
   return decoded;
+}
+
+function syntheticIrisLandmarks(gaze = { x: 0, y: 0 }) {
+  const landmarks = Array.from({ length: 478 }, () => ({ x: 0.5, y: 0.5, z: 0 }));
+  writeEye(landmarks, {
+    outer: 33,
+    inner: 133,
+    top: 159,
+    bottom: 145,
+    iris: [468, 469, 470, 471, 472],
+    outerPoint: { x: 0.35, y: 0.43 },
+    innerPoint: { x: 0.47, y: 0.43 },
+    topPoint: { x: 0.41, y: 0.40 },
+    bottomPoint: { x: 0.41, y: 0.46 },
+    gaze,
+  });
+  writeEye(landmarks, {
+    outer: 362,
+    inner: 263,
+    top: 386,
+    bottom: 374,
+    iris: [473, 474, 475, 476, 477],
+    outerPoint: { x: 0.53, y: 0.43 },
+    innerPoint: { x: 0.65, y: 0.43 },
+    topPoint: { x: 0.59, y: 0.40 },
+    bottomPoint: { x: 0.59, y: 0.46 },
+    gaze,
+  });
+  return landmarks;
+}
+
+function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, innerPoint, topPoint, bottomPoint, gaze }) {
+  landmarks[outer] = { ...outerPoint, z: 0 };
+  landmarks[inner] = { ...innerPoint, z: 0 };
+  landmarks[top] = { ...topPoint, z: 0 };
+  landmarks[bottom] = { ...bottomPoint, z: 0 };
+  const center = {
+    x: (outerPoint.x + innerPoint.x + topPoint.x + bottomPoint.x) / 4,
+    y: (outerPoint.y + innerPoint.y + topPoint.y + bottomPoint.y) / 4,
+  };
+  const width = Math.hypot(outerPoint.x - innerPoint.x, outerPoint.y - innerPoint.y);
+  const height = Math.hypot(topPoint.x - bottomPoint.x, topPoint.y - bottomPoint.y);
+  const irisCenter = {
+    x: center.x + gaze.x * width * 0.34,
+    y: center.y - gaze.y * height * 0.45,
+  };
+  const offsets = [[0, 0], [0.002, 0], [-0.002, 0], [0, 0.002], [0, -0.002]];
+  for (let i = 0; i < iris.length; i++) {
+    landmarks[iris[i]] = { x: irisCenter.x + offsets[i][0], y: irisCenter.y + offsets[i][1], z: 0 };
+  }
 }
 
 {
@@ -255,6 +313,52 @@ function roundTrip(frame) {
 
   const calibratedNeutral = applyCalibrationProfile(neutral, guidedProfile);
   assert.ok(Math.max(...calibratedNeutral) < 0.05, 'guided profile neutralizes resting offsets');
+}
+
+{
+  const centered = estimateIrisGaze(syntheticIrisLandmarks({ x: 0, y: 0 }));
+  assert.ok(Math.abs(centered.x) < 0.02);
+  assert.ok(Math.abs(centered.y) < 0.02);
+  const right = estimateIrisGaze(syntheticIrisLandmarks({ x: 0.55, y: 0.25 }));
+  assert.ok(right.x > 0.5);
+  assert.ok(right.y > 0.2);
+
+  const blinkWeights = new Float32Array(NUM_CHANNELS);
+  blinkWeights[CHANNEL_INDEX.eyeBlinkLeft] = 1;
+  blinkWeights[CHANNEL_INDEX.eyeBlinkRight] = 1;
+  blinkWeights[CHANNEL_INDEX.eyeLookInLeft] = 1;
+  const irisGaze = resolveGaze(blinkWeights, syntheticIrisLandmarks({ x: 0.4, y: 0 }));
+  const irisWeights = applyGazeToWeights(blinkWeights, irisGaze);
+  assert.ok(blendshapeGaze(irisWeights).x > 0.35, 'iris gaze overrides blink-cross-talk eyeLook weights');
+
+  const fallbackWeights = new Float32Array(NUM_CHANNELS);
+  fallbackWeights[CHANNEL_INDEX.eyeLookOutLeft] = 0.5;
+  fallbackWeights[CHANNEL_INDEX.eyeLookInRight] = 0.5;
+  const fallback = resolveGaze(fallbackWeights, []);
+  assert.equal(fallback.source, 'blendshape');
+  assert.equal(Math.round(fallback.x * 10) / 10, 0.5);
+
+  const gazeSession = createGazeCalibrationSession('gaze-test', 1000);
+  const rawByTarget = {
+    center: { x: 0.1, y: -0.05 },
+    left: { x: -0.3, y: -0.05 },
+    right: { x: 0.5, y: -0.05 },
+    up: { x: 0.1, y: 0.35 },
+    down: { x: 0.1, y: -0.45 },
+  };
+  for (let t = 1000; t < 11_000; t += 250) {
+    const step = calibrationGuideProgress(1000, t, [
+      { id: 'center', target: { x: 0, y: 0 }, durationMs: 2000 },
+      { id: 'left', target: { x: -0.8, y: 0 }, durationMs: 2000 },
+      { id: 'right', target: { x: 0.8, y: 0 }, durationMs: 2000 },
+      { id: 'up', target: { x: 0, y: 0.8 }, durationMs: 2000 },
+      { id: 'down', target: { x: 0, y: -0.8 }, durationMs: 2000 },
+    ]).step;
+    collectGazeCalibrationSample(gazeSession, syntheticIrisLandmarks(rawByTarget[step.id]), t);
+  }
+  const gazeProfile = buildGazeCalibrationProfile(gazeSession.samples);
+  const calibratedRight = estimateIrisGaze(syntheticIrisLandmarks(rawByTarget.right), { calibration: gazeProfile });
+  assert.ok(gazeAngularErrorDegrees(calibratedRight, { x: 0.8, y: 0 }) < 5);
 }
 
 {

@@ -13,6 +13,8 @@ import {
   DEFAULT_SMOOTHING_SETTINGS,
   DEFAULT_TRACKER_SETTINGS,
   FILTER_PRESETS,
+  GAZE_CALIBRATION_STEPS,
+  GAZE_CALIBRATION_TOTAL_MS,
   PROFILE_STORAGE_KEY,
   RESOLUTION_CONSTRAINTS,
   SMOOTHING_GROUPS,
@@ -22,11 +24,15 @@ import {
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
+  applyGazeToWeights,
   buildCalibrationProfileFromSamples,
+  buildGazeCalibrationProfile,
   calibrationGuideProgress,
   clamp,
+  collectGazeCalibrationSample,
   computeQualityScore,
   createCalibrationProfile,
+  createGazeCalibrationSession,
   createGuidedCalibrationSession,
   collectGuidedCalibrationSample,
   estimateLandmarkConfidence,
@@ -38,6 +44,7 @@ import {
   saveJson,
   setMirrorPreviewClass,
   validateCalibrationProfile,
+  resolveGaze,
 } from '../shared/runtime.js';
 import { createMotionRecord, createRecordingMetadata } from '../shared/recording.js';
 
@@ -116,6 +123,7 @@ const state = {
   qualityCanvas: document.createElement('canvas'),
   recording: { enabled: false, lines: [] },
   calibrationSession: null,
+  gazeCalibrationSession: null,
   meterPointer: { dragging: false, pointerId: null, startX: 0, startY: 0, longPressTimer: null, longPressFired: false },
   // stats
   frames: 0,
@@ -463,6 +471,10 @@ function loop() {
         state.raw.set(mirrored.weights);
       }
 
+      const gaze = resolveGaze(state.raw, faceRes.faceLandmarks?.[0], { mirror: state.mirror, calibration: profile.gaze });
+      state.raw.set(applyGazeToWeights(state.raw, gaze));
+      sampleGazeCalibration(faceRes.faceLandmarks?.[0]);
+
       // --- safety, calibration, and One Euro filtering
       const sanitized = sanitizeWeights(state.raw);
       frameWarnings.push(...sanitized.warnings);
@@ -533,6 +545,7 @@ function loop() {
   }
 
   tickGuidedCalibration();
+  tickGazeCalibration();
   updateStats(nowMs);
   requestAnimationFrame(loop);
 }
@@ -996,6 +1009,76 @@ function cancelGuidedCalibration(message = 'calibration cancelled') {
   $('calibrationProgress').value = '0';
 }
 
+function startGazeCalibration() {
+  if (!state.running) {
+    chip.textContent = 'start tracking before gaze calibration';
+    chip.dataset.state = 'error';
+    return;
+  }
+  state.gazeCalibrationSession = createGazeCalibrationSession(`gaze-${new Date().toISOString()}`, performance.now());
+  $('btnStartGazeCalibration').disabled = true;
+  $('gazeCalibrationGuide').hidden = false;
+  $('gazeCalibrationResult').textContent = 'collecting iris samples';
+  updateGazeCalibrationUi({
+    elapsedMs: 0,
+    totalMs: GAZE_CALIBRATION_TOTAL_MS,
+    step: { label: 'Look center' },
+    progress: 0,
+  });
+  chip.textContent = 'gaze calibration';
+  chip.dataset.state = 'idle';
+}
+
+function sampleGazeCalibration(landmarks) {
+  if (!state.gazeCalibrationSession) return;
+  const progress = collectGazeCalibrationSample(state.gazeCalibrationSession, landmarks, performance.now(), { mirror: state.mirror });
+  updateGazeCalibrationUi(progress);
+  if (progress.done) finishGazeCalibration();
+}
+
+function tickGazeCalibration() {
+  if (!state.gazeCalibrationSession) return;
+  const progress = calibrationGuideProgress(state.gazeCalibrationSession.startedAtMs, performance.now(), GAZE_CALIBRATION_STEPS);
+  updateGazeCalibrationUi(progress);
+  if (progress.done) finishGazeCalibration();
+}
+
+function updateGazeCalibrationUi(progress) {
+  $('gazeCalibrationStep').textContent = progress.step?.label || 'Look center';
+  $('gazeCalibrationTime').textContent = `${Math.max(0, (progress.totalMs - progress.elapsedMs) / 1000).toFixed(1)}s`;
+  $('gazeCalibrationProgress').value = String(progress.progress || 0);
+}
+
+function finishGazeCalibration() {
+  const session = state.gazeCalibrationSession;
+  if (!session) return;
+  state.gazeCalibrationSession = null;
+  $('btnStartGazeCalibration').disabled = false;
+
+  const coveredSteps = new Set(session.samples.map((sample) => sample.stepId));
+  if (coveredSteps.size < GAZE_CALIBRATION_STEPS.length) {
+    $('gazeCalibrationResult').textContent = `gaze calibration failed: ${coveredSteps.size}/${GAZE_CALIBRATION_STEPS.length} targets`;
+    chip.textContent = 'gaze calibration failed';
+    chip.dataset.state = 'error';
+    return;
+  }
+
+  profile.gaze = buildGazeCalibrationProfile(session.samples);
+  saveProfile();
+  $('gazeCalibrationResult').textContent = `saved ${session.samples.length} iris samples`;
+  chip.textContent = 'gaze calibration saved';
+  chip.dataset.state = 'open';
+}
+
+function cancelGazeCalibration(message = 'gaze calibration cancelled') {
+  if (!state.gazeCalibrationSession) return;
+  state.gazeCalibrationSession = null;
+  $('btnStartGazeCalibration').disabled = false;
+  $('gazeCalibrationResult').textContent = message;
+  $('gazeCalibrationTime').textContent = `${(GAZE_CALIBRATION_TOTAL_MS / 1000).toFixed(1)}s`;
+  $('gazeCalibrationProgress').value = '0';
+}
+
 async function restartCameraIfRunning() {
   persistSettings();
   if (state.running) {
@@ -1133,6 +1216,7 @@ $('btnStart').addEventListener('click', async () => {
 $('btnStop').addEventListener('click', () => {
   state.running = false;
   cancelGuidedCalibration('calibration stopped');
+  cancelGazeCalibration('gaze calibration stopped');
   if (video.srcObject) {
     for (const t of video.srcObject.getTracks()) t.stop();
     video.srcObject = null;
@@ -1236,6 +1320,7 @@ $('btnMuteChannel').addEventListener('click', () => {
   toggleSelectedChannelMute();
 });
 $('btnStartCalibration').addEventListener('click', startGuidedCalibration);
+$('btnStartGazeCalibration').addEventListener('click', startGazeCalibration);
 $('btnCalibrateNeutral').addEventListener('click', () => {
   profile.offsets = Array.from(state.raw);
   profile.createdAt = new Date().toISOString();
@@ -1267,6 +1352,7 @@ $('fileProfile').addEventListener('change', async (e) => {
 });
 $('btnResetSettings').addEventListener('click', () => {
   cancelGuidedCalibration('calibration reset');
+  cancelGazeCalibration('gaze calibration reset');
   Object.assign(settings, normalizeTrackerSettings(DEFAULT_TRACKER_SETTINGS));
   profile = createCalibrationProfile('default');
   saveJson(localStorage, TRACKER_STORAGE_KEY, settings);

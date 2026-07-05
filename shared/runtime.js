@@ -92,6 +92,14 @@ export const CALIBRATION_GUIDE_STEPS = Object.freeze([
   Object.freeze({ id: 'mouth-pucker', label: 'Mouth pucker', kind: 'range', durationMs: 4500 }),
 ]);
 export const CALIBRATION_GUIDE_TOTAL_MS = CALIBRATION_GUIDE_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
+export const GAZE_CALIBRATION_STEPS = Object.freeze([
+  Object.freeze({ id: 'center', label: 'Look center', target: Object.freeze({ x: 0, y: 0 }), durationMs: 2000 }),
+  Object.freeze({ id: 'left', label: 'Look left', target: Object.freeze({ x: -0.8, y: 0 }), durationMs: 2000 }),
+  Object.freeze({ id: 'right', label: 'Look right', target: Object.freeze({ x: 0.8, y: 0 }), durationMs: 2000 }),
+  Object.freeze({ id: 'up', label: 'Look up', target: Object.freeze({ x: 0, y: 0.8 }), durationMs: 2000 }),
+  Object.freeze({ id: 'down', label: 'Look down', target: Object.freeze({ x: 0, y: -0.8 }), durationMs: 2000 }),
+]);
+export const GAZE_CALIBRATION_TOTAL_MS = GAZE_CALIBRATION_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
 
 export function clamp(value, min = 0, max = 1) {
   if (!Number.isFinite(value)) return min;
@@ -273,6 +281,119 @@ export function computeQualityScore({
   };
 }
 
+export function createGazeCalibrationProfile() {
+  return {
+    schema: 'minamo.gaze-calibration.v1',
+    center: [0, 0],
+    scale: [1, 1],
+  };
+}
+
+export function blendshapeGaze(weights) {
+  const w = (name) => Number(weights?.[CHANNEL_INDEX[name]] || 0);
+  return {
+    x: clamp((w('eyeLookOutLeft') + w('eyeLookInRight') - w('eyeLookInLeft') - w('eyeLookOutRight')) * 0.5, -1, 1),
+    y: clamp((w('eyeLookUpLeft') + w('eyeLookUpRight') - w('eyeLookDownLeft') - w('eyeLookDownRight')) * 0.5, -1, 1),
+    source: 'blendshape',
+  };
+}
+
+export function estimateIrisGaze(landmarks = [], { mirror = false, calibration = null } = {}) {
+  const left = estimateEyeIrisGaze(landmarks, {
+    iris: [468, 469, 470, 471, 472],
+    outer: 33,
+    inner: 133,
+    top: 159,
+    bottom: 145,
+  });
+  const right = estimateEyeIrisGaze(landmarks, {
+    iris: [473, 474, 475, 476, 477],
+    outer: 362,
+    inner: 263,
+    top: 386,
+    bottom: 374,
+  });
+  const eyes = [left, right].filter(Boolean);
+  if (!eyes.length) return null;
+  let x = eyes.reduce((sum, eye) => sum + eye.x, 0) / eyes.length;
+  let y = eyes.reduce((sum, eye) => sum + eye.y, 0) / eyes.length;
+  if (mirror) x *= -1;
+  const gazeCalibration = validateGazeCalibration(calibration).profile;
+  x = (x - gazeCalibration.center[0]) * gazeCalibration.scale[0];
+  y = (y - gazeCalibration.center[1]) * gazeCalibration.scale[1];
+  return { x: clamp(x, -1, 1), y: clamp(y, -1, 1), source: 'iris', confidence: eyes.length / 2 };
+}
+
+export function applyGazeToWeights(weights, gaze) {
+  const out = new Float32Array(weights);
+  if (!gaze || gaze.source !== 'iris') return out;
+  const x = clamp(Number(gaze.x || 0), -1, 1);
+  const y = clamp(Number(gaze.y || 0), -1, 1);
+  for (const name of ['eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight']) {
+    out[CHANNEL_INDEX[name]] = 0;
+  }
+  if (x >= 0) {
+    out[CHANNEL_INDEX.eyeLookOutLeft] = x;
+    out[CHANNEL_INDEX.eyeLookInRight] = x;
+  } else {
+    out[CHANNEL_INDEX.eyeLookInLeft] = -x;
+    out[CHANNEL_INDEX.eyeLookOutRight] = -x;
+  }
+  if (y >= 0) {
+    out[CHANNEL_INDEX.eyeLookUpLeft] = y;
+    out[CHANNEL_INDEX.eyeLookUpRight] = y;
+  } else {
+    out[CHANNEL_INDEX.eyeLookDownLeft] = -y;
+    out[CHANNEL_INDEX.eyeLookDownRight] = -y;
+  }
+  return out;
+}
+
+export function resolveGaze(weights, landmarks, { mirror = false, calibration = null } = {}) {
+  return estimateIrisGaze(landmarks, { mirror, calibration }) || blendshapeGaze(weights);
+}
+
+export function createGazeCalibrationSession(name = 'gaze', startedAtMs = performanceNow()) {
+  return {
+    schema: 'minamo.gaze-calibration.session.v1',
+    name,
+    startedAtMs,
+    samples: [],
+  };
+}
+
+export function collectGazeCalibrationSample(session, landmarks, nowMs = performanceNow(), { mirror = false } = {}) {
+  const progress = calibrationGuideProgress(session.startedAtMs, nowMs, GAZE_CALIBRATION_STEPS);
+  if (progress.done) return progress;
+  const gaze = estimateIrisGaze(landmarks, { mirror, calibration: createGazeCalibrationProfile() });
+  if (gaze) {
+    session.samples.push({
+      stepId: progress.step.id,
+      target: progress.step.target,
+      raw: { x: gaze.x, y: gaze.y },
+    });
+  }
+  return progress;
+}
+
+export function buildGazeCalibrationProfile(samples = []) {
+  const profile = createGazeCalibrationProfile();
+  const centerSamples = samples.filter((sample) => sample.stepId === 'center');
+  if (centerSamples.length) {
+    profile.center = [average(centerSamples.map((sample) => sample.raw.x)), average(centerSamples.map((sample) => sample.raw.y))];
+  }
+  const horizontal = samples.filter((sample) => Math.abs(sample.target?.x || 0) > 0);
+  const vertical = samples.filter((sample) => Math.abs(sample.target?.y || 0) > 0);
+  const scaleX = calibrationScale(horizontal, profile.center[0], 'x');
+  const scaleY = calibrationScale(vertical, profile.center[1], 'y');
+  profile.scale = [scaleX || 1, scaleY || 1];
+  return validateGazeCalibration(profile).profile;
+}
+
+export function gazeAngularErrorDegrees(actual, target, maxDegrees = 20) {
+  return Math.hypot(Number(actual.x || 0) - Number(target.x || 0), Number(actual.y || 0) - Number(target.y || 0)) * maxDegrees;
+}
+
 export function createCalibrationProfile(name = 'default') {
   return {
     schema: 'minamo.calibration.v1',
@@ -282,9 +403,15 @@ export function createCalibrationProfile(name = 'default') {
     gains: Array(NUM_CHANNELS).fill(1),
     deadzones: Array(NUM_CHANNELS).fill(0),
     muted: Array(NUM_CHANNELS).fill(false),
+    gaze: createGazeCalibrationProfile(),
   };
 }
 
+/**
+ * @param {number} startedAtMs
+ * @param {number} [nowMs]
+ * @param {ReadonlyArray<{ id: string, label: string, durationMs: number, kind?: string, target?: { x: number, y: number } }>} [steps]
+ */
 export function calibrationGuideProgress(startedAtMs, nowMs = performanceNow(), steps = CALIBRATION_GUIDE_STEPS) {
   const totalMs = steps.reduce((sum, step) => sum + step.durationMs, 0);
   const elapsedMs = Math.max(0, nowMs - startedAtMs);
@@ -396,6 +523,7 @@ export function validateCalibrationProfile(profile) {
   base.offsets = base.offsets.map((value, index) => clampProfileNumber(value, 0, 1, `offsets[${index}]`, warnings));
   base.deadzones = base.deadzones.map((value, index) => clampProfileNumber(value, 0, 0.2, `deadzones[${index}]`, warnings));
   base.muted = base.muted.map(Boolean);
+  base.gaze = validateGazeCalibration(profile.gaze, warnings).profile;
   return { ok: true, profile: base, warnings: [...new Set(warnings)], errors };
 }
 
@@ -648,6 +776,75 @@ function percentile(values, q) {
   if (lower === upper) return sorted[lower];
   const weight = pos - lower;
   return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+function estimateEyeIrisGaze(landmarks, { iris, outer, inner, top, bottom }) {
+  const points = [landmarks[outer], landmarks[inner], landmarks[top], landmarks[bottom], ...iris.map((index) => landmarks[index])];
+  if (points.some((point) => !finitePoint(point))) return null;
+  const irisCenter = averagePoint(iris.map((index) => landmarks[index]));
+  const eyeCenter = averagePoint([landmarks[outer], landmarks[inner], landmarks[top], landmarks[bottom]]);
+  const width = distance2d(landmarks[outer], landmarks[inner]);
+  const height = distance2d(landmarks[top], landmarks[bottom]);
+  if (width < 0.015 || height < 0.004) return null;
+  return {
+    x: clamp((irisCenter.x - eyeCenter.x) / (width * 0.34), -1, 1),
+    y: clamp((eyeCenter.y - irisCenter.y) / (height * 0.45), -1, 1),
+  };
+}
+
+function validateGazeCalibration(value, warnings = []) {
+  const profile = createGazeCalibrationProfile();
+  if (!value || typeof value !== 'object') return { profile };
+  if (value.schema && value.schema !== profile.schema) {
+    warnings.push(`unsupported gaze calibration schema: ${value.schema}`);
+    return { profile };
+  }
+  if (Array.isArray(value.center)) {
+    profile.center = [
+      clampProfileNumber(value.center[0], -1, 1, 'gaze.center[0]', warnings),
+      clampProfileNumber(value.center[1], -1, 1, 'gaze.center[1]', warnings),
+    ];
+  }
+  if (Array.isArray(value.scale)) {
+    profile.scale = [
+      clampProfileNumber(value.scale[0], 0.25, 4, 'gaze.scale[0]', warnings),
+      clampProfileNumber(value.scale[1], 0.25, 4, 'gaze.scale[1]', warnings),
+    ];
+  }
+  return { profile };
+}
+
+function calibrationScale(samples, center, axis) {
+  const ratios = samples
+    .map((sample) => {
+      const rawDelta = Number(sample.raw?.[axis] || 0) - center;
+      const target = Number(sample.target?.[axis] || 0);
+      if (Math.abs(rawDelta) < 0.05 || Math.abs(target) < 0.05) return null;
+      return Math.abs(target / rawDelta);
+    })
+    .filter((value) => Number.isFinite(value));
+  if (!ratios.length) return 1;
+  return clamp(percentile(ratios, 0.5), 0.25, 4);
+}
+
+function average(values) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
+}
+
+function averagePoint(points) {
+  return {
+    x: average(points.map((point) => point.x)),
+    y: average(points.map((point) => point.y)),
+  };
+}
+
+function finitePoint(point) {
+  return Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y));
+}
+
+function distance2d(a, b) {
+  return Math.hypot(Number(a.x) - Number(b.x), Number(a.y) - Number(b.y));
 }
 
 function clampProfileNumber(value, min, max, name, warnings) {

@@ -478,6 +478,45 @@ def validate_quality_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing quality regression coverage: {needle}')
 
 
+def validate_gaze_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in [
+        'GAZE_CALIBRATION_STEPS',
+        'estimateIrisGaze',
+        'applyGazeToWeights',
+        'resolveGaze',
+        'buildGazeCalibrationProfile',
+        'gazeAngularErrorDegrees',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing iris gaze runtime contract: {needle}')
+    for needle in [
+        'resolveGaze(state.raw, faceRes.faceLandmarks?.[0]',
+        'applyGazeToWeights(state.raw, gaze)',
+        'sampleGazeCalibration(faceRes.faceLandmarks?.[0])',
+        'startGazeCalibration',
+        'tickGazeCalibration();',
+        'buildGazeCalibrationProfile',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker gaze contract: {needle}')
+    for needle in ['btnStartGazeCalibration', 'gazeCalibrationGuide', 'gazeCalibrationProgress']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing gaze calibration UI: {needle}')
+    for needle in [
+        'syntheticIrisLandmarks',
+        'iris gaze overrides blink-cross-talk eyeLook weights',
+        "fallback.source, 'blendshape'",
+        'gazeAngularErrorDegrees(calibratedRight',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing iris gaze regression coverage: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -627,6 +666,7 @@ validate_foundation_contracts()
 validate_calibration_contracts()
 validate_mixer_contracts()
 validate_quality_contracts()
+validate_gaze_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

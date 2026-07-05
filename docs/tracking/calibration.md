@@ -35,6 +35,13 @@ gain from 0-2x, adjust the selected channel deadzone from 0-0.2, and mute with
 right-click or touch long-press. These values are stored in the same local JSON
 profile and survive export/import.
 
+Gaze calibration adds a 10-second five-point iris pass: center, left, right,
+up, and down. When MediaPipe iris landmarks are available, Minamo estimates gaze
+from iris center versus eye contour, applies the saved center/scale correction,
+and projects the result into the existing eye-look channels consumed by the
+viewer look-at path. If iris landmarks are missing, it leaves the original
+blendshape gaze in place.
+
 ## 4. UX
 
 The UI should guide the user through short actions with progress bars and live quality warnings.

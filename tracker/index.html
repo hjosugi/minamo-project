@@ -130,6 +130,7 @@
       <div class="controls">
         <button id="btnMuteChannel">Mute channel</button>
         <button id="btnStartCalibration">Start guided calibration</button>
+        <button id="btnStartGazeCalibration">Start gaze calibration</button>
         <button id="btnCalibrateNeutral">Capture neutral</button>
         <button id="btnExportProfile">Export profile</button>
         <button id="btnImportProfile">Import profile</button>
@@ -143,6 +144,14 @@
         </div>
         <progress id="calibrationProgress" max="1" value="0"></progress>
         <output id="calibrationResult">waiting</output>
+      </div>
+      <div id="gazeCalibrationGuide" class="calibration-guide" hidden>
+        <div class="calibration-guide-head">
+          <strong id="gazeCalibrationStep">Look center</strong>
+          <span id="gazeCalibrationTime">10.0s</span>
+        </div>
+        <progress id="gazeCalibrationProgress" max="1" value="0"></progress>
+        <output id="gazeCalibrationResult">waiting</output>
       </div>
     </section>
 
