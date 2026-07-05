@@ -209,6 +209,8 @@ function roundTrip(frame) {
   raw[CHANNEL_INDEX.jawOpen] = 0.4;
   const adjusted = applyCalibrationProfile(raw, profile);
   assert.equal(Math.round(adjusted[CHANNEL_INDEX.jawOpen] * 100) / 100, 0.6);
+  profile.muted[CHANNEL_INDEX.jawOpen] = true;
+  assert.equal(applyCalibrationProfile(raw, profile)[CHANNEL_INDEX.jawOpen], 0);
 }
 
 {

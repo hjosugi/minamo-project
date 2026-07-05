@@ -23,6 +23,7 @@ import {
   applyCalibrationProfile,
   buildCalibrationProfileFromSamples,
   calibrationGuideProgress,
+  clamp,
   computeQualityScore,
   createCalibrationProfile,
   createGuidedCalibrationSession,
@@ -112,6 +113,7 @@ const state = {
   qualityCanvas: document.createElement('canvas'),
   recording: { enabled: false, lines: [] },
   calibrationSession: null,
+  meterPointer: { dragging: false, pointerId: null, startX: 0, startY: 0, longPressTimer: null, longPressFired: false },
   // stats
   frames: 0,
   lastStats: performance.now(),
@@ -1002,11 +1004,83 @@ function applyFilterControls() {
   updateSmoothingControls();
 }
 
-function selectMeterChannel(ev) {
+function meterPointFromEvent(ev) {
   const rect = meters.getBoundingClientRect();
-  const y = ev.clientY - rect.top;
-  state.selectedChannel = Math.max(0, Math.min(NUM_CHANNELS - 1, Math.floor((y / rect.height) * NUM_CHANNELS)));
+  const x = clamp(ev.clientX - rect.left, 0, rect.width);
+  const y = clamp(ev.clientY - rect.top, 0, rect.height);
+  const channel = Math.max(0, Math.min(NUM_CHANNELS - 1, Math.floor((y / rect.height) * NUM_CHANNELS)));
+  return { x, y, channel, width: rect.width };
+}
+
+function selectMeterChannel(ev) {
+  const point = meterPointFromEvent(ev);
+  state.selectedChannel = point.channel;
   updateChannelControls();
+  return point;
+}
+
+function gainFromMeterX(x, width) {
+  const labelW = 118;
+  const barW = Math.max(1, width - labelW - 42);
+  return clamp(((x - labelW) / barW) * 2, 0, 2);
+}
+
+function applyMeterGain(point) {
+  if (point.x < 118) return;
+  state.selectedChannel = point.channel;
+  profile.gains[state.selectedChannel] = Number(gainFromMeterX(point.x, point.width).toFixed(2));
+  saveProfile();
+}
+
+function clearMeterLongPress() {
+  if (!state.meterPointer.longPressTimer) return;
+  clearTimeout(state.meterPointer.longPressTimer);
+  state.meterPointer.longPressTimer = null;
+}
+
+function toggleSelectedChannelMute() {
+  profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
+  saveProfile();
+  chip.textContent = profile.muted[state.selectedChannel] ? 'channel muted' : 'channel unmuted';
+  chip.dataset.state = 'idle';
+}
+
+function startMeterInteraction(ev) {
+  if (ev.button !== undefined && ev.button !== 0) return;
+  ev.preventDefault();
+  const point = selectMeterChannel(ev);
+  state.meterPointer.dragging = true;
+  state.meterPointer.pointerId = ev.pointerId;
+  state.meterPointer.startX = point.x;
+  state.meterPointer.startY = point.y;
+  state.meterPointer.longPressFired = false;
+  meters.setPointerCapture?.(ev.pointerId);
+  applyMeterGain(point);
+
+  if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
+    clearMeterLongPress();
+    state.meterPointer.longPressTimer = setTimeout(() => {
+      state.meterPointer.longPressFired = true;
+      state.meterPointer.dragging = false;
+      toggleSelectedChannelMute();
+    }, 550);
+  }
+}
+
+function moveMeterInteraction(ev) {
+  if (!state.meterPointer.dragging || state.meterPointer.pointerId !== ev.pointerId) return;
+  const point = meterPointFromEvent(ev);
+  const moved = Math.hypot(point.x - state.meterPointer.startX, point.y - state.meterPointer.startY);
+  if (moved > 8) clearMeterLongPress();
+  if (!state.meterPointer.longPressFired) applyMeterGain(point);
+}
+
+function endMeterInteraction(ev) {
+  if (state.meterPointer.pointerId !== null && state.meterPointer.pointerId !== ev.pointerId) return;
+  clearMeterLongPress();
+  state.meterPointer.dragging = false;
+  state.meterPointer.pointerId = null;
+  if (meters.hasPointerCapture?.(ev.pointerId)) meters.releasePointerCapture(ev.pointerId);
 }
 
 function downloadText(filename, content, type = 'application/json') {
@@ -1135,12 +1209,15 @@ $('rngBeta').addEventListener('input', () => {
   applyFilterControls();
 });
 
-meters.addEventListener('pointerdown', selectMeterChannel);
+meters.addEventListener('pointerdown', startMeterInteraction);
+meters.addEventListener('pointermove', moveMeterInteraction);
+meters.addEventListener('pointerup', endMeterInteraction);
+meters.addEventListener('pointercancel', endMeterInteraction);
+meters.addEventListener('lostpointercapture', endMeterInteraction);
 meters.addEventListener('contextmenu', (ev) => {
   ev.preventDefault();
   selectMeterChannel(ev);
-  profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
-  saveProfile();
+  toggleSelectedChannelMute();
 });
 $('rngGain').addEventListener('input', (e) => {
   profile.gains[state.selectedChannel] = Number(e.target.value);
@@ -1151,8 +1228,7 @@ $('rngDeadzone').addEventListener('input', (e) => {
   saveProfile();
 });
 $('btnMuteChannel').addEventListener('click', () => {
-  profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
-  saveProfile();
+  toggleSelectedChannelMute();
 });
 $('btnStartCalibration').addEventListener('click', startGuidedCalibration);
 $('btnCalibrateNeutral').addEventListener('click', () => {

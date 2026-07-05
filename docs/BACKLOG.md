@@ -259,9 +259,9 @@ right-click or long-press to mute, small deadzone slider. This is the
 manual complement to KGM-013 and doubles as the debugging surface.
 
 Acceptance criteria:
-- [ ] Gain 0-2x and deadzone 0-0.2 per channel
-- [ ] Settings persist and export with the calibration profile
-- [ ] Muted channels render dimmed in the meters
+- [x] Gain 0-2x and deadzone 0-0.2 per channel
+- [x] Settings persist and export with the calibration profile
+- [x] Muted channels render dimmed in the meters
 
 ### [KGM-015] Low-light robustness and signal quality indicator
 - Labels: area/tracking, type/feature

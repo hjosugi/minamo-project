@@ -30,6 +30,11 @@ The profile is applied after raw signal sanitization and before One Euro
 filtering, so both the live meters and outgoing KGM1 frames use the calibrated
 signal.
 
+Manual tuning is available in the 52-channel meter: drag a channel row to set
+gain from 0-2x, adjust the selected channel deadzone from 0-0.2, and mute with
+right-click or touch long-press. These values are stored in the same local JSON
+profile and survive export/import.
+
 ## 4. UX
 
 The UI should guide the user through short actions with progress bars and live quality warnings.

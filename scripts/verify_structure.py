@@ -409,6 +409,36 @@ def validate_calibration_contracts() -> None:
         add_error('docs/BACKLOG.md', 'KGM-013 acceptance criteria must stay documented')
 
 
+def validate_mixer_contracts() -> None:
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    styles = read('assets/minamo.css')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in [
+        'id="rngGain" min="0" max="2"',
+        'id="rngDeadzone" min="0" max="0.2"',
+        'id="btnMuteChannel"',
+    ]:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing mixer control contract: {needle}')
+    for needle in [
+        'gainFromMeterX',
+        'startMeterInteraction',
+        'moveMeterInteraction',
+        'longPressTimer',
+        'toggleSelectedChannelMute',
+        "meters.addEventListener('contextmenu'",
+        "ctx.globalAlpha = muted ? 0.25",
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing interactive mixer contract: {needle}')
+    if 'touch-action: none' not in styles:
+        add_error('assets/minamo.css', 'meter canvas must disable touch panning for drag/long-press controls')
+    if 'profile.muted[CHANNEL_INDEX.jawOpen] = true' not in tests:
+        add_error('tests/run-tests.mjs', 'calibration profile tests must cover muted channel output')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -556,6 +586,7 @@ validate_glossary_examples()
 validate_dependency_guardrails()
 validate_foundation_contracts()
 validate_calibration_contracts()
+validate_mixer_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()
