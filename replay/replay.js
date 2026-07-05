@@ -11,21 +11,28 @@ let playing = false;
 let timer = null;
 let startedAt = 0;
 let baseT = 0;
+let validationErrors = [];
 
 $('fileReplay').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
+  playing = false;
+  if (timer) clearTimeout(timer);
+  timer = null;
   const parsed = parseRecordingJsonl(await file.text());
   frames = parsed.frames.sort((a, b) => a.t - b.t);
+  validationErrors = parsed.errors;
   cursor = 0;
   baseT = frames[0]?.t ?? 0;
   $('statFrames').textContent = String(frames.length);
   $('statCursor').textContent = '0';
   $('statDuration').textContent = frames.length ? (((frames.at(-1)?.t ?? baseT) - baseT) / 1000).toFixed(1) : '0.0';
-  $('btnPlay').disabled = frames.length === 0;
-  $('btnReset').disabled = frames.length === 0;
-  chip.textContent = parsed.errors.length ? `loaded with ${parsed.errors.length} error(s)` : (frames.length ? 'loaded' : 'empty');
-  chip.dataset.state = parsed.errors.length || !frames.length ? 'error' : 'open';
+  $('btnPlay').disabled = !canReplay();
+  $('btnPause').disabled = true;
+  $('btnReset').disabled = !canReplay();
+  renderReplayValidation(validationErrors, frames.length);
+  chip.textContent = validationErrors.length ? `blocked: ${validationErrors.length} error(s)` : (frames.length ? 'loaded' : 'empty');
+  chip.dataset.state = validationErrors.length || !frames.length ? 'error' : 'open';
 });
 
 $('btnPlay').addEventListener('click', () => {
@@ -69,10 +76,42 @@ function pause(label) {
   playing = false;
   if (timer) clearTimeout(timer);
   timer = null;
-  $('btnPlay').disabled = frames.length === 0;
+  $('btnPlay').disabled = !canReplay();
   $('btnPause').disabled = true;
   chip.textContent = label;
   chip.dataset.state = label === 'finished' ? 'closed' : 'idle';
+}
+
+function canReplay() {
+  return frames.length > 0 && validationErrors.length === 0;
+}
+
+function renderReplayValidation(errors, frameCount) {
+  const panel = $('replayValidation');
+  const summary = $('replayValidationSummary');
+  const list = $('replayErrors');
+  list.replaceChildren();
+
+  if (!errors.length) {
+    panel.dataset.state = frameCount ? 'open' : 'empty';
+    summary.textContent = frameCount
+      ? `ready: ${frameCount} frame(s), no validation errors`
+      : 'no playable motion frames found';
+    return;
+  }
+
+  panel.dataset.state = 'error';
+  summary.textContent = `${errors.length} validation error(s); playback disabled`;
+  for (const error of errors.slice(0, 20)) {
+    const li = document.createElement('li');
+    li.textContent = `line ${error.line ?? '?'}: ${(error.errors ?? []).join('; ')}`;
+    list.appendChild(li);
+  }
+  if (errors.length > 20) {
+    const li = document.createElement('li');
+    li.textContent = `and ${errors.length - 20} more error(s)`;
+    list.appendChild(li);
+  }
 }
 
 function publish(record) {

@@ -42,6 +42,10 @@
         <span>cursor <b id="statCursor">0</b></span>
         <span>duration <b id="statDuration">0.0</b>s</span>
       </div>
+      <div class="validation-panel" id="replayValidation" data-state="idle" aria-live="polite">
+        <strong id="replayValidationSummary">No recording loaded.</strong>
+        <ul class="error-list" id="replayErrors"></ul>
+      </div>
       <p class="note">Replays tracker JSONL locally through BroadcastChannel. No upload is performed.</p>
     </section>
   </main>

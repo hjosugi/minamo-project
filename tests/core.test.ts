@@ -15,10 +15,12 @@ import {
   deriveFingerChain,
   detectHandSwap,
   finiteNumber,
+  finiteVec3Guard,
   fuseVisualHitWithAudio,
   estimateHitVelocity,
   classifyLowLight,
   classifyMotionBlur,
+  HAND_LANDMARK_COUNT,
   privacyPreservingDatasetRecord,
   verifyModelHash,
   shortestPathQuat,
@@ -60,6 +62,23 @@ describe('hand solver', () => {
     expect(state.confidence).toBeGreaterThan(0.9);
   });
 
+  it('computes tip velocity from timestamp delta', () => {
+    const previous = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
+    const next = createSyntheticHandLandmarks(0, 'Right');
+    next[8] = { ...next[8], y: next[8].y + 0.06 };
+    const state = solveHandState({ handedness: 'Right', landmarks: next, previous, dtSec: 0.02 });
+    expect(state.fingers.index.tipVelocity.y).toBeCloseTo(3, 5);
+  });
+
+  it('rejects malformed and non-finite hand landmarks', () => {
+    const short = createSyntheticHandLandmarks(0, 'Right').slice(0, HAND_LANDMARK_COUNT - 1);
+    expect(() => solveHandState({ handedness: 'Right', landmarks: short })).toThrow(/Expected 21 hand landmarks/);
+
+    const nonFinite = createSyntheticHandLandmarks(0, 'Right');
+    nonFinite[8] = { ...nonFinite[8], x: Number.NaN };
+    expect(() => solveHandState({ handedness: 'Right', landmarks: nonFinite })).toThrow(/non-finite/);
+  });
+
   it('reports outside-frame and low-confidence warnings', () => {
     const landmarks = createSyntheticHandLandmarks(0, 'Right');
     landmarks[0].x = 1.4;
@@ -72,10 +91,23 @@ describe('hand solver', () => {
     expect(state.fingers.index.occluded).toBe(true);
   });
 
+  it('reports frame-level low confidence and finger occlusion warnings', () => {
+    const landmarks = createSyntheticHandLandmarks(0, 'Right');
+    for (const point of landmarks) {
+      point.visibility = 0.2;
+      point.presence = 0.2;
+    }
+    const state = solveHandState({ handedness: 'Right', landmarks });
+    expect(state.warnings).toContain('HAND_LOW_CONFIDENCE');
+    expect(state.warnings).toContain('index:OCCLUDED');
+    expect(state.fingers.index.confidence).toBeLessThan(0.35);
+  });
+
   it('uses hysteresis for finger contact and confidence decay for occlusion', () => {
     const contact = new FingerContactHysteresis(0.03, 0.05);
     expect(contact.update(0.029, 1)).toBe(true);
     expect(contact.update(0.04, 1)).toBe(true);
+    expect(contact.update(0.08, 0.1)).toBe(true);
     expect(contact.update(0.06, 1)).toBe(false);
 
     const decay = new ConfidenceDecay();
@@ -144,6 +176,9 @@ describe('audio and drum helpers', () => {
 describe('stability layer', () => {
   it('guards finite values and rig ranges', () => {
     expect(finiteNumber(Number.NaN, 0.25).value).toBe(0.25);
+    const guarded = finiteVec3Guard({ x: Number.NaN, y: 1, z: Infinity }, { x: 0, y: 0, z: 0 });
+    expect(guarded.value).toEqual({ x: 0, y: 1, z: 0 });
+    expect(guarded.warnings).toEqual(['NON_FINITE_VEC3_X', 'NON_FINITE_VEC3_Z']);
     expect(clampRigParameter(2, 0, 1).value).toBe(1);
     expect(clampRigParameter(2, 0, 1).warnings).toContain('RIG_PARAMETER_CLAMPED');
   });

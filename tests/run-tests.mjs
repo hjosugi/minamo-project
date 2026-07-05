@@ -21,6 +21,7 @@ import {
   syntheticFaceFixture,
   setMirrorPreviewClass,
   validateCalibrationProfile,
+  WARNING_TAXONOMY,
 } from '../shared/runtime.js';
 import {
   createMotionRecord,
@@ -281,14 +282,34 @@ function roundTrip(frame) {
   const motion = createMotionRecord(frame, { quality: { state: 'good', score: 1 }, warnings: [] });
   assert.equal(validateRecordingRecord(metadata, 1).ok, true);
   assert.equal(validateRecordingRecord(motion, 2).ok, true);
+  assert.deepEqual(Object.keys(metadata.settings).sort(), ['fps', 'hands', 'mirror', 'mode', 'pose', 'resolution', 'smoothingGroup'].sort());
+  assert.equal(JSON.stringify(metadata).includes('video'), false);
+  assert.equal(JSON.stringify(metadata).includes('audio'), false);
   const parsed = parseRecordingJsonl(`${JSON.stringify(metadata)}\n${JSON.stringify(motion)}\n`);
   assert.equal(parsed.errors.length, 0);
   assert.equal(parsed.frames.length, 1);
   const malformed = parseRecordingJsonl(`${JSON.stringify(metadata)}\n{"schema":"minamo.kgm1.motion-jsonl.v1","t":"bad"}\n`);
   assert.equal(malformed.errors[0].line, 2);
+  assert.ok(malformed.errors[0].errors.includes('frame.t must be finite'));
+  const badWarnings = validateRecordingRecord({ ...motion, warnings: ['LOW_LIGHT', 3] }, 3);
+  assert.equal(badWarnings.ok, false);
+  assert.ok(badWarnings.errors.includes('frame.warnings[1] must be a string'));
+  const badQuality = validateRecordingRecord({ ...motion, quality: { state: 'idle', score: 2 } }, 4);
+  assert.equal(badQuality.ok, false);
+  assert.ok(badQuality.errors.includes('frame.quality.state must be good, degraded, or poor'));
+  assert.ok(badQuality.errors.includes('frame.quality.score must be between 0 and 1'));
+  const rawMetadata = validateRecordingRecord({ ...metadata, video: 'data:video/webm;base64,AAAA' }, 5);
+  assert.equal(rawMetadata.ok, false);
+  assert.ok(rawMetadata.errors.some((error) => error.includes('raw media data')));
+  const rawNested = parseRecordingJsonl(`${JSON.stringify(metadata)}\n${JSON.stringify({ ...motion, face: { ...motion.face, imageData: 'raw pixels' } })}\n`);
+  assert.equal(rawNested.errors[0].line, 2);
+  assert.ok(rawNested.errors[0].errors.some((error) => error.includes('record.face.imageData')));
   const fixture = parseRecordingJsonl(fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.jsonl'), 'utf8'));
   assert.equal(fixture.errors.length, 0);
   assert.equal(fixture.frames.length, 1);
+  for (const code of ['LOW_LIGHT', 'MOTION_BLUR', 'DROPPED_FRAMES', 'OCCLUSION', 'NON_FINITE_SIGNAL', 'SIGNAL_CLAMPED']) {
+    assert.ok(Object.values(WARNING_TAXONOMY).includes(code), `warning taxonomy exposes ${code}`);
+  }
 }
 
 {

@@ -2,6 +2,8 @@ import { NUM_CHANNELS, NUM_POSE_POINTS } from './blendshapes.js';
 
 export const RECORDING_METADATA_SCHEMA = 'minamo.kgm1.recording-metadata.v1';
 export const RECORDING_FRAME_SCHEMA = 'minamo.kgm1.motion-jsonl.v1';
+const RAW_MEDIA_FIELD_RE = /^(?:raw(?:camera|video|audio|media|frame)|camera(?:frame|image|pixels|blob|data)|video(?:frame|data|blob|url)?|audio(?:data|blob|buffer|url)?|image(?:data|blob|url)?|media(?:stream|blob|data|url)?|canvas|pixelData|thumbnail)$/i;
+const QUALITY_STATES = new Set(['good', 'degraded', 'poor']);
 
 export function createRecordingMetadata({
   version = '0.1.0',
@@ -39,7 +41,10 @@ export function createMotionRecord(frame, { quality = null, warnings = [] } = {}
 
 export function validateRecordingRecord(record, line = 1) {
   const errors = [];
-  if (!record || typeof record !== 'object') errors.push('record is not an object');
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return { ok: false, line, errors: ['record is not an object'] };
+  }
+  errors.push(...rawMediaFieldErrors(record));
   const schema = record?.schema;
   if (schema === RECORDING_METADATA_SCHEMA) {
     if (typeof record.startedAt !== 'string') errors.push('metadata.startedAt must be a string');
@@ -47,14 +52,14 @@ export function validateRecordingRecord(record, line = 1) {
   } else if (schema === RECORDING_FRAME_SCHEMA) {
     if (!Number.isFinite(record.t)) errors.push('frame.t must be finite');
     if (!Number.isInteger(record.seq)) errors.push('frame.seq must be an integer');
+    validateStringArray(record.warnings, 'frame.warnings', errors);
+    validateQuality(record.quality, errors);
     if (record.face) {
-      if (!Array.isArray(record.face.quat) || record.face.quat.length !== 4) errors.push('face.quat must have 4 values');
-      if (!Array.isArray(record.face.pos) || record.face.pos.length !== 3) errors.push('face.pos must have 3 values');
-      if (!Array.isArray(record.face.weights) || record.face.weights.length !== NUM_CHANNELS) errors.push(`face.weights must have ${NUM_CHANNELS} values`);
+      validateNumberArray(record.face.quat, 4, 'face.quat', errors);
+      validateNumberArray(record.face.pos, 3, 'face.pos', errors);
+      validateNumberArray(record.face.weights, NUM_CHANNELS, 'face.weights', errors);
     }
-    if (record.pose?.points && (!Array.isArray(record.pose.points) || record.pose.points.length !== NUM_POSE_POINTS * 3)) {
-      errors.push(`pose.points must have ${NUM_POSE_POINTS * 3} values`);
-    }
+    if (record.pose?.points) validateNumberArray(record.pose.points, NUM_POSE_POINTS * 3, 'pose.points', errors);
   } else {
     errors.push(`unknown schema: ${schema || 'missing'}`);
   }
@@ -102,4 +107,60 @@ function summarizeCalibration(calibration) {
     name: calibration.name,
     createdAt: calibration.createdAt,
   };
+}
+
+function validateNumberArray(value, length, field, errors) {
+  if (!Array.isArray(value) || value.length !== length) {
+    errors.push(`${field} must have ${length} values`);
+    return;
+  }
+  for (let i = 0; i < value.length; i++) {
+    if (!Number.isFinite(value[i])) errors.push(`${field}[${i}] must be finite`);
+  }
+}
+
+function validateStringArray(value, field, errors) {
+  if (!Array.isArray(value)) {
+    errors.push(`${field} must be an array`);
+    return;
+  }
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== 'string') errors.push(`${field}[${i}] must be a string`);
+  }
+}
+
+function validateQuality(value, errors) {
+  if (value === null || value === undefined) return;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    errors.push('frame.quality must be null or an object');
+    return;
+  }
+  if (value.state !== undefined && !QUALITY_STATES.has(value.state)) {
+    errors.push('frame.quality.state must be good, degraded, or poor');
+  }
+  if (value.score !== undefined && (!Number.isFinite(value.score) || value.score < 0 || value.score > 1)) {
+    errors.push('frame.quality.score must be between 0 and 1');
+  }
+  if (value.reasons !== undefined) validateStringArray(value.reasons, 'frame.quality.reasons', errors);
+  if (value.warnings !== undefined) validateStringArray(value.warnings, 'frame.quality.warnings', errors);
+}
+
+function rawMediaFieldErrors(record) {
+  const found = [];
+  const seen = new Set();
+  const visit = (value, path) => {
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) visit(value[i], `${path}[${i}]`);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      const nextPath = `${path}.${key}`;
+      if (RAW_MEDIA_FIELD_RE.test(key)) found.push(nextPath);
+      visit(child, nextPath);
+    }
+  };
+  visit(record, 'record');
+  return found.map((path) => `${path} must not contain raw media data`);
 }

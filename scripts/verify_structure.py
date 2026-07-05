@@ -285,12 +285,85 @@ def validate_dependency_guardrails() -> None:
             add_error('scripts/fetch-models.sh', f'MediaPipe model URL lacks pinned model version: {url}')
 
 
+def validate_static_demo_entrypoints() -> None:
+    nojekyll = ROOT / '.nojekyll'
+    if not nojekyll.is_file():
+        add_error('.nojekyll', 'Pages demo requires a .nojekyll file at repository root')
+
+    old_stylesheet = 'kagami' + '.css'
+    old_asset_path = 'assets/' + 'kagami'
+    entrypoints = {
+        'index.html': './assets/minamo.css',
+        'tracker/index.html': '../assets/minamo.css',
+        'viewer/index.html': '../assets/minamo.css',
+        'replay/index.html': '../assets/minamo.css',
+        'roadmap/index.html': '../assets/minamo.css',
+    }
+    for rel, stylesheet in entrypoints.items():
+        path = ROOT / rel
+        if not path.exists():
+            add_error(rel, 'static demo entrypoint is missing')
+            continue
+        text = path.read_text(encoding='utf-8')
+        if stylesheet not in text:
+            add_error(rel, f'static demo entrypoint must load {stylesheet}')
+        if old_stylesheet in text or old_asset_path in text:
+            add_error(rel, 'static demo entrypoint still references the old Kagami stylesheet')
+
+    stale_paths = []
+    for path in ROOT.rglob('*'):
+        if not path.is_file() or any(part in {'.git', 'node_modules', 'dist'} for part in path.parts):
+            continue
+        if path.suffix not in {'.html', '.js', '.mjs', '.py', '.md', '.css', '.json', '.yml', '.yaml', '.ts'}:
+            continue
+        text = path.read_text(encoding='utf-8', errors='ignore')
+        if old_stylesheet in text or old_asset_path in text:
+            stale_paths.append(path.relative_to(ROOT))
+    for path in stale_paths:
+        add_error(path, 'old Kagami stylesheet reference must not ship in source')
+
+
+def validate_replay_validation_ui() -> None:
+    html = read('replay/index.html')
+    js = read('replay/replay.js')
+    for element_id in ['replayValidation', 'replayValidationSummary', 'replayErrors']:
+        if f'id="{element_id}"' not in html:
+            add_error('replay/index.html', f'missing replay validation element #{element_id}')
+    if 'validationErrors.length === 0' not in js or 'playback disabled' not in js:
+        add_error('replay/replay.js', 'replay playback must be disabled and explained when validation errors exist')
+
+
+def validate_runtime_warning_taxonomy() -> None:
+    runtime = read('shared/runtime.js')
+    required_codes = [
+        'INSECURE_CONTEXT',
+        'NO_CAMERA_API',
+        'CAMERA_PERMISSION_DENIED',
+        'NO_CAMERA_DEVICE',
+        'NO_WEBGL2',
+        'NO_WEBTRANSPORT',
+        'LOW_LIGHT',
+        'MOTION_BLUR',
+        'DROPPED_FRAMES',
+        'OCCLUSION',
+        'TEMPORAL_OUTLIER',
+        'NON_FINITE_SIGNAL',
+        'SIGNAL_CLAMPED',
+    ]
+    for code in required_codes:
+        if f"'{code}'" not in runtime and f'"{code}"' not in runtime:
+            add_error('shared/runtime.js', f'WARNING_TAXONOMY missing public code {code}')
+
+
 validate_issue_templates()
 validate_adr_headings()
 validate_local_docs_links()
 validate_documented_package_scripts()
 validate_glossary_examples()
 validate_dependency_guardrails()
+validate_static_demo_entrypoints()
+validate_replay_validation_ui()
+validate_runtime_warning_taxonomy()
 
 if errors:
     print('Structure verification failed:')

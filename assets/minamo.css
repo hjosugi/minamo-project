@@ -253,6 +253,38 @@ output {
   font-size: 12px;
 }
 
+.validation-panel {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 18, 32, 0.42);
+}
+.validation-panel strong {
+  display: block;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+.validation-panel[data-state='open'] { border-color: rgba(124, 231, 169, 0.46); }
+.validation-panel[data-state='open'] strong { color: var(--ok); }
+.validation-panel[data-state='error'] { border-color: rgba(255, 141, 122, 0.52); }
+.validation-panel[data-state='error'] strong { color: var(--err); }
+.error-list {
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+.error-list li {
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .signal-checklist {
   margin-top: 10px;
   padding: 10px;
