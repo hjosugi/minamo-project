@@ -439,6 +439,45 @@ def validate_mixer_contracts() -> None:
         add_error('tests/run-tests.mjs', 'calibration profile tests must cover muted channel output')
 
 
+def validate_quality_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in [
+        'export class LandmarkConfidenceTracker',
+        'export function estimateLandmarkConfidence',
+        'meanLuma',
+        'low light',
+        "state: score >= 0.72 ? 'good' : score >= 0.45 ? 'degraded' : 'poor'",
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing quality scoring contract: {needle}')
+    for needle in [
+        'qualityChip',
+        'sampleLuma()',
+        'estimateLandmarkConfidence(faceRes.faceLandmarks?.[0])',
+        'configureCameraQualityControls',
+        'nudgeBrightnessForLowLight',
+        'exposureMode',
+        'brightness',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker quality contract: {needle}')
+    for needle in ['id="qualityChip"', 'checkExposure', 'lighting checklist']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing quality UI contract: {needle}')
+    for needle in [
+        'normal indoor',
+        "assert.notEqual(result.state, 'poor'",
+        'estimateLandmarkConfidence(stableFace) > 0.9',
+        'new LandmarkConfidenceTracker',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing quality regression coverage: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -587,6 +626,7 @@ validate_dependency_guardrails()
 validate_foundation_contracts()
 validate_calibration_contracts()
 validate_mixer_contracts()
+validate_quality_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

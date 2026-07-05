@@ -8,6 +8,7 @@ import {
   CALIBRATION_GUIDE_TOTAL_MS,
   FrameOrderGate,
   DroppedFrameDetector,
+  LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
   buildCalibrationProfileFromSamples,
@@ -16,6 +17,7 @@ import {
   createCalibrationProfile,
   createGuidedCalibrationSession,
   collectGuidedCalibrationSample,
+  estimateLandmarkConfidence,
   isEditableTarget,
   mirrorFacePayload,
   mirrorWeights,
@@ -276,6 +278,16 @@ function roundTrip(frame) {
   const weights = new Float32Array(NUM_CHANNELS);
   weights[CHANNEL_INDEX.jawOpen] = 0.8;
   assert.equal(semanticFaceControls(weights).vowel, 'A');
+  const stableFace = [
+    { x: 0.35, y: 0.35 }, { x: 0.65, y: 0.35 }, { x: 0.35, y: 0.65 }, { x: 0.65, y: 0.65 },
+    { x: 0.4, y: 0.4 }, { x: 0.6, y: 0.4 }, { x: 0.45, y: 0.55 }, { x: 0.55, y: 0.55 },
+  ];
+  assert.ok(estimateLandmarkConfidence(stableFace) > 0.9);
+  assert.equal(estimateLandmarkConfidence(stableFace.map((point) => ({ ...point, x: point.x + 2 }))), 0);
+  const confidenceTracker = new LandmarkConfidenceTracker(1000);
+  assert.ok(confidenceTracker.sample(1, 0) > 0.9);
+  assert.ok(confidenceTracker.sample(0, 500) < 0.5);
+
   const quality = computeQualityScore({ meanLuma: 12, fps: 12, droppedFrames: 6, confidence: 0.2 });
   assert.equal(quality.state, 'poor');
   assert.ok(quality.warnings.length >= 2);

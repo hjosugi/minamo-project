@@ -183,6 +183,60 @@ export class DroppedFrameDetector {
   }
 }
 
+export class LandmarkConfidenceTracker {
+  constructor(windowMs = 2500) {
+    this.windowMs = windowMs;
+    this.samples = [];
+  }
+
+  sample(confidence, nowMs = performanceNow()) {
+    this.samples.push({ confidence: clamp(confidence), timeMs: nowMs });
+    this.prune(nowMs);
+    return this.quality();
+  }
+
+  prune(nowMs = performanceNow()) {
+    const cutoff = nowMs - this.windowMs;
+    while (this.samples.length && this.samples[0].timeMs < cutoff) this.samples.shift();
+  }
+
+  quality() {
+    if (!this.samples.length) return 0;
+    const values = this.samples.map((sample) => sample.confidence);
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+    const stability = 1 - clamp(Math.sqrt(variance) / 0.75);
+    return clamp(mean * (0.65 + stability * 0.35));
+  }
+}
+
+export function estimateLandmarkConfidence(landmarks = []) {
+  if (!Array.isArray(landmarks) || landmarks.length === 0) return 0;
+  let finite = 0;
+  let inside = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const landmark of landmarks) {
+    const x = Number(landmark?.x);
+    const y = Number(landmark?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    finite++;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+    if (x >= -0.05 && x <= 1.05 && y >= -0.05 && y <= 1.05) inside++;
+  }
+  if (finite < Math.max(8, landmarks.length * 0.5)) return 0;
+  const finiteRatio = finite / landmarks.length;
+  const insideRatio = inside / finite;
+  const area = Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+  const areaScore = clamp((area - 0.01) / 0.08);
+  return clamp(finiteRatio * insideRatio * areaScore);
+}
+
 export function computeQualityScore({
   meanLuma = 128,
   confidence = 1,

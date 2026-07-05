@@ -275,8 +275,8 @@ signal quality chip. Below a threshold, suggest fixes (light, camera). Try
 `exposureMode`/`brightness` constraints where supported.
 
 Acceptance criteria:
-- [ ] Quality chip: good / degraded / poor with reasons
-- [ ] No false "poor" in normal indoor lighting
+- [x] Quality chip: good / degraded / poor with reasons
+- [x] No false "poor" in normal indoor lighting
 
 ### [KGM-016] True gaze from iris landmarks
 - Labels: area/tracking, type/feature

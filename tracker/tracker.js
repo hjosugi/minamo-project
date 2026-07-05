@@ -19,6 +19,7 @@ import {
   TRACKER_STORAGE_KEY,
   WARNING_TAXONOMY,
   DroppedFrameDetector,
+  LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
   buildCalibrationProfileFromSamples,
@@ -28,6 +29,7 @@ import {
   createCalibrationProfile,
   createGuidedCalibrationSession,
   collectGuidedCalibrationSample,
+  estimateLandmarkConfidence,
   isEditableTarget,
   loadJson,
   mirrorFacePayload,
@@ -105,6 +107,7 @@ const state = {
   handCurlFilter: new OneEuroArray(10, filterOptions('hands')),
   handSpreadFilter: new OneEuroArray(10, filterOptions('hands')),
   dropDetector: new DroppedFrameDetector(Number(settings.fps) || 60),
+  confidenceTracker: new LandmarkConfidenceTracker(),
   cameraControls: { supported: [], attempted: [], unavailable: true, lowLightNudged: false },
   selectedChannel: ARKIT_52.indexOf('jawOpen'),
   warnings: [],
@@ -255,6 +258,7 @@ async function startCamera() {
   const deviceId = $('selCamera').value;
   const fps = Number($('selFps').value) || 60;
   state.dropDetector = new DroppedFrameDetector(fps);
+  state.confidenceTracker = new LandmarkConfidenceTracker();
   const videoConstraints = {
     width: { ideal: res.width },
     height: { ideal: res.height },
@@ -498,9 +502,10 @@ function loop() {
       }
     }
 
+    const landmarkConfidence = state.confidenceTracker.sample(estimateLandmarkConfidence(faceRes.faceLandmarks?.[0]), nowMs);
     state.quality = computeQualityScore({
       meanLuma: sampleLuma(),
-      confidence: hasFace ? 1 : 0,
+      confidence: landmarkConfidence,
       inferenceMs: state.inferMs,
       fps: state.lastFps || Number($('selFps').value) || 60,
       droppedFrames: state.dropDetector.rollingDropped(2500, nowMs),
