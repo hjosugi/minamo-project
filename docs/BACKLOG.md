@@ -565,8 +565,8 @@ Prometheus endpoint: rooms, connections, datagrams in/out, drop counters,
 fan-out latency histogram. tracing-subscriber JSON logs.
 
 Acceptance criteria:
-- [ ] /metrics scrapeable
-- [ ] Grafana dashboard JSON committed
+- [x] /metrics scrapeable
+- [x] Grafana dashboard JSON committed
 
 ### [KGM-034] Congestion-aware newest-only delivery per subscriber
 - Labels: area/transport, type/feature
@@ -580,8 +580,8 @@ Replace the per-room broadcast buffer semantics for subscribers with a
 1-slot mailbox (latest frame wins) and drop counters.
 
 Acceptance criteria:
-- [ ] Artificially slowed subscriber stays < 1 frame behind on reconnect-free stream
-- [ ] Fast subscribers unaffected (no added latency)
+- [x] Artificially slowed subscriber stays < 1 frame behind on reconnect-free stream
+- [x] Fast subscribers unaffected (no added latency)
 
 ### [KGM-035] MoQ (Media over QUIC) distribution evaluation
 - Labels: area/transport, type/research

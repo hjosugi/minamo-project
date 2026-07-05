@@ -46,6 +46,8 @@ Runtime policy:
 - WebTransport sends use a newest-only pending datagram slot. If a new frame
   arrives while a datagram write is in flight, the pending older frame is
   replaced.
+- `relay-rs` drains each subscriber's room queue before sending, so a slow
+  subscriber receives the newest queued frame instead of replaying stale poses.
 - WebSocket sends are skipped when `bufferedAmount` exceeds 512 KiB, preventing
   stale motion from building a long reliable queue.
 - `classifyCongestion()` returns `clear`, `congested`, or `severe`, with a
@@ -61,6 +63,26 @@ best-effort latency metric. KGM1 timestamp latency is computed when clocks are
 compatible; impossible skew is rejected instead of displaying misleading
 numbers. Future multi-source rooms use `ClockOffsetEstimator` from
 `shared/kgm2.js` to align sender clocks.
+
+`relay-rs` exposes Prometheus metrics at `http://127.0.0.1:9487/metrics` by
+default. Override with `MINAMO_METRICS_ADDR=host:port`, or disable with
+`MINAMO_METRICS_ADDR=off`.
+
+Scraped metrics:
+
+- `minamo_relay_sessions_total`
+- `minamo_relay_active_sessions`
+- `minamo_relay_rooms`
+- `minamo_relay_frames_in_total`
+- `minamo_relay_frames_out_total`
+- `minamo_relay_frames_dropped_newest_only_total`
+- `minamo_relay_auth_failures_total`
+
+Grafana dashboard JSON: `relay-rs/grafana-dashboard.json`.
+
+Session join, leave, authentication failure, and metrics server errors are
+logged as single-line JSON objects with an `event` field for structured log
+collection.
 
 ## 6. Security
 

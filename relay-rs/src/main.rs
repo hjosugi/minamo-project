@@ -16,7 +16,10 @@
 // Run: cargo run --release
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tokio::sync::{broadcast, Mutex};
 use wtransport::endpoint::IncomingSession;
 use wtransport::tls::Sha256DigestFmt;
@@ -24,6 +27,7 @@ use wtransport::{Endpoint, Identity, ServerConfig};
 
 const PORT: u16 = 4433;
 const ROOM_CAPACITY: usize = 512; // frames buffered per room before lagging subs drop
+const METRICS_ADDR: &str = "127.0.0.1:9487";
 
 struct Room {
     tx: broadcast::Sender<Vec<u8>>,
@@ -31,6 +35,18 @@ struct Room {
 }
 
 type Rooms = Arc<Mutex<HashMap<String, Room>>>;
+
+#[derive(Default)]
+struct RelayMetrics {
+    sessions_total: AtomicU64,
+    active_sessions: AtomicU64,
+    frames_in_total: AtomicU64,
+    frames_out_total: AtomicU64,
+    frames_dropped_newest_only_total: AtomicU64,
+    auth_failures_total: AtomicU64,
+}
+
+type Metrics = Arc<RelayMetrics>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -45,14 +61,27 @@ async fn main() -> anyhow::Result<()> {
 
     let endpoint = Endpoint::server(config)?;
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+    let metrics: Metrics = Arc::new(RelayMetrics::default());
     let relay_token = Arc::new(
         std::env::var("MINAMO_RELAY_TOKEN")
             .or_else(|_| std::env::var("ROOM_TOKEN"))
             .unwrap_or_default(),
     );
+    let metrics_addr =
+        std::env::var("MINAMO_METRICS_ADDR").unwrap_or_else(|_| METRICS_ADDR.to_string());
+    if metrics_addr != "off" {
+        tokio::spawn(metrics_server(
+            metrics.clone(),
+            rooms.clone(),
+            metrics_addr.clone(),
+        ));
+    }
 
     println!("Minamo relay-rs (WebTransport)");
     println!("  url  : https://localhost:{PORT}/room/<room>/<pub|sub>");
+    if metrics_addr != "off" {
+        println!("  metrics: http://{metrics_addr}/metrics");
+    }
     println!("  cert sha-256 (paste into the tracker/viewer UI):");
     println!("    {}", digest.fmt(Sha256DigestFmt::DottedHex));
     println!("  note : self-signed; restart regenerates it (14-day browser limit)");
@@ -62,9 +91,10 @@ async fn main() -> anyhow::Result<()> {
             incoming = endpoint.accept() => {
                 let rooms = rooms.clone();
                 let relay_token = relay_token.clone();
+                let metrics = metrics.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_session(incoming, rooms, relay_token).await {
-                        eprintln!("[session] {e}");
+                    if let Err(e) = handle_session(incoming, rooms, relay_token, metrics).await {
+                        log_event("session_error", &[("error", e.to_string())]);
                     }
                 });
             }
@@ -81,6 +111,7 @@ async fn handle_session(
     incoming: IncomingSession,
     rooms: Rooms,
     relay_token: Arc<String>,
+    metrics: Metrics,
 ) -> anyhow::Result<()> {
     let request = incoming.await?;
     let path = request.path().to_string();
@@ -97,6 +128,8 @@ async fn handle_session(
         }
     };
     if !relay_token.is_empty() && !constant_time_equal(token, relay_token.as_str()) {
+        metrics.auth_failures_total.fetch_add(1, Ordering::Relaxed);
+        log_event("auth_failure", &[("room", room), ("role", role)]);
         request.forbidden().await;
         return Ok(());
     }
@@ -106,7 +139,9 @@ async fn handle_session(
     }
 
     let connection = request.accept().await?;
-    println!("[join] room={room} role={role}");
+    metrics.sessions_total.fetch_add(1, Ordering::Relaxed);
+    metrics.active_sessions.fetch_add(1, Ordering::Relaxed);
+    log_event("join", &[("room", room.clone()), ("role", role.clone())]);
 
     let tx = {
         let mut map = rooms.lock().await;
@@ -122,6 +157,7 @@ async fn handle_session(
         "pub" => {
             // Publisher: every received datagram fans out to the room.
             while let Ok(dgram) = connection.receive_datagram().await {
+                metrics.frames_in_total.fetch_add(1, Ordering::Relaxed);
                 let _ = tx.send(dgram.to_vec());
             }
         }
@@ -132,12 +168,17 @@ async fn handle_session(
                 tokio::select! {
                     msg = rx.recv() => match msg {
                         Ok(frame) => {
+                            let frame = drain_newest(&mut rx, frame, &metrics);
                             if connection.send_datagram(&frame).is_err() {
                                 break;
                             }
+                            metrics.frames_out_total.fetch_add(1, Ordering::Relaxed);
                         }
                         // Slow subscriber: skip the missed frames and continue.
-                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            metrics.frames_dropped_newest_only_total.fetch_add(skipped, Ordering::Relaxed);
+                            continue;
+                        }
                         Err(broadcast::error::RecvError::Closed) => break,
                     },
                     // Detect the peer going away even while the room is idle.
@@ -154,7 +195,8 @@ async fn handle_session(
         }
     }
 
-    println!("[leave] room={room} role={role}");
+    metrics.active_sessions.fetch_sub(1, Ordering::Relaxed);
+    log_event("leave", &[("room", room.clone()), ("role", role.clone())]);
     gc_room(&rooms, &room).await;
     Ok(())
 }
@@ -167,6 +209,134 @@ async fn gc_room(rooms: &Rooms, room: &str) {
             map.remove(room);
         }
     }
+}
+
+fn drain_newest(
+    rx: &mut broadcast::Receiver<Vec<u8>>,
+    first: Vec<u8>,
+    metrics: &RelayMetrics,
+) -> Vec<u8> {
+    let mut newest = first;
+    while let Ok(frame) = rx.try_recv() {
+        metrics
+            .frames_dropped_newest_only_total
+            .fetch_add(1, Ordering::Relaxed);
+        newest = frame;
+    }
+    newest
+}
+
+async fn metrics_server(metrics: Metrics, rooms: Rooms, addr: String) {
+    let listener = match TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            log_event(
+                "metrics_bind_error",
+                &[("addr", addr), ("error", error.to_string())],
+            );
+            return;
+        }
+    };
+    loop {
+        let (mut stream, _) = match listener.accept().await {
+            Ok(pair) => pair,
+            Err(error) => {
+                log_event("metrics_accept_error", &[("error", error.to_string())]);
+                continue;
+            }
+        };
+        let metrics = metrics.clone();
+        let rooms = rooms.clone();
+        tokio::spawn(async move {
+            let mut buf = [0u8; 1024];
+            let read = stream.read(&mut buf).await.unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..read]);
+            let path = request
+                .lines()
+                .next()
+                .and_then(|line| line.split_whitespace().nth(1))
+                .unwrap_or("/");
+            if path != "/metrics" {
+                let _ = stream
+                    .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 9\r\n\r\nnot found")
+                    .await;
+                return;
+            }
+            let room_count = rooms.lock().await.len() as u64;
+            let body = render_metrics(&metrics, room_count);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: text/plain; version=0.0.4\r\ncontent-length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+        });
+    }
+}
+
+fn render_metrics(metrics: &RelayMetrics, room_count: u64) -> String {
+    format!(
+        concat!(
+            "# HELP minamo_relay_sessions_total Total accepted WebTransport sessions.\n",
+            "# TYPE minamo_relay_sessions_total counter\n",
+            "minamo_relay_sessions_total {}\n",
+            "# HELP minamo_relay_active_sessions Active WebTransport sessions.\n",
+            "# TYPE minamo_relay_active_sessions gauge\n",
+            "minamo_relay_active_sessions {}\n",
+            "# HELP minamo_relay_rooms Active relay rooms.\n",
+            "# TYPE minamo_relay_rooms gauge\n",
+            "minamo_relay_rooms {}\n",
+            "# HELP minamo_relay_frames_in_total Motion datagrams received from publishers.\n",
+            "# TYPE minamo_relay_frames_in_total counter\n",
+            "minamo_relay_frames_in_total {}\n",
+            "# HELP minamo_relay_frames_out_total Motion datagrams sent to subscribers.\n",
+            "# TYPE minamo_relay_frames_out_total counter\n",
+            "minamo_relay_frames_out_total {}\n",
+            "# HELP minamo_relay_frames_dropped_newest_only_total Stale frames replaced by newest-only delivery.\n",
+            "# TYPE minamo_relay_frames_dropped_newest_only_total counter\n",
+            "minamo_relay_frames_dropped_newest_only_total {}\n",
+            "# HELP minamo_relay_auth_failures_total Room-token authentication failures.\n",
+            "# TYPE minamo_relay_auth_failures_total counter\n",
+            "minamo_relay_auth_failures_total {}\n",
+        ),
+        metrics.sessions_total.load(Ordering::Relaxed),
+        metrics.active_sessions.load(Ordering::Relaxed),
+        room_count,
+        metrics.frames_in_total.load(Ordering::Relaxed),
+        metrics.frames_out_total.load(Ordering::Relaxed),
+        metrics
+            .frames_dropped_newest_only_total
+            .load(Ordering::Relaxed),
+        metrics.auth_failures_total.load(Ordering::Relaxed),
+    )
+}
+
+fn log_event(event: &str, fields: &[(&str, String)]) {
+    let mut line = format!("{{\"event\":\"{}\"", json_escape(event));
+    for (key, value) in fields {
+        line.push_str(&format!(
+            ",\"{}\":\"{}\"",
+            json_escape(key),
+            json_escape(value)
+        ));
+    }
+    line.push('}');
+    println!("{line}");
+}
+
+fn json_escape(value: &str) -> String {
+    let mut out = String::new();
+    for ch in value.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 fn constant_time_equal(a: &str, b: &str) -> bool {
@@ -212,6 +382,7 @@ mod tests {
             let endpoint = Endpoint::server(config)?;
             let port = endpoint.local_addr()?.port();
             let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+            let metrics: Metrics = Arc::new(RelayMetrics::default());
             let relay_token = Arc::new(token.to_string());
 
             let task = tokio::spawn({
@@ -221,8 +392,9 @@ mod tests {
                         let incoming = endpoint.accept().await;
                         let rooms = rooms.clone();
                         let relay_token = relay_token.clone();
+                        let metrics = metrics.clone();
                         tokio::spawn(async move {
-                            let _ = handle_session(incoming, rooms, relay_token).await;
+                            let _ = handle_session(incoming, rooms, relay_token, metrics).await;
                         });
                     }
                 }
@@ -297,6 +469,42 @@ mod tests {
         assert!(!constant_time_equal("secret", "wrong"));
         assert!(!constant_time_equal("secret", "secret-extra"));
         assert!(!constant_time_equal("", "secret"));
+    }
+
+    #[test]
+    fn metrics_render_prometheus_counters() {
+        let metrics = RelayMetrics::default();
+        metrics.sessions_total.store(2, Ordering::Relaxed);
+        metrics.active_sessions.store(1, Ordering::Relaxed);
+        metrics.frames_in_total.store(30, Ordering::Relaxed);
+        metrics.frames_out_total.store(29, Ordering::Relaxed);
+        metrics
+            .frames_dropped_newest_only_total
+            .store(9, Ordering::Relaxed);
+        metrics.auth_failures_total.store(1, Ordering::Relaxed);
+        let body = render_metrics(&metrics, 3);
+        assert!(body.contains("minamo_relay_sessions_total 2"));
+        assert!(body.contains("minamo_relay_active_sessions 1"));
+        assert!(body.contains("minamo_relay_rooms 3"));
+        assert!(body.contains("minamo_relay_frames_dropped_newest_only_total 9"));
+    }
+
+    #[test]
+    fn newest_only_drain_keeps_latest_frame() {
+        let metrics = RelayMetrics::default();
+        let (tx, mut rx) = broadcast::channel(16);
+        for i in 0u8..10 {
+            tx.send(vec![i]).unwrap();
+        }
+        let first = rx.blocking_recv().unwrap();
+        let newest = drain_newest(&mut rx, first, &metrics);
+        assert_eq!(newest, vec![9]);
+        assert_eq!(
+            metrics
+                .frames_dropped_newest_only_total
+                .load(Ordering::Relaxed),
+            9
+        );
     }
 
     #[tokio::test]

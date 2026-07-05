@@ -66,6 +66,7 @@ REQUIRED = [
     'src-tauri/icons/icon.svg',
     'src-tauri/src/lib.rs',
     'src-tauri/src/main.rs',
+    'relay-rs/grafana-dashboard.json',
     'Cargo.toml',
     'Cargo.lock',
     'crates/kgm1-codec/Cargo.toml',
@@ -893,6 +894,8 @@ def validate_transport_contracts() -> None:
     viewer = read('viewer/viewer.js')
     viewer_html = read('viewer/index.html')
     transport_doc = read('docs/transport/webtransport-realtime.md')
+    relay_rs = read('relay-rs/src/main.rs')
+    dashboard = read('relay-rs/grafana-dashboard.json')
 
     for needle in [
         'TRANSPORT_FALLBACKS',
@@ -931,6 +934,8 @@ def validate_transport_contracts() -> None:
         'connectAuto()',
         '3 seconds',
         'NewestOnlyMailbox',
+        '127.0.0.1:9487/metrics',
+        'grafana-dashboard.json',
         'latency metric',
         'MINAMO_ALLOWED_ORIGINS',
         'transportSecurityNote()',
@@ -940,6 +945,32 @@ def validate_transport_contracts() -> None:
     kgm036 = read('docs/BACKLOG.md').split('### [KGM-036]', 1)[1].split('\n### ', 1)[0]
     if '- [ ]' in kgm036:
         add_error('docs/BACKLOG.md', 'KGM-036 acceptance criteria must remain checked after auto-fallback implementation')
+    for needle in [
+        'metrics_server',
+        'render_metrics',
+        'log_event',
+        'drain_newest',
+        'MINAMO_METRICS_ADDR',
+        'frames_dropped_newest_only_total',
+        'metrics_render_prometheus_counters',
+        'newest_only_drain_keeps_latest_frame',
+    ]:
+        if needle not in relay_rs:
+            add_error('relay-rs/src/main.rs', f'missing relay observability/newest-only contract: {needle}')
+    for needle in [
+        'minamo_relay_active_sessions',
+        'minamo_relay_frames_in_total',
+        'minamo_relay_frames_out_total',
+        'minamo_relay_frames_dropped_newest_only_total',
+        'minamo_relay_auth_failures_total',
+    ]:
+        if needle not in dashboard:
+            add_error('relay-rs/grafana-dashboard.json', f'missing Grafana metric: {needle}')
+    backlog = read('docs/BACKLOG.md')
+    for kgm in ['KGM-033', 'KGM-034']:
+        entry = backlog.split(f'### [{kgm}]', 1)[1].split('\n### ', 1)[0]
+        if '- [ ]' in entry:
+            add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after relay implementation')
 
 
 def validate_desktop_contracts() -> None:

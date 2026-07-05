@@ -1,0 +1,46 @@
+{
+  "title": "Minamo relay-rs",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "tags": ["minamo", "webtransport"],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active sessions",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "minamo_relay_active_sessions" }]
+    },
+    {
+      "type": "stat",
+      "title": "Rooms",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "minamo_relay_rooms" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Frames in/out",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(minamo_relay_frames_in_total[1m])", "legendFormat": "in" },
+        { "expr": "rate(minamo_relay_frames_out_total[1m])", "legendFormat": "out" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Newest-only drops",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(minamo_relay_frames_dropped_newest_only_total[1m])", "legendFormat": "dropped" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth failures",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        { "expr": "rate(minamo_relay_auth_failures_total[5m])", "legendFormat": "auth failures" }
+      ]
+    }
+  ]
+}
