@@ -80,6 +80,7 @@ const state = {
   hasPose: false,
   hasHands: false,
   hands: [],
+  handTargets: null,
   nameToIndex: null, // built from the first MediaPipe result
   // filters
   weightFilter: new OneEuroArray(NUM_CHANNELS, filterOptions()),
@@ -363,11 +364,13 @@ function loop() {
 
     state.hasHands = false;
     state.hands = [];
+    state.handTargets = null;
     if (handRes && handRes.landmarks && handRes.landmarks.length > 0) {
       state.hasHands = true;
       state.hands = handRes.landmarks;
+      state.handTargets = deriveHandTargets(handRes);
       if (handRes.landmarks.some((hand) => hand.some((lm) => lm.x < -0.05 || lm.x > 1.05 || lm.y < -0.05 || lm.y > 1.05))) {
-        state.warnings.push('hand outside frame');
+        frameWarnings.push('hand outside frame');
       }
     }
 
@@ -387,6 +390,7 @@ function loop() {
         seq: state.seq++,
         face: { quat: state.quat, pos: state.pos, weights: state.weights },
         pose: state.hasPose ? { points: state.posePoints } : null,
+        hands: state.handTargets,
       };
       const buf = encodeFrame(frame);
       state.lastPacketBytes = buf.byteLength;
@@ -462,6 +466,54 @@ function drawOverlay(faceRes, poseRes, handRes) {
     }
   }
   overlayCtx.restore();
+}
+
+const HAND_CHAINS = [
+  [1, 2, 3, 4],
+  [5, 6, 7, 8],
+  [9, 10, 11, 12],
+  [13, 14, 15, 16],
+  [17, 18, 19, 20],
+];
+
+function deriveHandTargets(handRes) {
+  return handRes.landmarks.slice(0, 2).map((landmarks, handIndex) => {
+    const handedness = handRes.handedness?.[handIndex]?.[0]?.categoryName === 'Left' ? 'Left' : 'Right';
+    const middle = fingerVector(landmarks, HAND_CHAINS[2]);
+    return {
+      handedness,
+      confidence: handRes.handedness?.[handIndex]?.[0]?.score ?? 1,
+      curls: HAND_CHAINS.map((chain) => fingerCurl(landmarks, chain)),
+      spreads: HAND_CHAINS.map((chain) => fingerSpread(landmarks, chain, middle)),
+    };
+  });
+}
+
+function fingerVector(landmarks, chain) {
+  const a = landmarks[chain[0]];
+  const b = landmarks[chain[1]];
+  return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
+}
+
+function fingerCurl(landmarks, chain) {
+  const a = angle(landmarks[chain[0]], landmarks[chain[1]], landmarks[chain[2]]);
+  const b = angle(landmarks[chain[1]], landmarks[chain[2]], landmarks[chain[3]]);
+  return Math.max(0, Math.min(1, ((Math.PI - a) + (Math.PI - b)) / (Math.PI * 1.2)));
+}
+
+function fingerSpread(landmarks, chain, middle) {
+  const v = fingerVector(landmarks, chain);
+  const cross = middle.x * v.y - middle.y * v.x;
+  const dot = middle.x * v.x + middle.y * v.y;
+  return Math.max(-1.5, Math.min(1.5, Math.atan2(cross, dot)));
+}
+
+function angle(a, b, c) {
+  const ab = { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+  const cb = { x: c.x - b.x, y: c.y - b.y, z: c.z - b.z };
+  const denom = Math.hypot(ab.x, ab.y, ab.z) * Math.hypot(cb.x, cb.y, cb.z) || 1;
+  const dot = (ab.x * cb.x + ab.y * cb.y + ab.z * cb.z) / denom;
+  return Math.acos(Math.max(-1, Math.min(1, dot)));
 }
 
 function drawMeters() {

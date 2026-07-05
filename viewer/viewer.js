@@ -71,6 +71,7 @@ const target = {
   quat: new THREE.Quaternion(),
   weights: new Float32Array(NUM_CHANNELS),
   posePoints: null,
+  hands: null,
   fresh: false,
 };
 const current = {
@@ -265,7 +266,38 @@ function applyVrm(dt) {
     }
   }
 
+  if (target.hands) applyVrmHands(h, target.hands);
+
   vrm.update(dt);
+}
+
+const FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+const FINGER_BONES = {
+  thumb: ['ThumbMetacarpal', 'ThumbProximal', 'ThumbDistal'],
+  index: ['IndexProximal', 'IndexIntermediate', 'IndexDistal'],
+  middle: ['MiddleProximal', 'MiddleIntermediate', 'MiddleDistal'],
+  ring: ['RingProximal', 'RingIntermediate', 'RingDistal'],
+  pinky: ['LittleProximal', 'LittleIntermediate', 'LittleDistal'],
+};
+
+function applyVrmHands(humanoid, hands) {
+  for (const hand of hands) {
+    const side = hand.handedness === 'Left' ? 'left' : 'right';
+    for (let i = 0; i < FINGER_NAMES.length; i++) {
+      const finger = FINGER_NAMES[i];
+      const curl = clamp01(hand.curls?.[i] ?? 0);
+      const spread = Math.max(-0.6, Math.min(0.6, hand.spreads?.[i] ?? 0));
+      const bones = FINGER_BONES[finger];
+      for (let j = 0; j < bones.length; j++) {
+        const bone = humanoid.getNormalizedBoneNode(`${side}${bones[j]}`);
+        if (!bone) continue;
+        const curlScale = j === 0 ? 0.75 : j === 1 ? 1.0 : 0.65;
+        const spreadScale = j === 0 ? 0.35 : 0;
+        tmpQ.setFromEuler(new THREE.Euler(curl * curlScale, spread * spreadScale, 0));
+        bone.quaternion.slerp(tmpQ, 0.45);
+      }
+    }
+  }
 }
 
 // Signed gaze from the four eye-look channel pairs. Positive x = look left
@@ -300,6 +332,7 @@ transport.addEventListener('frame', (ev) => {
   target.quat.copy(refQuatInv).multiply(tmpQ); // rotation relative to Center
   target.weights.set(frame.face.weights);
   target.posePoints = frame.pose ? frame.pose.points : null;
+  target.hands = frame.hands;
   target.fresh = true;
   recvFrames++;
 });

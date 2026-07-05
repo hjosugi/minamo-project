@@ -65,9 +65,23 @@ function roundTrip(frame) {
   });
   assert.equal(facePose.pose.points.length, NUM_POSE_POINTS * 3);
 
+  const withHands = roundTrip({
+    t: 567,
+    seq: 8,
+    face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights },
+    hands: [
+      { handedness: 'Left', confidence: 0.9, curls: [0, 0.25, 0.5, 0.75, 1], spreads: [-0.2, -0.1, 0, 0.1, 0.2] },
+      { handedness: 'Right', confidence: 0.8, curls: [1, 0.75, 0.5, 0.25, 0], spreads: [0.2, 0.1, 0, -0.1, -0.2] },
+    ],
+  });
+  assert.equal(withHands.hands.length, 2);
+  assert.equal(withHands.hands[0].handedness, 'Left');
+  assert.ok(Math.abs(withHands.hands[0].curls[2] - 0.5) < 0.01);
+
   const emptyBlocks = roundTrip({ t: 789, seq: 0 });
   assert.equal(emptyBlocks.face, null);
   assert.equal(emptyBlocks.pose, null);
+  assert.equal(emptyBlocks.hands, null);
 }
 
 {

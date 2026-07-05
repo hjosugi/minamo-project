@@ -10,10 +10,13 @@ export const VERSION = 1;
 
 export const BLOCK_FACE = 1 << 0;
 export const BLOCK_POSE = 1 << 1;
+export const BLOCK_HANDS = 1 << 2;
 
 export const HEADER_BYTES = 10;
 export const FACE_BYTES = 4 * 2 + 3 * 2 + NUM_CHANNELS; // quat + pos + weights = 66
 export const POSE_BYTES = 1 + NUM_POSE_POINTS * 3 * 2;  // count + points = 43
+export const HAND_FINGER_COUNT = 5;
+export const HAND_TARGET_BYTES = 2 + HAND_FINGER_COUNT + HAND_FINGER_COUNT; // handedness + confidence + curls + spreads
 
 const QUAT_SCALE = 32767;   // i16 full range for [-1, 1]
 const POS_SCALE = 1000;     // meters -> millimeters, i16 (+-32.7 m range)
@@ -39,6 +42,10 @@ export function encodeFrame(frame) {
   let blocks = 0;
   if (frame.face) { blocks |= BLOCK_FACE; size += FACE_BYTES; }
   if (frame.pose) { blocks |= BLOCK_POSE; size += POSE_BYTES; }
+  if (frame.hands && frame.hands.length) {
+    blocks |= BLOCK_HANDS;
+    size += 1 + Math.min(2, frame.hands.length) * HAND_TARGET_BYTES;
+  }
 
   const buf = new ArrayBuffer(size);
   const dv = new DataView(buf);
@@ -65,6 +72,18 @@ export function encodeFrame(frame) {
     }
   }
 
+  if (frame.hands && frame.hands.length) {
+    const count = Math.min(2, frame.hands.length);
+    dv.setUint8(o, count); o += 1;
+    for (let h = 0; h < count; h++) {
+      const hand = frame.hands[h];
+      dv.setUint8(o, hand.handedness === 'Left' ? 0 : 1); o += 1;
+      dv.setUint8(o, clampU8((hand.confidence ?? 1) * 255)); o += 1;
+      for (let i = 0; i < HAND_FINGER_COUNT; i++) { dv.setUint8(o, clampU8((hand.curls?.[i] ?? 0) * 255)); o += 1; }
+      for (let i = 0; i < HAND_FINGER_COUNT; i++) { dv.setInt8(o, Math.max(-128, Math.min(127, Math.round((hand.spreads?.[i] ?? 0) * 64)))); o += 1; }
+    }
+  }
+
   return buf;
 }
 
@@ -87,11 +106,11 @@ export function decodeFrame(data) {
     const version = dv.getUint8(o); o += 1;
     if (version !== VERSION) return null;
     const blocks = dv.getUint8(o); o += 1;
-    if ((blocks & ~(BLOCK_FACE | BLOCK_POSE)) !== 0) return null;
+    if ((blocks & ~(BLOCK_FACE | BLOCK_POSE | BLOCK_HANDS)) !== 0) return null;
     const t = dv.getUint32(o, true); o += 4;
     const seq = dv.getUint16(o, true); o += 2;
 
-    const frame = { t, seq, face: null, pose: null };
+    const frame = { t, seq, face: null, pose: null, hands: null };
 
     if (blocks & BLOCK_FACE) {
       if (buf.byteLength < o + FACE_BYTES) return null;
@@ -112,6 +131,24 @@ export function decodeFrame(data) {
       const points = new Float32Array(count * 3);
       for (let i = 0; i < count * 3; i++) { points[i] = dv.getInt16(o, true) / POS_SCALE; o += 2; }
       frame.pose = { points };
+    }
+
+    if (blocks & BLOCK_HANDS) {
+      if (buf.byteLength < o + 1) return null;
+      const count = dv.getUint8(o); o += 1;
+      if (count > 2) return null;
+      if (buf.byteLength < o + count * HAND_TARGET_BYTES) return null;
+      const hands = [];
+      for (let h = 0; h < count; h++) {
+        const handedness = dv.getUint8(o) === 0 ? 'Left' : 'Right'; o += 1;
+        const confidence = dv.getUint8(o) / 255; o += 1;
+        const curls = new Float32Array(HAND_FINGER_COUNT);
+        for (let i = 0; i < HAND_FINGER_COUNT; i++) { curls[i] = dv.getUint8(o) / 255; o += 1; }
+        const spreads = new Float32Array(HAND_FINGER_COUNT);
+        for (let i = 0; i < HAND_FINGER_COUNT; i++) { spreads[i] = dv.getInt8(o) / 64; o += 1; }
+        hands.push({ handedness, confidence, curls, spreads });
+      }
+      frame.hands = hands;
     }
 
     return frame;
