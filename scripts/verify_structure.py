@@ -589,6 +589,34 @@ def validate_blink_wink_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing blink/wink regression coverage: {needle}')
 
 
+def validate_filter_tuning_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in ['responsive', 'balanced', 'smooth', 'estimateOneEuroLagMs', 'rollingJitterMs']:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing filter tuning runtime contract: {needle}')
+    for needle in [
+        'selFilterPreset',
+        'rngMinCutoff',
+        'rngBeta',
+        'applyFilterControls',
+        'resetFilters()',
+        'statFilterLag',
+        'statJitter',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker filter tuning contract: {needle}')
+    for needle in ['id="selFilterPreset"', 'id="rngMinCutoff"', 'id="rngBeta"', 'id="statFilterLag"', 'id="statJitter"']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing filter tuning UI contract: {needle}')
+    for needle in ['estimateOneEuroLagMs(2.4) < estimateOneEuroLagMs(0.9)', 'rollingJitterMs']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing filter tuning regression coverage: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -741,6 +769,7 @@ validate_quality_contracts()
 validate_gaze_contracts()
 validate_head_position_contracts()
 validate_blink_wink_contracts()
+validate_filter_tuning_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

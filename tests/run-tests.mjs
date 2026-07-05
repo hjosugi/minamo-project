@@ -26,6 +26,7 @@ import {
   collectGuidedCalibrationSample,
   estimateIrisGaze,
   estimateLandmarkConfidence,
+  estimateOneEuroLagMs,
   gazeAngularErrorDegrees,
   isEditableTarget,
   mirrorFacePayload,
@@ -249,6 +250,8 @@ function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, inne
   assert.equal(detector.sample(1000 / 60), 0);
   assert.ok(detector.sample(120) >= 5);
   assert.ok(detector.rollingDropped(2500, 120) >= 5);
+  assert.ok(detector.rollingJitterMs(2500, 120) > 0);
+  assert.ok(estimateOneEuroLagMs(2.4) < estimateOneEuroLagMs(0.9));
   for (let i = 1; i < 180; i++) detector.sample(120 + i * (1000 / 60));
   assert.equal(detector.rollingDropped(2500, 3200), 0, 'rolling dropped-frame window recovers after stable frames');
 }

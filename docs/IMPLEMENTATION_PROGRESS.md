@@ -54,7 +54,8 @@ node --check relay-node/server.mjs
   persistence, privacy mode copy, quality warnings, a 30-second guided
   calibration flow, calibration profile import/export, per-channel
   gain/deadzone/mute, configurable head-distance lean stabilization, smoothing
-  presets/sliders, keyboard reset, and local JSONL recording.
+  presets/sliders with lag/jitter readouts, keyboard reset, and local JSONL
+  recording.
 - Viewer UI now persists connection settings, supports room tokens, has
   transparent OBS mode, and drops stale/out-of-order frames with wrap-aware
   sequence handling.

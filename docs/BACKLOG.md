@@ -339,8 +339,8 @@ Expose One Euro (minCutoff, beta) as presets: "responsive", "balanced",
 readout so users can see the tradeoff.
 
 Acceptance criteria:
-- [ ] Three presets switchable while tracking
-- [ ] Advanced sliders apply without restart
+- [x] Three presets switchable while tracking
+- [x] Advanced sliders apply without restart
 
 ### [KGM-020] Tracking-loss fade and re-acquisition easing
 - Labels: area/tracking, type/bug

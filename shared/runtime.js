@@ -174,7 +174,7 @@ export class DroppedFrameDetector {
     if (gap > expected * this.tolerance) {
       missed = Math.max(1, Math.round(gap / expected) - 1);
     }
-    this.samples.push({ timeMs, missed });
+    this.samples.push({ timeMs, missed, gapMs: gap });
     this.prune(timeMs);
     if (missed === 0) return 0;
     this.dropped += missed;
@@ -190,6 +190,20 @@ export class DroppedFrameDetector {
     this.prune(nowMs, windowMs);
     return this.samples.reduce((sum, sample) => sum + sample.missed, 0);
   }
+
+  rollingJitterMs(windowMs = 2500, nowMs = this.lastTimeMs ?? 0) {
+    this.prune(nowMs, windowMs);
+    if (this.samples.length < 2) return 0;
+    const gaps = this.samples.map((sample) => sample.gapMs || 0);
+    const mean = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+    const variance = gaps.reduce((sum, gap) => sum + (gap - mean) ** 2, 0) / gaps.length;
+    return Math.sqrt(variance);
+  }
+}
+
+export function estimateOneEuroLagMs(minCutoff = FILTER_PRESETS.balanced.minCutoff) {
+  const cutoff = Math.max(0.001, Number(minCutoff) || FILTER_PRESETS.balanced.minCutoff);
+  return 1000 / (2 * Math.PI * cutoff);
 }
 
 export class LandmarkConfidenceTracker {

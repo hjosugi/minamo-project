@@ -38,6 +38,7 @@ import {
   createGuidedCalibrationSession,
   collectGuidedCalibrationSample,
   estimateLandmarkConfidence,
+  estimateOneEuroLagMs,
   isEditableTarget,
   loadJson,
   mirrorFacePayload,
@@ -763,6 +764,8 @@ function updateStats(nowMs) {
   $('statInfer').textContent = state.inferMs.toFixed(1);
   $('statPacket').textContent = state.lastPacketBytes || '--';
   $('statDropped').textContent = String(state.dropDetector.dropped);
+  $('statFilterLag').textContent = estimateOneEuroLagMs(settings.smoothing.face.minCutoff).toFixed(0);
+  $('statJitter').textContent = state.dropDetector.rollingJitterMs(2500, nowMs).toFixed(1);
   $('statHands').textContent = state.hasHands ? String(state.hands.length) : '0';
   const rate = (state.transport.bytesOut - state.lastBytesOut) / dt / 1024;
   $('statRate').textContent = rate.toFixed(1);
