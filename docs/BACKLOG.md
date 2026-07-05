@@ -862,7 +862,7 @@ Acceptance criteria:
 - Design doc: -
 
 Deploy the static site (tracker+viewer, local mode) to GitHub Pages so
-anyone can try KAGAMI with zero setup. Actions workflow on main.
+anyone can try KAGAMI with zero setup. Branch-based Pages publish from main.
 
 Acceptance criteria:
 - [ ] Public URL runs local-mode demo end to end

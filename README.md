@@ -54,8 +54,8 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
    it to the same local room.
 
 The landing hub and mock demo are at http://localhost:8000/landing/.
-The repository also ships a GitHub Pages workflow that publishes the static
-tracker/viewer/replay/landing files from `main`.
+GitHub Pages publishes the static tracker/viewer/replay/landing files directly
+from `main`.
 
 For offline model serving:
 
