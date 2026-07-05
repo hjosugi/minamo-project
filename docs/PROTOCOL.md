@@ -2,6 +2,8 @@
 
 Version 1. Status: implemented in `shared/codec.js`.
 
+Terminology used below is defined in [GLOSSARY.md](GLOSSARY.md).
+
 ## Design goals
 
 - One tracking frame fits in one QUIC datagram (< 1200 bytes MTU). No fragmentation.

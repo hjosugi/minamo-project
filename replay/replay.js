@@ -1,6 +1,7 @@
 import { encodeFrame } from '../shared/codec.js';
-import { parseMotionJsonl } from '../shared/runtime.js';
+import { parseRecordingJsonl } from '../shared/recording.js';
 
+/** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 
@@ -12,22 +13,10 @@ let startedAt = 0;
 let baseT = 0;
 
 $('fileReplay').addEventListener('change', async (event) => {
-  const file = event.target.files[0];
+  const file = event.target.files?.[0];
   if (!file) return;
-  try {
-    frames = parseMotionJsonl(await file.text()).sort((a, b) => a.t - b.t);
-  } catch (error) {
-    frames = [];
-    cursor = 0;
-    $('statFrames').textContent = '0';
-    $('statCursor').textContent = '0';
-    $('statDuration').textContent = '0.0';
-    $('btnPlay').disabled = true;
-    $('btnReset').disabled = true;
-    chip.textContent = `error: ${error.message}`;
-    chip.dataset.state = 'error';
-    return;
-  }
+  const parsed = parseRecordingJsonl(await file.text());
+  frames = parsed.frames.sort((a, b) => a.t - b.t);
   cursor = 0;
   baseT = frames[0]?.t ?? 0;
   $('statFrames').textContent = String(frames.length);
@@ -35,8 +24,8 @@ $('fileReplay').addEventListener('change', async (event) => {
   $('statDuration').textContent = frames.length ? (((frames.at(-1)?.t ?? baseT) - baseT) / 1000).toFixed(1) : '0.0';
   $('btnPlay').disabled = frames.length === 0;
   $('btnReset').disabled = frames.length === 0;
-  chip.textContent = frames.length ? 'loaded' : 'empty';
-  chip.dataset.state = frames.length ? 'open' : 'error';
+  chip.textContent = parsed.errors.length ? `loaded with ${parsed.errors.length} error(s)` : (frames.length ? 'loaded' : 'empty');
+  chip.dataset.state = parsed.errors.length || !frames.length ? 'error' : 'open';
 });
 
 $('btnPlay').addEventListener('click', () => {

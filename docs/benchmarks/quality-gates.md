@@ -23,3 +23,20 @@
 - mobile browser smoke test
 - low-light quality warning
 - custom stick detector benchmark
+
+## Runtime Quality Score
+
+The tracker computes a per-frame score from normalized sub-scores:
+
+| Input | Weight | Good fixture expectation |
+| --- | ---: | --- |
+| mean luma | 0.22 | normal indoor lighting is never `poor` |
+| landmark confidence | 0.28 | full face visible stays `good` |
+| observed fps | 0.18 | 30-60 fps remains usable |
+| inference time | 0.14 | short spikes degrade but recover |
+| rolling dropped frames | 0.10 | startup stalls do not poison later frames |
+| motion blur estimate | 0.08 | fast motion can warn independently |
+
+Fixtures should cover good indoor lighting, low light, dropped fps, high
+inference time, occlusion, and motion blur. Quality regressions should fail in
+unit tests before they reach manual camera testing.

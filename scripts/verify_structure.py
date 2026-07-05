@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+
 import ast
 import json
 import re
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
@@ -22,6 +23,7 @@ REQUIRED = [
     'docs/ISSUE_LABELS.md',
     'docs/GLOSSARY.md',
     'docs/IMPLEMENTATION_PROGRESS.md',
+    'docs/adr/README.md',
     'docs/product/onboarding.md',
     'docs/product/obs-setup.md',
     'docs/product/drummer-setup.md',
@@ -35,14 +37,17 @@ REQUIRED = [
     'src/core/oneEuroFilter.ts',
     'src/core/anatomy.ts',
     'shared/runtime.js',
+    'shared/recording.js',
+    'tests/fixtures/kgm1-synthetic.jsonl',
+    'tsconfig.browser-js.json',
     'scripts/fetch-models.sh',
+    'scripts/release-smoke.mjs',
     '.github/workflows/ci.yml',
     '.nojekyll',
     'docker-compose.yml',
     'issues/index.csv',
 ]
-missing = [p for p in REQUIRED if not (ROOT / p).exists()]
-issue_count = len(list((ROOT / 'issues' / 'backlog').glob('*.md')))
+
 errors: list[str] = []
 
 
@@ -50,8 +55,15 @@ def add_error(path: str | Path, message: str) -> None:
     errors.append(f'{path}: {message}')
 
 
-for p in missing:
-    add_error(p, 'required file is missing')
+def read(rel: str) -> str:
+    return (ROOT / rel).read_text(encoding='utf-8')
+
+
+missing = [p for p in REQUIRED if not (ROOT / p).exists()]
+for path in missing:
+    add_error(path, 'required file is missing')
+
+issue_count = len(list((ROOT / 'issues' / 'backlog').glob('*.md')))
 if issue_count < 100:
     add_error('issues/backlog', f'expected at least 100 issue files, got {issue_count}')
 
@@ -100,7 +112,7 @@ def parse_issue_template(path: Path) -> dict[str, object]:
 
 
 def validate_issue_templates() -> None:
-    taxonomy_text = (ROOT / 'docs' / 'ISSUE_LABELS.md').read_text(encoding='utf-8')
+    taxonomy_text = read('docs/ISSUE_LABELS.md')
     taxonomy_labels = set(re.findall(r'`((?:area|type|priority|effort|protocol|tracking|integration)/[^`]+)`', taxonomy_text))
     template_dir = ROOT / '.github' / 'ISSUE_TEMPLATE'
     required_templates = {'bug_report.yml', 'feature_request.yml', 'tracking_quality.yml'}
@@ -133,8 +145,7 @@ def validate_issue_templates() -> None:
             add_error(path, 'body item ids must be unique')
         if path.name == 'tracking_quality.yml':
             required_ids = {'browser', 'camera', 'fps', 'lighting', 'mode', 'capture_checklist'}
-            missing_ids = required_ids - set(ids)
-            for item_id in sorted(missing_ids):
+            for item_id in sorted(required_ids - set(ids)):
                 add_error(path, f'tracking quality template must ask for "{item_id}"')
             text = path.read_text(encoding='utf-8')
             if 'No private raw camera recording is attached' not in text:
@@ -142,17 +153,30 @@ def validate_issue_templates() -> None:
 
 
 def validate_adr_headings() -> None:
-    required_headings = {'## Status', '## Context', '## Decision', '## Consequences'}
+    required_headings = {
+        '## Status',
+        '## Context',
+        '## Decision',
+        '## Consequences',
+        '## Validation',
+        '## References',
+    }
     for path in sorted((ROOT / 'docs' / 'adr').glob('*.md')):
-        headings = {line.strip() for line in path.read_text(encoding='utf-8').splitlines() if line.startswith('## ')}
+        if path.name == 'README.md':
+            continue
+        text = path.read_text(encoding='utf-8')
+        headings = {line.strip() for line in text.splitlines() if line.startswith('## ')}
         for heading in sorted(required_headings - headings):
             add_error(path, f'missing ADR heading "{heading}"')
+        if not re.search(r'## Status\s+\n\s*(Proposed|Accepted|Superseded|Deprecated)', text):
+            add_error(path, 'ADR status must be Proposed, Accepted, Superseded, or Deprecated')
 
 
 def validate_local_docs_links() -> None:
     link_pattern = re.compile(r'(?<!!)\[[^\]]+\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
     for base_dir in (ROOT, ROOT / 'docs'):
-        for path in sorted(base_dir.glob('*.md') if base_dir == ROOT else base_dir.rglob('*.md')):
+        paths = base_dir.glob('*.md') if base_dir == ROOT else base_dir.rglob('*.md')
+        for path in sorted(paths):
             text = path.read_text(encoding='utf-8')
             for match in link_pattern.finditer(text):
                 target = match.group(1)
@@ -233,10 +257,40 @@ def validate_documented_package_scripts() -> None:
             check_command(match.group(1), path)
 
 
+def validate_glossary_examples() -> None:
+    glossary = read('docs/GLOSSARY.md')
+    terms = ['KGM1', 'KGM1 JSON', 'KGM1B', 'KGM2', 'Face block', 'Pose block', 'JSONL recording', 'Room token', 'Quality score', 'Calibration profile']
+    for term in terms:
+        if f'- {term}:' not in glossary:
+            add_error('docs/GLOSSARY.md', f'missing required term: {term}')
+            continue
+        entry = glossary.split(f'- {term}:', 1)[1].split('\n-', 1)[0]
+        if 'Example:' not in entry:
+            add_error('docs/GLOSSARY.md', f'term lacks example: {term}')
+
+
+def validate_dependency_guardrails() -> None:
+    package = json.loads(read('package.json'))
+    tracker_version = re.search(r"MEDIAPIPE_VERSION = '([^']+)'", read('tracker/tracker.js'))
+    fetch_version = re.search(r'^VERSION="([^"]+)"', read('scripts/fetch-models.sh'), re.MULTILINE)
+    package_version = package.get('dependencies', {}).get('@mediapipe/tasks-vision', '').lstrip('^~')
+    if tracker_version and fetch_version and tracker_version.group(1) != fetch_version.group(1):
+        add_error('scripts/fetch-models.sh', 'MediaPipe version mismatch with tracker/tracker.js')
+    if tracker_version and package_version and tracker_version.group(1) != package_version:
+        add_error('package.json', 'MediaPipe version mismatch with tracker/tracker.js')
+    model_text = read('scripts/fetch-models.sh') + read('tracker/tracker.js')
+    external_model_urls = re.findall(r'https://storage\.googleapis\.com/mediapipe-models/[^\'"\s]+', model_text)
+    for url in external_model_urls:
+        if not re.search(r'/float16/\d+/', url):
+            add_error('scripts/fetch-models.sh', f'MediaPipe model URL lacks pinned model version: {url}')
+
+
 validate_issue_templates()
 validate_adr_headings()
 validate_local_docs_links()
 validate_documented_package_scripts()
+validate_glossary_examples()
+validate_dependency_guardrails()
 
 if errors:
     print('Structure verification failed:')

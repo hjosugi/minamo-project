@@ -3,6 +3,8 @@
 Version: 0.1.0
 Status: Draft (target schema)
 
+Terminology used below is defined in [GLOSSARY.md](GLOSSARY.md).
+
 > **Relationship to other specs:** the implemented v1 wire format
 > (76-byte binary frames, face + upper body) is [PROTOCOL.md](PROTOCOL.md).
 > This document is the draft semantic schema for the next protocol

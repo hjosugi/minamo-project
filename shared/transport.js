@@ -28,6 +28,9 @@ export class MinamoTransport extends EventTarget {
     this.dispatchEvent(new CustomEvent('frame', { detail: bytes }));
   }
 
+  /**
+   * @param {{ mode: string, room: string, role: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string }} options
+   */
   async connect({ mode, room, role, wsUrl, wtUrl, certHashHex, token = '' }) {
     await this.close();
     this.mode = mode;
@@ -83,6 +86,7 @@ export class MinamoTransport extends EventTarget {
       const base = (wtUrl || 'https://localhost:4433').replace(/\/+$/, '');
       const tokenPath = token ? `/${encodeURIComponent(token)}` : '';
       const url = `${base}/room/${encodeURIComponent(room)}${tokenPath}/${role}`;
+      /** @type {any} */
       const opts = {};
       const hex = (certHashHex || '').replace(/[^0-9a-fA-F]/g, '');
       if (hex.length === 64) {

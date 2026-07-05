@@ -26,6 +26,11 @@ npm run verify
 npm run build
 ```
 
+`npm run verify` checks that the MediaPipe Tasks Vision version is consistent
+between `package.json`, `tracker/tracker.js`, and `scripts/fetch-models.sh`.
+It also rejects MediaPipe model URLs that do not include a pinned model version
+segment.
+
 Rust dependencies:
 
 ```sh

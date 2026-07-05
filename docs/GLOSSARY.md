@@ -3,12 +3,16 @@
 ## Protocol
 
 - KGM1: Current compact realtime motion protocol used by the tracker and
-  viewer.
+  viewer. Example: a browser tracker sends one KGM1 frame per video sample.
 - KGM1 JSON: Human-readable frame shape used by browser code, tests, and local
-  recording.
+  recording. Example: one JSONL line stores `t`, `seq`, `face`, `pose`, and
+  optional `hands`.
 - KGM1B: Compact binary packet for KGM1 frames. It starts with the `KGM1`
-  magic bytes and is intended for low-latency transport.
+  magic bytes and is intended for low-latency transport. Example: WebTransport
+  sends a KGM1B datagram that decodes without needing earlier frames.
 - KGM2: Draft richer schema for hands, drums, quality, and future transports.
+  Example: a future KGM2 keyframe may include sparse channels, quality
+  metadata, and drum hit events.
 - Frame: One timestamped motion sample from a producer. Frames include a
   sequence number so receivers can reject stale or reordered packets.
 - Keyframe: Reliable full-state frame that lets a receiver recover if it
@@ -19,13 +23,16 @@
 ## Frame Blocks
 
 - Face block: Quaternion, head position, and 52 ARKit-style blendshape weights.
+  Example: `jawOpen` and head rotation for a single video frame.
 - Pose block: Compact upper-body landmark points sent with KGM1 frames.
+  Example: shoulders, elbows, wrists, and hips in hip-centered meters.
 - Blendshape: Normalized expression channel, usually in the `[0, 1]` range.
 - Head quaternion: Rotation for the tracked head in canonical KGM1 space.
 - Canonical space: Normalized coordinate space used inside KGM1 before mapping
   to avatar-specific rigs.
 - Quality score: Per-frame confidence value derived from tracking warnings,
-  stale frames, and signal validity.
+  stale frames, and signal validity. Example: low light plus dropped frames
+  produces a `poor` score in the tracker chip.
 
 ## Runtime Roles
 
@@ -39,6 +46,7 @@
 - Subscriber: Consumer connected to a relay room.
 - Room: Relay namespace that connects one publisher to one or more subscribers.
 - Room token: Optional shared secret required by relays before joining a room.
+  Example: tracker and viewer both use the same token field before connecting.
 
 ## Transport Modes
 
@@ -48,6 +56,7 @@
 - Newest-only delivery: Realtime policy where old packets are dropped instead
   of queued, keeping avatar motion current.
 - JSONL recording: Local newline-delimited capture of decoded motion frames.
+  Example: a metadata line followed by one KGM1 JSON record per frame.
 
 ## Stabilization
 
@@ -63,7 +72,8 @@
 ## Calibration
 
 - Calibration profile: Local settings that store offsets, gains, dead zones,
-  and mirror preferences for a creator or device.
+  and mirror preferences for a creator or device. Example: a profile lowers
+  a user's resting `browDownLeft` offset before filtering.
 - Mirror mode: Viewer/tracker option that swaps left and right signals when
   the camera or OBS setup requires it.
 - Warning taxonomy: Structured set of tracking warnings, such as low light,

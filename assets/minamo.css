@@ -289,11 +289,17 @@ output {
   font-size: 12px;
 }
 .signal-checklist b {
+  grid-row: span 2;
   color: var(--ink-dim);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
+}
+.signal-checklist small {
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
 }
 .signal-checklist li[data-state='ok'] {
   border-color: rgba(124, 231, 169, 0.46);

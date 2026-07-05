@@ -18,6 +18,10 @@ or more `area/*`, and a priority label when scheduling matters.
 - `area/quality`: tracking quality reports, quality score thresholds, capture
   diagnostics
 
+Granular area labels may be used when they make triage sharper:
+`area/quality`, `area/capture`, `area/ui`, `area/test`, `area/devex`,
+`area/calibration`, `area/benchmark`, `area/privacy`, and `protocol/kgm1`.
+
 ## Types
 
 - `type/feature`: user-visible capability

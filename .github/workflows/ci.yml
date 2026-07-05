@@ -22,6 +22,8 @@ jobs:
         run: npm run verify
       - name: TypeScript strict gate
         run: npm run typecheck
+      - name: Browser JavaScript type contract gate
+        run: npm run typecheck:js
       - name: Build production bundle
         run: npm run build
 

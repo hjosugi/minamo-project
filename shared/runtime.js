@@ -26,6 +26,22 @@ export const FILTER_PRESETS = Object.freeze({
   smooth: Object.freeze({ minCutoff: 0.9, beta: 0.18, dCutoff: 1.0 }),
 });
 
+export const SMOOTHING_GROUPS = Object.freeze({
+  face: 'Face weights',
+  headRotation: 'Head rotation',
+  headPosition: 'Head position',
+  pose: 'Upper-body pose',
+  hands: 'Hands',
+});
+
+export const DEFAULT_SMOOTHING_SETTINGS = Object.freeze({
+  face: Object.freeze({ filterPreset: 'balanced', minCutoff: FILTER_PRESETS.balanced.minCutoff, beta: FILTER_PRESETS.balanced.beta }),
+  headRotation: Object.freeze({ filterPreset: 'balanced', minCutoff: 1.2, beta: 0.8 }),
+  headPosition: Object.freeze({ filterPreset: 'smooth', minCutoff: 1.0, beta: 0.3 }),
+  pose: Object.freeze({ filterPreset: 'smooth', minCutoff: 0.8, beta: 0.2 }),
+  hands: Object.freeze({ filterPreset: 'balanced', minCutoff: 1.8, beta: 0.5 }),
+});
+
 export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   mode: 'local',
   room: 'demo',
@@ -41,6 +57,8 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   filterPreset: 'balanced',
   minCutoff: FILTER_PRESETS.balanced.minCutoff,
   beta: FILTER_PRESETS.balanced.beta,
+  smoothingGroup: 'face',
+  smoothing: DEFAULT_SMOOTHING_SETTINGS,
   privacyLocalOnly: true,
 });
 
@@ -121,6 +139,7 @@ export class DroppedFrameDetector {
     this.lastTimeMs = null;
     this.dropped = 0;
     this.longestGapMs = 0;
+    this.samples = [];
   }
 
   sample(timeMs) {
@@ -132,10 +151,25 @@ export class DroppedFrameDetector {
     const gap = timeMs - this.lastTimeMs;
     this.lastTimeMs = timeMs;
     this.longestGapMs = Math.max(this.longestGapMs, gap);
-    if (gap <= expected * this.tolerance) return 0;
-    const missed = Math.max(1, Math.round(gap / expected) - 1);
+    let missed = 0;
+    if (gap > expected * this.tolerance) {
+      missed = Math.max(1, Math.round(gap / expected) - 1);
+    }
+    this.samples.push({ timeMs, missed });
+    this.prune(timeMs);
+    if (missed === 0) return 0;
     this.dropped += missed;
     return missed;
+  }
+
+  prune(nowMs = this.lastTimeMs ?? 0, windowMs = 2500) {
+    const cutoff = nowMs - windowMs;
+    while (this.samples.length && this.samples[0].timeMs < cutoff) this.samples.shift();
+  }
+
+  rollingDropped(windowMs = 2500, nowMs = this.lastTimeMs ?? 0) {
+    this.prune(nowMs, windowMs);
+    return this.samples.reduce((sum, sample) => sum + sample.missed, 0);
   }
 }
 
@@ -187,18 +221,40 @@ export function createCalibrationProfile(name = 'default') {
   };
 }
 
-export function normalizeProfile(profile) {
+export function validateCalibrationProfile(profile) {
+  const warnings = [];
+  const errors = [];
   const base = createCalibrationProfile(profile?.name || 'default');
-  if (!profile || profile.schema !== base.schema) return base;
-  for (const key of ['offsets', 'gains', 'deadzones', 'muted']) {
-    if (Array.isArray(profile[key])) base[key] = profile[key].slice(0, NUM_CHANNELS);
-    while (base[key].length < NUM_CHANNELS) base[key].push(key === 'gains' ? 1 : false);
+  if (!profile || typeof profile !== 'object') {
+    errors.push('profile must be a JSON object');
+    return { ok: false, profile: base, warnings, errors };
   }
-  base.gains = base.gains.map((v) => clamp(Number(v), 0, 2));
-  base.offsets = base.offsets.map((v) => clamp(Number(v), 0, 1));
-  base.deadzones = base.deadzones.map((v) => clamp(Number(v), 0, 0.2));
+  if (profile.schema !== base.schema) {
+    errors.push(`unsupported calibration schema: ${profile.schema || 'missing'}`);
+    return { ok: false, profile: base, warnings, errors };
+  }
+
+  const keys = ['offsets', 'gains', 'deadzones', 'muted'];
+  for (const key of keys) {
+    if (!Array.isArray(profile[key])) {
+      warnings.push(`${key} missing; defaults inserted`);
+      continue;
+    }
+    if (profile[key].length > NUM_CHANNELS) warnings.push(`${key} has extra values; truncated to ${NUM_CHANNELS}`);
+    if (profile[key].length < NUM_CHANNELS) warnings.push(`${key} has ${profile[key].length} values; padded to ${NUM_CHANNELS}`);
+    base[key] = profile[key].slice(0, NUM_CHANNELS);
+    while (base[key].length < NUM_CHANNELS) base[key].push(defaultProfileValue(key));
+  }
+
+  base.gains = base.gains.map((value, index) => clampProfileNumber(value, 0, 2, `gains[${index}]`, warnings));
+  base.offsets = base.offsets.map((value, index) => clampProfileNumber(value, 0, 1, `offsets[${index}]`, warnings));
+  base.deadzones = base.deadzones.map((value, index) => clampProfileNumber(value, 0, 0.2, `deadzones[${index}]`, warnings));
   base.muted = base.muted.map(Boolean);
-  return base;
+  return { ok: true, profile: base, warnings: [...new Set(warnings)], errors };
+}
+
+export function normalizeProfile(profile) {
+  return validateCalibrationProfile(profile).profile;
 }
 
 export function applyCalibrationProfile(weights, profile) {
@@ -220,6 +276,26 @@ export function mirrorWeights(weights) {
   const out = new Float32Array(NUM_CHANNELS);
   for (let i = 0; i < NUM_CHANNELS; i++) out[MIRROR_INDEX[i]] = Number(weights[i] || 0);
   return out;
+}
+
+export function mirrorFacePayload({ quat = [0, 0, 0, 1], pos = [0, 0, 0.4], weights = new Float32Array(NUM_CHANNELS) } = {}) {
+  return {
+    quat: [quat[0], -quat[1], -quat[2], quat[3]],
+    pos: [-pos[0], pos[1], pos[2]],
+    weights: mirrorWeights(weights),
+  };
+}
+
+export function setMirrorPreviewClass(element, mirror) {
+  element?.classList?.toggle?.('mirrored', Boolean(mirror));
+  return Boolean(mirror);
+}
+
+export function isEditableTarget(target) {
+  const element = typeof Element !== 'undefined' && target instanceof Element ? target : null;
+  if (!element) return false;
+  const tag = element.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || Boolean(/** @type {any} */ (element).isContentEditable);
 }
 
 export function sanitizeWeights(weights) {
@@ -284,6 +360,23 @@ export function syntheticBlendshapeFrame(seed = 1) {
   };
 }
 
+export function syntheticFaceFixture(name = 'neutral') {
+  const frame = syntheticBlendshapeFrame(fixtureSeed(name));
+  frame.face.weights.fill(0);
+  if (name === 'wink-left') frame.face.weights[CHANNEL_INDEX.eyeBlinkLeft] = 0.92;
+  else if (name === 'wink-right') frame.face.weights[CHANNEL_INDEX.eyeBlinkRight] = 0.92;
+  else if (name === 'asymmetric-smile') {
+    frame.face.weights[CHANNEL_INDEX.mouthSmileLeft] = 0.85;
+    frame.face.weights[CHANNEL_INDEX.mouthSmileRight] = 0.12;
+  } else if (name === 'mouth-a') {
+    frame.face.weights[CHANNEL_INDEX.jawOpen] = 0.82;
+  } else if (name === 'low-confidence') {
+    frame.face.weights[CHANNEL_INDEX.eyeBlinkLeft] = Number.NaN;
+    frame.face.weights[CHANNEL_INDEX.mouthSmileRight] = 2;
+  }
+  return frame;
+}
+
 export function parseMotionJsonl(text, { maxFrames = MAX_MOTION_JSONL_FRAMES } = {}) {
   if (typeof text !== 'string') throw new TypeError('Motion JSONL input must be text.');
   const limit = Math.max(1, Number(maxFrames) || MAX_MOTION_JSONL_FRAMES);
@@ -298,6 +391,7 @@ export function parseMotionJsonl(text, { maxFrames = MAX_MOTION_JSONL_FRAMES } =
     } catch (error) {
       throw new Error(`Invalid motion JSONL at line ${i + 1}: ${error.message}`);
     }
+    if (value?.schema === 'minamo.kgm1.recording-metadata.v1' || value?.schema === 'kagami.kgm1.recording-metadata.v1') continue;
     frames.push(parseMotionRecord(value, i + 1));
     if (frames.length >= limit) break;
   }
@@ -385,4 +479,30 @@ export function saveJson(storage, key, value) {
 
 function performanceNow() {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function defaultProfileValue(key) {
+  if (key === 'gains') return 1;
+  if (key === 'muted') return false;
+  return 0;
+}
+
+function clampProfileNumber(value, min, max, name, warnings) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    warnings.push(`${name} was not finite; reset to ${min}`);
+    return min;
+  }
+  const clamped = clamp(numeric, min, max);
+  if (numeric !== clamped) warnings.push(`${name} clamped to ${clamped}`);
+  return clamped;
+}
+
+function fixtureSeed(name) {
+  let seed = 2166136261;
+  for (const char of String(name)) {
+    seed ^= char.charCodeAt(0);
+    seed = Math.imul(seed, 16777619);
+  }
+  return seed >>> 0;
 }

@@ -29,14 +29,12 @@ function clampU8(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-/**
- * @param {object} frame
- * @param {number} frame.t timestamp ms (wraps at 2^32)
- * @param {number} frame.seq sequence number (wraps at 2^16)
- * @param {object} [frame.face] { quat: [x,y,z,w], pos: [x,y,z] meters, weights: Float32Array(52) in [0,1] }
- * @param {object} [frame.pose] { points: Float32Array(21) meters, 7 points hip-centered }
- * @returns {ArrayBuffer}
- */
+/** @typedef {{ handedness: string, confidence?: number, curls?: ArrayLike<number>, spreads?: ArrayLike<number> }} HandTarget */
+/** @typedef {{ quat: ArrayLike<number>, pos: ArrayLike<number>, weights: ArrayLike<number> }} FaceBlock */
+/** @typedef {{ points: ArrayLike<number> }} PoseBlock */
+/** @typedef {{ t: number, seq: number, face?: FaceBlock | null, pose?: PoseBlock | null, hands?: HandTarget[] | null }} KgmFrame */
+
+/** @param {KgmFrame} frame @returns {ArrayBuffer} */
 export function encodeFrame(frame) {
   let size = HEADER_BYTES;
   let blocks = 0;

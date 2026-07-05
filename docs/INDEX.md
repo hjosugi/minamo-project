@@ -63,7 +63,7 @@ Primary language is English; documents that originated in Japanese keep a
 
 ## Engineering references
 
-- [adr/](adr/) — architecture decision records
+- [adr/README.md](adr/README.md) — architecture decision records
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - [ISSUE_LABELS.md](ISSUE_LABELS.md)
 - [DEPENDENCY_POLICY.md](DEPENDENCY_POLICY.md)

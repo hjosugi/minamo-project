@@ -24,10 +24,7 @@ class LowPass {
 
 export class OneEuroFilter {
   /**
-   * @param {object} opts
-   * @param {number} opts.minCutoff base cutoff Hz. Lower = smoother, more lag.
-   * @param {number} opts.beta speed coefficient. Higher = less lag on fast motion.
-   * @param {number} opts.dCutoff cutoff for the derivative estimate.
+   * @param {{ minCutoff?: number, beta?: number, dCutoff?: number }} [opts]
    */
   constructor({ minCutoff = 1.0, beta = 0.05, dCutoff = 1.0 } = {}) {
     this.minCutoff = minCutoff;
@@ -77,6 +74,7 @@ export class OneEuroFilter {
 
 // Filters a fixed-length Float32Array in place.
 export class OneEuroArray {
+  /** @param {number} n @param {{ minCutoff?: number, beta?: number, dCutoff?: number }} [opts] */
   constructor(n, opts) {
     this.filters = Array.from({ length: n }, () => new OneEuroFilter(opts));
   }
@@ -94,6 +92,7 @@ export class OneEuroArray {
 // Quaternion smoothing: filter the 4 components, then renormalize.
 // A hemisphere check keeps q and -q (same rotation) from fighting the filter.
 export class OneEuroQuat {
+  /** @param {{ minCutoff?: number, beta?: number, dCutoff?: number }} [opts] */
   constructor(opts = { minCutoff: 1.2, beta: 0.6, dCutoff: 1.0 }) {
     this.filters = Array.from({ length: 4 }, () => new OneEuroFilter(opts));
     this.prev = null;

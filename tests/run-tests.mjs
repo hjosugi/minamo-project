@@ -11,12 +11,23 @@ import {
   applyCalibrationProfile,
   computeQualityScore,
   createCalibrationProfile,
+  isEditableTarget,
+  mirrorFacePayload,
   mirrorWeights,
   parseMotionJsonl,
   sanitizeWeights,
   semanticFaceControls,
   syntheticBlendshapeFrame,
+  syntheticFaceFixture,
+  setMirrorPreviewClass,
+  validateCalibrationProfile,
 } from '../shared/runtime.js';
+import {
+  createMotionRecord,
+  createRecordingMetadata,
+  parseRecordingJsonl,
+  validateRecordingRecord,
+} from '../shared/recording.js';
 
 const root = process.cwd();
 const required = [
@@ -168,6 +179,9 @@ function roundTrip(frame) {
   assert.equal(detector.sample(0), 0);
   assert.equal(detector.sample(1000 / 60), 0);
   assert.ok(detector.sample(120) >= 5);
+  assert.ok(detector.rollingDropped(2500, 120) >= 5);
+  for (let i = 1; i < 180; i++) detector.sample(120 + i * (1000 / 60));
+  assert.equal(detector.rollingDropped(2500, 3200), 0, 'rolling dropped-frame window recovers after stable frames');
 }
 
 {
@@ -197,6 +211,15 @@ function roundTrip(frame) {
   const mirrored = mirrorWeights(weights);
   assert.equal(mirrored[CHANNEL_INDEX.eyeBlinkRight], 0.75);
   assert.equal(mirrored[CHANNEL_INDEX.eyeBlinkLeft], 0);
+
+  const payload = mirrorFacePayload({ quat: [0.1, 0.2, -0.3, 0.9], pos: [0.2, 0.1, 0.4], weights });
+  assert.deepEqual(payload.quat, [0.1, -0.2, 0.3, 0.9]);
+  assert.equal(payload.pos[0], -0.2);
+  assert.equal(payload.weights[CHANNEL_INDEX.eyeBlinkRight], 0.75);
+
+  const classList = { mirrored: false, toggle(name, value) { if (name === 'mirrored') this.mirrored = value; } };
+  assert.equal(setMirrorPreviewClass({ classList }, true), true);
+  assert.equal(classList.mirrored, true);
 }
 
 {
@@ -206,7 +229,82 @@ function roundTrip(frame) {
   const quality = computeQualityScore({ meanLuma: 12, fps: 12, droppedFrames: 6, confidence: 0.2 });
   assert.equal(quality.state, 'poor');
   assert.ok(quality.warnings.length >= 2);
+
+  const qualityCases = [
+    ['good indoor', { meanLuma: 110, fps: 60, droppedFrames: 0, confidence: 0.95, inferenceMs: 8, motionBlur: 0 }, 'good'],
+    ['normal indoor', { meanLuma: 72, fps: 30, droppedFrames: 0, confidence: 0.85, inferenceMs: 16, motionBlur: 0.1 }, 'degraded'],
+    ['low light', { meanLuma: 18, fps: 60, droppedFrames: 0, confidence: 0.9 }, 'degraded'],
+    ['occlusion', { meanLuma: 110, fps: 60, droppedFrames: 0, confidence: 0.2 }, 'degraded'],
+    ['motion blur', { meanLuma: 110, fps: 60, droppedFrames: 0, confidence: 0.9, motionBlur: 0.8 }, 'good'],
+    ['high inference', { meanLuma: 110, fps: 60, droppedFrames: 0, confidence: 0.9, inferenceMs: 45 }, 'degraded'],
+  ];
+  for (const [name, input, minimum] of qualityCases) {
+    const result = computeQualityScore(input);
+    if (name === 'normal indoor') assert.notEqual(result.state, 'poor');
+    if (minimum === 'good') assert.equal(result.state, 'good');
+    else assert.notEqual(result.state, 'poor', `${name} should stay recoverable unless multiple inputs fail`);
+  }
+}
+
+{
+  const invalid = validateCalibrationProfile({ schema: 'wrong' });
+  assert.equal(invalid.ok, false);
+  const partial = validateCalibrationProfile({
+    schema: 'minamo.calibration.v1',
+    gains: [3, Number.NaN],
+    offsets: [0.1],
+    deadzones: [0.5],
+    muted: [1],
+  });
+  assert.equal(partial.ok, true);
+  assert.equal(partial.profile.gains[0], 2);
+  assert.equal(partial.profile.gains[1], 0);
+  assert.ok(partial.warnings.length >= 4);
+}
+
+{
+  const wink = syntheticFaceFixture('wink-left');
+  assert.ok(wink.face.weights[CHANNEL_INDEX.eyeBlinkLeft] > 0.9);
+  assert.equal(wink.face.weights[CHANNEL_INDEX.eyeBlinkRight], 0);
+  const lowConfidence = sanitizeWeights(syntheticFaceFixture('low-confidence').face.weights);
+  assert.ok(lowConfidence.warnings.some((warning) => warning.startsWith('NON_FINITE_SIGNAL')));
+}
+
+{
+  const frame = syntheticBlendshapeFrame(33);
+  const metadata = createRecordingMetadata({
+    version: 'test',
+    modelSource: 'synthetic',
+    settings: { mode: 'local', mirror: true, hands: false, pose: false, resolution: '720p', fps: '60' },
+    calibration: createCalibrationProfile('fixture'),
+  });
+  const motion = createMotionRecord(frame, { quality: { state: 'good', score: 1 }, warnings: [] });
+  assert.equal(validateRecordingRecord(metadata, 1).ok, true);
+  assert.equal(validateRecordingRecord(motion, 2).ok, true);
+  const parsed = parseRecordingJsonl(`${JSON.stringify(metadata)}\n${JSON.stringify(motion)}\n`);
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.frames.length, 1);
+  const malformed = parseRecordingJsonl(`${JSON.stringify(metadata)}\n{"schema":"minamo.kgm1.motion-jsonl.v1","t":"bad"}\n`);
+  assert.equal(malformed.errors[0].line, 2);
+  const fixture = parseRecordingJsonl(fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.jsonl'), 'utf8'));
+  assert.equal(fixture.errors.length, 0);
+  assert.equal(fixture.frames.length, 1);
+}
+
+{
+  const previousElement = globalThis.Element;
+  globalThis.Element = class {
+    constructor(tagName, editable = false) {
+      this.tagName = tagName;
+      this.isContentEditable = editable;
+    }
+  };
+  assert.equal(isEditableTarget(new globalThis.Element('INPUT')), true);
+  assert.equal(isEditableTarget(new globalThis.Element('DIV', true)), true);
+  assert.equal(isEditableTarget(new globalThis.Element('BUTTON')), false);
+  if (previousElement === undefined) delete globalThis.Element;
+  else globalThis.Element = previousElement;
 }
 
 assert.equal(ARKIT_52.length, NUM_CHANNELS);
-console.log(`OK: ${issues.length} issue files found; codec, filters, sequencing, calibration, mirror, and quality tests passed.`);
+console.log(`OK: ${issues.length} issue files found; codec, filters, sequencing, calibration, mirror, quality, recording, and shortcut tests passed.`);

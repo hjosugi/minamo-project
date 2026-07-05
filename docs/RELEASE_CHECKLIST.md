@@ -15,13 +15,19 @@
 npm run lint
 npm test
 npm run verify
+npm run typecheck:js
 npm run build
+npm run release:smoke
 cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
 cargo clippy --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
 cargo build --manifest-path relay-rs/Cargo.toml --release
 cargo test --manifest-path crates/kgm1-codec/Cargo.toml
 cd relay-node && node --check server.mjs
 ```
+
+`npm run release:smoke` runs the automated release checks above where the
+required toolchains are available. It does not replace the manual browser,
+camera, relay-token, WebTransport, or OBS smoke tests.
 
 ## Manual Smoke Tests
 

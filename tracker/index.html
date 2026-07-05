@@ -25,6 +25,7 @@
       <div class="controls">
         <button id="btnStart" class="primary">Start tracking</button>
         <button id="btnStop" disabled>Stop</button>
+        <button id="btnResetTracking" title="Reset tracking filters (R)">Reset tracking</button>
         <label class="check"><input type="checkbox" id="chkMirror" checked />Mirror view</label>
         <label class="check"><input type="checkbox" id="chkPose" />Upper-body pose (experimental)</label>
         <label class="check"><input type="checkbox" id="chkHands" />Hands (experimental)</label>
@@ -70,10 +71,10 @@
       <div class="signal-checklist" aria-label="Camera exposure and lighting checklist">
         <div class="check-title">lighting checklist</div>
         <ul>
-          <li id="checkExposure" data-state="idle"><b>wait</b><span>face exposure</span></li>
-          <li id="checkFps" data-state="idle"><b>wait</b><span>steady camera fps</span></li>
-          <li id="checkBlur" data-state="idle"><b>wait</b><span>low motion blur</span></li>
-          <li id="checkConfidence" data-state="idle"><b>wait</b><span>stable landmark confidence</span></li>
+          <li id="checkExposure" data-state="idle"><b>wait</b><span>face exposure</span><small>start camera</small></li>
+          <li id="checkFps" data-state="idle"><b>wait</b><span>steady camera fps</span><small>start camera</small></li>
+          <li id="checkBlur" data-state="idle"><b>wait</b><span>low motion blur</span><small>start camera</small></li>
+          <li id="checkConfidence" data-state="idle"><b>wait</b><span>stable landmark confidence</span><small>start camera</small></li>
         </ul>
       </div>
     </section>
@@ -95,11 +96,22 @@
           <input type="range" id="rngDeadzone" min="0" max="0.2" step="0.005" value="0" />
         </div>
         <div class="field">
-          <span>smoothing</span>
+          <span>signal group</span>
+          <select id="selSmoothingGroup">
+            <option value="face">face weights</option>
+            <option value="headRotation">head rotation</option>
+            <option value="headPosition">head position</option>
+            <option value="pose">upper-body pose</option>
+            <option value="hands">hands</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>preset</span>
           <select id="selFilterPreset">
             <option value="responsive">responsive</option>
             <option value="balanced" selected>balanced</option>
             <option value="smooth">smooth</option>
+            <option value="custom">custom</option>
           </select>
         </div>
         <div class="field">
@@ -109,6 +121,10 @@
         <div class="field">
           <span>beta</span>
           <input type="range" id="rngBeta" min="0" max="1.5" step="0.01" value="0.4" />
+        </div>
+        <div class="field">
+          <span>effective</span>
+          <output id="outSmoothingEffective">face 1.60 / 0.40</output>
         </div>
       </div>
       <div class="controls">

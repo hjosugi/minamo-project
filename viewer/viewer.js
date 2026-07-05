@@ -19,6 +19,7 @@ import {
   saveJson,
 } from '../shared/runtime.js';
 
+/** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
@@ -349,12 +350,12 @@ function applyIncomingFrame(frame) {
   return true;
 }
 
-transport.addEventListener('frame', (ev) => {
+transport.addEventListener('frame', (/** @type {any} */ ev) => {
   const frame = decodeFrame(ev.detail);
   applyIncomingFrame(frame);
 });
 
-transport.addEventListener('status', (ev) => {
+transport.addEventListener('status', (/** @type {any} */ ev) => {
   chip.textContent = ev.detail.detail || ev.detail.state;
   chip.dataset.state = ev.detail.state;
 });
