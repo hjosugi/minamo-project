@@ -50,6 +50,7 @@ REQUIRED = [
     'shared/kgm2.js',
     'shared/kgm-recording.js',
     'shared/e2ee.js',
+    'shared/hud-metrics.js',
     'shared/expression-mapping.js',
     'shared/layered-avatar.js',
     'shared/recording.js',
@@ -1458,6 +1459,33 @@ def validate_kgm_recording_contracts() -> None:
             add_error('docs/design/DD-007-recording.md', f'missing .kgm implementation documentation: {needle}')
 
 
+def validate_latency_quality_hud_contracts() -> None:
+    hud = read('shared/hud-metrics.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in ['computeLossPercent', 'latencyWithinTolerance', 'percentileSample', 'controlledNetemHudCheck']:
+        if needle not in hud:
+            add_error('shared/hud-metrics.js', f'missing HUD metric helper: {needle}')
+    for needle in ['inferSamples', 'statInferP50', 'statInferP95', 'percentileSample(state.inferSamples, 0.95)']:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker inference percentile contract: {needle}')
+    for needle in ['statInferP50', 'statInferP95']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing tracker inference percentile HUD: {needle}')
+    for needle in ['computeLossPercent(orderGate.lost, orderGate.accepted)', 'statLatency', 'statTransportMode']:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing viewer latency/loss HUD contract: {needle}')
+    if '<span>loss <b id="statLoss">0.0</b>%</span>' not in viewer_html:
+        add_error('viewer/index.html', 'viewer HUD must label packet loss as a percentage')
+    for needle in ['controlledNetemHudCheck', 'computeLossPercent(10, 90)', 'latencyWithinTolerance(54, 50, 10)', 'percentileSample([4, 8, 16, 32, 64], 0.95)']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing HUD metric regression coverage: {needle}')
+
+
 def validate_runtime_warning_taxonomy() -> None:
     runtime = read('shared/runtime.js')
     required_codes = [
@@ -1509,6 +1537,7 @@ validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()
 validate_kgm_recording_contracts()
+validate_latency_quality_hud_contracts()
 validate_runtime_warning_taxonomy()
 
 if errors:

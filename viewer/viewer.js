@@ -28,6 +28,7 @@ import {
   layerTransformForDepth,
   normalizeLayerDepth,
 } from '../shared/layered-avatar.js';
+import { computeLossPercent } from '../shared/hud-metrics.js';
 import { MinamoTransport } from '../shared/transport.js';
 import {
   DEFAULT_VIEWER_SETTINGS,
@@ -675,7 +676,7 @@ function render() {
     $('statRate').textContent = ((transport.bytesIn - lastBytesIn) / dts / 1024).toFixed(1);
     $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
     $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
-    $('statLoss').textContent = String(orderGate.lost);
+    $('statLoss').textContent = computeLossPercent(orderGate.lost, orderGate.accepted).toFixed(1);
     $('statReorder').textContent = String(orderGate.reordered);
     recvFrames = 0;
     lastBytesIn = transport.bytesIn;

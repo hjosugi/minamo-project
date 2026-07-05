@@ -42,6 +42,12 @@ import {
   serializeLayeredAvatarManifest,
 } from '../shared/layered-avatar.js';
 import {
+  computeLossPercent,
+  controlledNetemHudCheck,
+  latencyWithinTolerance,
+  percentileSample,
+} from '../shared/hud-metrics.js';
+import {
   ClockOffsetEstimator,
   KGM2_FACE_CHANNELS,
   KGM2_FACE_MASK_BYTES,
@@ -493,6 +499,19 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.deepEqual(Array.from(mailbox.take()), [3]);
   assert.equal(mailbox.replaced, 2, 'packet drop simulation replaces stale frames');
   assert.equal(mailbox.lagFrames(), 0);
+  assert.equal(computeLossPercent(10, 90), 10);
+  assert.equal(latencyWithinTolerance(54, 50, 10), true);
+  assert.equal(latencyWithinTolerance(60, 50, 10), false);
+  const netem = controlledNetemHudCheck({
+    expectedLossPercent: 10,
+    measuredLost: 10,
+    measuredAccepted: 90,
+    expectedLatencyMs: 50,
+    measuredLatencyMs: 54,
+  });
+  assert.equal(netem.lossOk, true);
+  assert.equal(netem.latencyOk, true);
+  assert.equal(percentileSample([4, 8, 16, 32, 64], 0.95), 64);
 }
 
 {

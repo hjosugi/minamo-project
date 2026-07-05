@@ -68,6 +68,7 @@ import {
 } from '../shared/runtime.js';
 import { createMotionRecord, createRecordingMetadata } from '../shared/recording.js';
 import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } from '../shared/kgm-recording.js';
+import { percentileSample } from '../shared/hud-metrics.js';
 
 const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -162,6 +163,7 @@ const state = {
   frames: 0,
   lastStats: performance.now(),
   inferMs: 0,
+  inferSamples: [],
   lastBytesOut: 0,
   lastPacketBytes: 0,
 };
@@ -491,6 +493,8 @@ function loop() {
       handRes = state.lastHandResult;
     }
     state.inferMs = performance.now() - t0;
+    state.inferSamples.push(state.inferMs);
+    if (state.inferSamples.length > 240) state.inferSamples.shift();
 
     const tSec = nowMs / 1000;
     const faceSelection = selectTrackedFace(faceRes.faceLandmarks || [], {
@@ -911,6 +915,8 @@ function updateStats(nowMs) {
   state.lastFps = state.frames / dt;
   $('statFps').textContent = state.lastFps.toFixed(0);
   $('statInfer').textContent = state.inferMs.toFixed(1);
+  $('statInferP50').textContent = percentileSample(state.inferSamples, 0.5).toFixed(1);
+  $('statInferP95').textContent = percentileSample(state.inferSamples, 0.95).toFixed(1);
   $('statPacket').textContent = state.lastPacketBytes || '--';
   $('statDropped').textContent = String(state.dropDetector.dropped);
   $('statFilterLag').textContent = estimateOneEuroLagMs(settings.smoothing.face.minCutoff).toFixed(0);
