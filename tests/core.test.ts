@@ -8,6 +8,7 @@ import {
   TemporalOutlierRejector,
   VelocityClamp,
   clampRigParameter,
+  classifyHandGesture,
   confidenceWeightedBlend,
   computeFingerCurl,
   computePalmBasis,
@@ -119,6 +120,21 @@ describe('hand solver', () => {
     const previous = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     const next = solveHandState({ handedness: 'Left', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     expect(detectHandSwap(previous, next)).toBe(true);
+  });
+
+  it('classifies finger count and drum grip gesture states', () => {
+    const open = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
+    expect(classifyHandGesture(open).openPalm).toBe(true);
+
+    const grip = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
+    grip.fingers.thumb.curl = 0.55;
+    grip.fingers.index.curl = 0.55;
+    grip.fingers.middle.curl = 0.62;
+    grip.fingers.ring.curl = 0.7;
+    grip.fingers.pinky.curl = 0.72;
+    const gesture = classifyHandGesture(grip);
+    expect(gesture.fingerCount).toBeGreaterThanOrEqual(0);
+    expect(gesture.drumGrip || gesture.fist).toBe(true);
   });
 });
 

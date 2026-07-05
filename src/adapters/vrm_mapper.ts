@@ -49,18 +49,22 @@ export function mapKGM1HandsToVrmFingers(hands: HandState[] = []): VrmFingerOutp
   const outputs: VrmFingerOutput[] = [];
   for (const hand of hands) {
     for (const finger of Object.values(hand.fingers)) {
-      const curl = clamp01(finger.curl);
+      const curl = easeCurl(clamp01(finger.curl));
       outputs.push({
         handedness: hand.handedness,
         finger: finger.name,
-        proximal: curl * 0.75,
-        intermediate: curl,
-        distal: curl * 0.65,
+        proximal: curl,
+        intermediate: curl * 0.85,
+        distal: curl * 0.7,
         spread: clampSigned(finger.spread / 1.2),
       });
     }
   }
   return outputs;
+}
+
+function easeCurl(value: number): number {
+  return value * value * (3 - 2 * value);
 }
 
 function clamp01(value: number): number {

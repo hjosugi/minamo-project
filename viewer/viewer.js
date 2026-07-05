@@ -88,6 +88,10 @@ let hasRef = false;
 const IDENT = new THREE.Quaternion();
 const tmpQ = new THREE.Quaternion();
 const tmpPos = new THREE.Vector3();
+const tmpA = new THREE.Vector3();
+const tmpB = new THREE.Vector3();
+const tmpC = new THREE.Vector3();
+const BONE_DOWN = new THREE.Vector3(0, -1, 0);
 
 let vrm = null;
 let bot = buildBot();
@@ -260,19 +264,8 @@ function applyVrm(dt) {
   expr('angry', clamp01((w[C.browDownLeft] + w[C.browDownRight]) * 0.4));
   expr('surprised', clamp01(w[C.browInnerUp] * 0.6 + (w[C.eyeWideLeft] + w[C.eyeWideRight]) * 0.25));
 
-  // Experimental chest sway from pose points.
   if (target.posePoints) {
-    const p = target.posePoints;
-    const dx = p[2 * 3 + 0] - p[1 * 3 + 0];
-    const dy = p[2 * 3 + 1] - p[1 * 3 + 1];
-    const dz = p[2 * 3 + 2] - p[1 * 3 + 2];
-    const roll = Math.atan2(dy, Math.abs(dx) || 1e-4) * 0.6;
-    const yaw = Math.atan2(dz, dx) * 0.4;
-    const chest = h.getNormalizedBoneNode('chest') || h.getNormalizedBoneNode('spine');
-    if (chest) {
-      tmpQ.setFromEuler(new THREE.Euler(0, yaw, roll));
-      chest.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 6));
-    }
+    applyVrmUpperBodyPose(h, target.posePoints, dt);
   }
 
   if (target.hands) applyVrmHands(h, target.hands);
@@ -300,21 +293,71 @@ const FINGER_BONES = {
 function applyVrmHands(humanoid, hands) {
   for (const hand of hands) {
     const side = hand.handedness === 'Left' ? 'left' : 'right';
+    const handBone = humanoid.getNormalizedBoneNode(`${side}Hand`);
+    if (handBone && hand.wrist) {
+      tmpQ.setFromEuler(new THREE.Euler(
+        Math.max(-0.45, Math.min(0.45, -(hand.wrist[1] || 0) * 0.4)),
+        Math.max(-0.45, Math.min(0.45, (hand.wrist[0] || 0) * 0.4)),
+        Math.max(-0.45, Math.min(0.45, (hand.wrist[2] || 0) * 0.3)),
+      ));
+      handBone.quaternion.slerp(tmpQ, 0.25);
+    }
     for (let i = 0; i < FINGER_NAMES.length; i++) {
       const finger = FINGER_NAMES[i];
-      const curl = clamp01(hand.curls?.[i] ?? 0);
+      const curl = smoothstep(clamp01(hand.curls?.[i] ?? 0));
       const spread = Math.max(-0.6, Math.min(0.6, hand.spreads?.[i] ?? 0));
       const bones = FINGER_BONES[finger];
       for (let j = 0; j < bones.length; j++) {
         const bone = humanoid.getNormalizedBoneNode(`${side}${bones[j]}`);
         if (!bone) continue;
-        const curlScale = j === 0 ? 0.75 : j === 1 ? 1.0 : 0.65;
+        const curlScale = j === 0 ? 1.0 : j === 1 ? 0.85 : 0.7;
         const spreadScale = j === 0 ? 0.35 : 0;
         tmpQ.setFromEuler(new THREE.Euler(curl * curlScale, spread * spreadScale, 0));
         bone.quaternion.slerp(tmpQ, 0.45);
       }
     }
   }
+}
+
+function applyVrmUpperBodyPose(humanoid, p, dt) {
+  const dx = p[2 * 3 + 0] - p[1 * 3 + 0];
+  const dy = p[2 * 3 + 1] - p[1 * 3 + 1];
+  const dz = p[2 * 3 + 2] - p[1 * 3 + 2];
+  const roll = Math.atan2(dy, Math.abs(dx) || 1e-4) * 0.6;
+  const yaw = Math.atan2(dz, dx) * 0.4;
+  const chest = humanoid.getNormalizedBoneNode('chest') || humanoid.getNormalizedBoneNode('spine');
+  if (chest) {
+    tmpQ.setFromEuler(new THREE.Euler(0, yaw, roll));
+    chest.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 6));
+  }
+  if (!settings.armSolver) return;
+  applyArmChain(humanoid, 'left', posePoint(p, 1), posePoint(p, 3), posePoint(p, 5), dt);
+  applyArmChain(humanoid, 'right', posePoint(p, 2), posePoint(p, 4), posePoint(p, 6), dt);
+}
+
+function applyArmChain(humanoid, side, shoulder, elbow, wrist, dt) {
+  const upper = tmpA.copy(elbow).sub(shoulder);
+  const lower = tmpB.copy(wrist).sub(elbow);
+  const reach = tmpC.copy(wrist).sub(shoulder);
+  if (upper.length() < 0.04 || lower.length() < 0.04 || reach.length() < 0.08) return;
+  const upperArm = humanoid.getNormalizedBoneNode(`${side}UpperArm`);
+  const lowerArm = humanoid.getNormalizedBoneNode(`${side}LowerArm`);
+  if (upperArm) {
+    tmpQ.setFromUnitVectors(BONE_DOWN, upper.normalize());
+    upperArm.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 10));
+  }
+  if (lowerArm) {
+    tmpQ.setFromUnitVectors(BONE_DOWN, lower.normalize());
+    lowerArm.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 12));
+  }
+}
+
+function posePoint(points, index) {
+  return new THREE.Vector3(points[index * 3], points[index * 3 + 1], points[index * 3 + 2]);
+}
+
+function smoothstep(value) {
+  return value * value * (3 - 2 * value);
 }
 
 // Signed gaze from the four eye-look channel pairs. Positive x = look left
@@ -414,6 +457,7 @@ render();
 const params = new URLSearchParams(location.search);
 if (params.get('room')) settings.room = params.get('room');
 if (params.get('token')) settings.token = params.get('token');
+if (params.get('arms') === '0') settings.armSolver = false;
 
 function applySettingsToUi() {
   $('selMode').value = settings.mode;
@@ -422,6 +466,7 @@ function applySettingsToUi() {
   $('inpWtUrl').value = settings.wtUrl;
   $('inpWtHash').value = settings.wtHash;
   $('chkTransparent').checked = Boolean(settings.transparent);
+  $('chkArmSolver').checked = Boolean(settings.armSolver);
   updateModeFields();
   applyBackground();
 }
@@ -433,6 +478,7 @@ function readSettingsFromUi() {
   settings.wtUrl = $('inpWtUrl').value;
   settings.wtHash = $('inpWtHash').value;
   settings.transparent = $('chkTransparent').checked;
+  settings.armSolver = $('chkArmSolver').checked;
   return settings;
 }
 
@@ -463,6 +509,7 @@ $('chkTransparent').addEventListener('change', () => {
   persistSettings();
   applyBackground();
 });
+$('chkArmSolver').addEventListener('change', persistSettings);
 
 $('btnConnect').addEventListener('click', async () => {
   try {

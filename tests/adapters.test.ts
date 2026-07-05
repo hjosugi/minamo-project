@@ -73,7 +73,11 @@ describe('avatar mapper snapshots', () => {
       ]
     `);
     expect(mapKGM1ToVrmLookAt(frame)).toEqual({ yaw: 0.2, pitch: -0.15000000000000002 });
-    expect(mapKGM1HandsToVrmFingers(frame.tracking.hands).length).toBe(5);
+    const fingers = mapKGM1HandsToVrmFingers(frame.tracking.hands);
+    expect(fingers.length).toBe(5);
+    const index = fingers.find((finger) => finger.finger === 'index');
+    expect(index?.proximal).toBeGreaterThanOrEqual(index?.intermediate ?? 0);
+    expect(index?.intermediate).toBeGreaterThanOrEqual(index?.distal ?? 0);
   });
 
   it('maps Live2D and Inochi2D parameters', () => {

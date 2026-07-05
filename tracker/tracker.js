@@ -15,6 +15,9 @@ import {
   FILTER_PRESETS,
   GAZE_CALIBRATION_STEPS,
   GAZE_CALIBRATION_TOTAL_MS,
+  HAND_CALIBRATION_TOTAL_MS,
+  HAND_INFERENCE_INTERVAL_MS,
+  HAND_PROFILE_STORAGE_KEY,
   PROFILE_STORAGE_KEY,
   RESOLUTION_CONSTRAINTS,
   SMOOTHING_GROUPS,
@@ -22,28 +25,38 @@ import {
   WARNING_TAXONOMY,
   BlinkWinkStabilizer,
   DroppedFrameDetector,
+  HandTargetStabilizer,
   HeadPositionStabilizer,
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   TrackingLossSmoother,
   applyCalibrationProfile,
   applyGazeToWeights,
+  applyHandCalibrationProfile,
   buildCalibrationProfileFromSamples,
   buildGazeCalibrationProfile,
+  buildHandCalibrationProfile,
   calibrationGuideProgress,
+  classifyHandGesture,
   clamp,
+  collectHandCalibrationSample,
   collectGazeCalibrationSample,
   computeQualityScore,
   createCalibrationProfile,
   createGazeCalibrationSession,
   createGuidedCalibrationSession,
+  createHandCalibrationProfile,
+  createHandCalibrationSession,
   collectGuidedCalibrationSample,
   defaultFaceLockRegion,
   estimateLandmarkConfidence,
   estimateOneEuroLagMs,
+  handCalibrationProgress,
+  handTargetDebugRows,
   isEditableTarget,
   loadJson,
   mirrorFacePayload,
+  normalizeHandCalibrationProfile,
   normalizeProfile,
   normalizeHeadLeanRangeCm,
   sanitizeWeights,
@@ -79,6 +92,8 @@ const overlay = $('overlay');
 const overlayCtx = overlay.getContext('2d');
 const meters = $('meters');
 const metersCtx = meters.getContext('2d');
+const handDebug = $('handDebug');
+const handDebugCtx = handDebug.getContext('2d');
 const chip = $('statusChip');
 const qualityChip = $('qualityChip');
 const warningList = $('warningList');
@@ -91,6 +106,7 @@ const COLOR_INK = css.getPropertyValue('--ink').trim();
 
 const settings = normalizeTrackerSettings(loadJson(localStorage, TRACKER_STORAGE_KEY, DEFAULT_TRACKER_SETTINGS));
 let profile = normalizeProfile(loadJson(localStorage, PROFILE_STORAGE_KEY, createCalibrationProfile('default')));
+let handProfile = normalizeHandCalibrationProfile(loadJson(localStorage, HAND_PROFILE_STORAGE_KEY, createHandCalibrationProfile('default')));
 let resolvedAssets = null;
 
 const state = {
@@ -112,6 +128,9 @@ const state = {
   hasHands: false,
   hands: [],
   handTargets: null,
+  lastHandResult: null,
+  lastHandInferenceMs: -Infinity,
+  handDebugRows: [],
   trackedFaceBox: null,
   nameToIndex: null, // built from the first MediaPipe result
   // filters
@@ -122,6 +141,7 @@ const state = {
   poseFilter: new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose')),
   handCurlFilter: new OneEuroArray(10, filterOptions('hands')),
   handSpreadFilter: new OneEuroArray(10, filterOptions('hands')),
+  handTargetStabilizer: new HandTargetStabilizer(),
   blinkWinkStabilizer: new BlinkWinkStabilizer(),
   trackingLossSmoother: new TrackingLossSmoother(),
   dropDetector: new DroppedFrameDetector(Number(settings.fps) || 60),
@@ -135,6 +155,7 @@ const state = {
   recording: { enabled: false, lines: [] },
   calibrationSession: null,
   gazeCalibrationSession: null,
+  handCalibrationSession: null,
   meterPointer: { dragging: false, pointerId: null, startX: 0, startY: 0, longPressTimer: null, longPressFired: false },
   // stats
   frames: 0,
@@ -195,6 +216,7 @@ function normalizeTrackerSettings(raw) {
   }
   if (!SMOOTHING_GROUPS[base.smoothingGroup]) base.smoothingGroup = 'face';
   base.headLeanRangeCm = normalizeHeadLeanRangeCm(base.headLeanRangeCm);
+  if (!['seated', 'standing'].includes(base.bodyMode)) base.bodyMode = 'seated';
   base.faceLock = Boolean(base.faceLock);
   if (!raw?.smoothing?.face) {
     smoothing.face = {
@@ -391,6 +413,9 @@ function resetFilters({ resetTrackingLoss = true } = {}) {
   state.poseFilter = new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose'));
   state.handCurlFilter = new OneEuroArray(10, filterOptions('hands'));
   state.handSpreadFilter = new OneEuroArray(10, filterOptions('hands'));
+  state.handTargetStabilizer.reset();
+  state.lastHandResult = null;
+  state.lastHandInferenceMs = -Infinity;
 }
 
 function checkCapabilities() {
@@ -450,8 +475,12 @@ function loop() {
     if (state.poseEnabled && state.poseLandmarker) {
       poseRes = state.poseLandmarker.detectForVideo(video, nowMs);
     }
-    if (state.handsEnabled && state.handLandmarker) {
+    if (state.handsEnabled && state.handLandmarker && nowMs - state.lastHandInferenceMs >= HAND_INFERENCE_INTERVAL_MS) {
       handRes = state.handLandmarker.detectForVideo(video, nowMs);
+      state.lastHandResult = handRes;
+      state.lastHandInferenceMs = nowMs;
+    } else if (state.handsEnabled) {
+      handRes = state.lastHandResult;
     }
     state.inferMs = performance.now() - t0;
 
@@ -537,6 +566,16 @@ function loop() {
         state.posePoints[i * 3 + 1] = -lm.y; // MediaPipe y is down; KGM1 y is up
         state.posePoints[i * 3 + 2] = -lm.z;
       }
+      if (settings.bodyMode === 'seated') {
+        const shoulderX = (state.posePoints[1 * 3 + 0] + state.posePoints[2 * 3 + 0]) * 0.5;
+        const shoulderY = (state.posePoints[1 * 3 + 1] + state.posePoints[2 * 3 + 1]) * 0.5;
+        const shoulderZ = (state.posePoints[1 * 3 + 2] + state.posePoints[2 * 3 + 2]) * 0.5;
+        for (let i = 0; i < NUM_POSE_POINTS; i++) {
+          state.posePoints[i * 3 + 0] -= shoulderX;
+          state.posePoints[i * 3 + 1] -= shoulderY;
+          state.posePoints[i * 3 + 2] -= shoulderZ;
+        }
+      }
       state.poseFilter.filter(state.posePoints, tSec);
       state.hasPose = true;
     }
@@ -544,13 +583,32 @@ function loop() {
     state.hasHands = false;
     state.hands = [];
     state.handTargets = null;
+    state.handDebugRows = [];
     if (handRes && handRes.landmarks && handRes.landmarks.length > 0) {
       state.hasHands = true;
       state.hands = handRes.landmarks;
-      state.handTargets = filterHandTargets(deriveHandTargets(handRes), tSec);
-      if (handRes.landmarks.some((hand) => hand.some((lm) => lm.x < -0.05 || lm.x > 1.05 || lm.y < -0.05 || lm.y > 1.05))) {
-        frameWarnings.push('hand outside frame');
+      const rawHandTargets = filterHandTargets(deriveHandTargets(handRes, state.mirror), tSec);
+      const calibratedHandTargets = applyHandCalibrationProfile(rawHandTargets, handProfile);
+      sampleHandCalibration(rawHandTargets, nowMs);
+      const stableHands = state.handTargetStabilizer.update(calibratedHandTargets, nowMs);
+      state.handTargets = stableHands.targets.length ? stableHands.targets : null;
+      state.handDebugRows = handTargetDebugRows(state.handTargets || calibratedHandTargets);
+      frameWarnings.push(...stableHands.warnings);
+      if (stableHands.warnings.some((warning) => warning.startsWith('HAND_CURL_CLAMPED') || warning.startsWith('HAND_SPREAD_CLAMPED'))) {
+        frameWarnings.push('HAND_FAST_MOTION_BLUR');
       }
+      for (const target of state.handTargets || []) {
+        if ((target.confidence ?? 1) < 0.45) frameWarnings.push('HAND_LOW_CONFIDENCE');
+        if (target.gesture?.drumGrip) frameWarnings.push('HAND_DRUM_GRIP');
+      }
+      if (handRes.landmarks.some((hand) => hand.some((lm) => lm.x < -0.05 || lm.x > 1.05 || lm.y < -0.05 || lm.y > 1.05))) {
+        frameWarnings.push('HAND_OUTSIDE_FRAME');
+      }
+    } else {
+      const stableHands = state.handTargetStabilizer.update([], nowMs);
+      state.handTargets = stableHands.targets.length ? stableHands.targets : null;
+      state.handDebugRows = handTargetDebugRows(state.handTargets || []);
+      frameWarnings.push(...stableHands.warnings);
     }
 
     const landmarkConfidence = state.confidenceTracker.sample(estimateLandmarkConfidence(selectedLandmarks), nowMs);
@@ -561,6 +619,8 @@ function loop() {
       fps: state.lastFps || Number($('selFps').value) || 60,
       droppedFrames: state.dropDetector.rollingDropped(2500, nowMs),
     });
+    if (state.handsEnabled && state.quality.warnings.includes(WARNING_TAXONOMY.lowLight)) frameWarnings.push('HAND_LOW_LIGHT');
+    if (state.handsEnabled && state.quality.warnings.includes(WARNING_TAXONOMY.motionBlur)) frameWarnings.push('HAND_FAST_MOTION_BLUR');
     state.warnings = [...new Set([...frameWarnings, ...state.quality.warnings])];
 
     // --- encode and send
@@ -580,11 +640,13 @@ function loop() {
 
     drawOverlay(faceRes, poseRes, handRes, faceIndex);
     drawMeters();
+    drawHandDebug();
     state.frames++;
   }
 
   tickGuidedCalibration();
   tickGazeCalibration();
+  tickHandCalibration();
   updateStats(nowMs);
   requestAnimationFrame(loop);
 }
@@ -658,16 +720,26 @@ const HAND_CHAINS = [
   [17, 18, 19, 20],
 ];
 
-function deriveHandTargets(handRes) {
+function deriveHandTargets(handRes, mirror = false) {
   return handRes.landmarks.slice(0, 2).map((landmarks, handIndex) => {
-    const handedness = handRes.handedness?.[handIndex]?.[0]?.categoryName === 'Left' ? 'Left' : 'Right';
+    const rawHandedness = handRes.handedness?.[handIndex]?.[0]?.categoryName === 'Left' ? 'Left' : 'Right';
+    const handedness = mirror ? (rawHandedness === 'Left' ? 'Right' : 'Left') : rawHandedness;
     const middle = fingerVector(landmarks, HAND_CHAINS[2]);
-    return {
+    const worldWrist = handRes.worldLandmarks?.[handIndex]?.[0];
+    const screenWrist = landmarks[0];
+    const wrist = worldWrist
+      ? [(mirror ? -1 : 1) * worldWrist.x, -worldWrist.y, -worldWrist.z]
+      : [(mirror ? -1 : 1) * (screenWrist.x - 0.5), 0.5 - screenWrist.y, -screenWrist.z];
+    const target = {
+      flags: 0,
       handedness,
       confidence: handRes.handedness?.[handIndex]?.[0]?.score ?? 1,
       curls: HAND_CHAINS.map((chain) => fingerCurl(landmarks, chain)),
       spreads: HAND_CHAINS.map((chain) => fingerSpread(landmarks, chain, middle)),
+      wrist,
     };
+    target.gesture = classifyHandGesture(target);
+    return target;
   });
 }
 
@@ -715,6 +787,45 @@ function angle(a, b, c) {
   const denom = Math.hypot(ab.x, ab.y, ab.z) * Math.hypot(cb.x, cb.y, cb.z) || 1;
   const dot = (ab.x * cb.x + ab.y * cb.y + ab.z * cb.z) / denom;
   return Math.acos(Math.max(-1, Math.min(1, dot)));
+}
+
+function drawHandDebug() {
+  const dpr = window.devicePixelRatio || 1;
+  const cw = handDebug.clientWidth, ch = handDebug.clientHeight;
+  if (handDebug.width !== cw * dpr) { handDebug.width = cw * dpr; handDebug.height = ch * dpr; }
+  const ctx = handDebugCtx;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.fillStyle = '#0b0e1a';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.font = '10px "IBM Plex Mono", monospace';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = COLOR_DIM;
+  ctx.fillText('hand finger debug', 8, 12);
+
+  const rows = state.handDebugRows.slice(0, 10);
+  if (!rows.length) {
+    ctx.fillText('enable hands to inspect curls, spreads, confidence, and gestures', 8, ch / 2);
+    return;
+  }
+  const labelW = 116;
+  const barW = Math.max(40, cw - labelW - 62);
+  const rowH = Math.max(16, (ch - 24) / rows.length);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const y = 24 + i * rowH + rowH / 2;
+    const curl = clamp(row.curl);
+    ctx.fillStyle = row.recovered ? 'rgba(255,196,107,0.18)' : i % 2 ? 'rgba(255,255,255,0.03)' : 'transparent';
+    ctx.fillRect(0, 24 + i * rowH, cw, rowH);
+    ctx.fillStyle = COLOR_DIM;
+    ctx.fillText(`${row.handedness[0]} ${row.finger}`, 8, y);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(labelW, y - 3, barW, 6);
+    ctx.fillStyle = row.confidence < 0.45 ? 'rgba(255,141,122,0.9)' : COLOR_POSE;
+    ctx.fillRect(labelW, y - 3, barW * curl, 6);
+    ctx.fillStyle = COLOR_INK;
+    ctx.fillText(`${curl.toFixed(2)} ${row.gesture}`, labelW + barW + 8, y);
+  }
 }
 
 function drawMeters() {
@@ -881,6 +992,7 @@ function applySettingsToUi() {
   $('selFps').value = settings.fps;
   $('rngHeadLean').value = settings.headLeanRangeCm;
   $('outHeadLean').textContent = `${settings.headLeanRangeCm} cm`;
+  $('selBodyMode').value = settings.bodyMode;
   $('selSmoothingGroup').value = settings.smoothingGroup;
   updateSmoothingControls();
   state.mirror = Boolean(settings.mirror);
@@ -907,6 +1019,7 @@ function readSettingsFromUi() {
   settings.resolution = $('selResolution').value;
   settings.fps = $('selFps').value;
   settings.headLeanRangeCm = normalizeHeadLeanRangeCm($('rngHeadLean').value);
+  settings.bodyMode = $('selBodyMode').value === 'standing' ? 'standing' : 'seated';
   $('outHeadLean').textContent = `${settings.headLeanRangeCm} cm`;
   readSmoothingFromUi();
   return settings;
@@ -1126,6 +1239,81 @@ function cancelGazeCalibration(message = 'gaze calibration cancelled') {
   $('gazeCalibrationProgress').value = '0';
 }
 
+function startHandCalibration() {
+  if (!state.running || !state.handsEnabled) {
+    chip.textContent = 'enable hands before hand calibration';
+    chip.dataset.state = 'error';
+    return;
+  }
+  state.handCalibrationSession = createHandCalibrationSession(`hand-${new Date().toISOString()}`, performance.now());
+  $('btnStartHandCalibration').disabled = true;
+  $('handCalibrationGuide').hidden = false;
+  $('handCalibrationResult').textContent = 'collecting hand samples';
+  updateHandCalibrationUi({
+    elapsedMs: 0,
+    totalMs: HAND_CALIBRATION_TOTAL_MS,
+    step: { label: 'Open palm' },
+    progress: 0,
+  });
+  chip.textContent = 'hand calibration';
+  chip.dataset.state = 'idle';
+}
+
+function sampleHandCalibration(handTargets, nowMs = performance.now()) {
+  if (!state.handCalibrationSession) return;
+  const progress = collectHandCalibrationSample(state.handCalibrationSession, handTargets, nowMs);
+  updateHandCalibrationUi(progress);
+  if (progress.done) finishHandCalibration();
+}
+
+function tickHandCalibration() {
+  if (!state.handCalibrationSession) return;
+  const progress = handCalibrationProgress(state.handCalibrationSession.startedAtMs, performance.now());
+  updateHandCalibrationUi(progress);
+  if (progress.done) finishHandCalibration();
+}
+
+function updateHandCalibrationUi(progress) {
+  $('handCalibrationStep').textContent = progress.step?.label || 'Open palm';
+  $('handCalibrationTime').textContent = `${Math.max(0, (progress.totalMs - progress.elapsedMs) / 1000).toFixed(1)}s`;
+  $('handCalibrationProgress').value = String(progress.progress || 0);
+}
+
+function finishHandCalibration() {
+  const session = state.handCalibrationSession;
+  if (!session) return;
+  state.handCalibrationSession = null;
+  $('btnStartHandCalibration').disabled = false;
+
+  if (session.openSamples.length === 0 || session.fistSamples.length === 0) {
+    $('handCalibrationResult').textContent = 'hand calibration failed: need open palm and fist samples';
+    chip.textContent = 'hand calibration failed';
+    chip.dataset.state = 'error';
+    return;
+  }
+
+  handProfile = buildHandCalibrationProfile({
+    openSamples: session.openSamples,
+    fistSamples: session.fistSamples,
+    rangeSamples: session.rangeSamples,
+    name: session.name,
+  });
+  saveJson(localStorage, HAND_PROFILE_STORAGE_KEY, handProfile);
+  state.handTargetStabilizer.reset();
+  $('handCalibrationResult').textContent = `saved ${session.openSamples.length} open / ${session.fistSamples.length} fist samples`;
+  chip.textContent = 'hand calibration saved';
+  chip.dataset.state = 'open';
+}
+
+function cancelHandCalibration(message = 'hand calibration cancelled') {
+  if (!state.handCalibrationSession) return;
+  state.handCalibrationSession = null;
+  $('btnStartHandCalibration').disabled = false;
+  $('handCalibrationResult').textContent = message;
+  $('handCalibrationTime').textContent = `${(HAND_CALIBRATION_TOTAL_MS / 1000).toFixed(1)}s`;
+  $('handCalibrationProgress').value = '0';
+}
+
 async function restartCameraIfRunning() {
   persistSettings();
   if (state.running) {
@@ -1264,6 +1452,7 @@ $('btnStop').addEventListener('click', () => {
   state.running = false;
   cancelGuidedCalibration('calibration stopped');
   cancelGazeCalibration('gaze calibration stopped');
+  cancelHandCalibration('hand calibration stopped');
   if (video.srcObject) {
     for (const t of video.srcObject.getTracks()) t.stop();
     video.srcObject = null;
@@ -1316,6 +1505,7 @@ $('selCamera').addEventListener('change', restartCameraIfRunning);
 $('selResolution').addEventListener('change', restartCameraIfRunning);
 $('selFps').addEventListener('change', restartCameraIfRunning);
 $('rngHeadLean').addEventListener('input', persistSettings);
+$('selBodyMode').addEventListener('change', persistSettings);
 
 $('selMode').addEventListener('change', () => {
   updateModeFields();
@@ -1373,6 +1563,7 @@ $('btnMuteChannel').addEventListener('click', () => {
 });
 $('btnStartCalibration').addEventListener('click', startGuidedCalibration);
 $('btnStartGazeCalibration').addEventListener('click', startGazeCalibration);
+$('btnStartHandCalibration').addEventListener('click', startHandCalibration);
 $('btnCalibrateNeutral').addEventListener('click', () => {
   profile.offsets = Array.from(state.raw);
   profile.createdAt = new Date().toISOString();
@@ -1405,10 +1596,13 @@ $('fileProfile').addEventListener('change', async (e) => {
 $('btnResetSettings').addEventListener('click', () => {
   cancelGuidedCalibration('calibration reset');
   cancelGazeCalibration('gaze calibration reset');
+  cancelHandCalibration('hand calibration reset');
   Object.assign(settings, normalizeTrackerSettings(DEFAULT_TRACKER_SETTINGS));
   profile = createCalibrationProfile('default');
+  handProfile = createHandCalibrationProfile('default');
   saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
   saveProfile();
+  saveJson(localStorage, HAND_PROFILE_STORAGE_KEY, handProfile);
   applySettingsToUi();
   resetFilters();
   chip.textContent = 'settings reset';

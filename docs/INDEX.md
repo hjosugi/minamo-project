@@ -71,6 +71,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [SECURITY_REVIEW.md](SECURITY_REVIEW.md)
 - [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 - [benchmarks/quality-gates.md](benchmarks/quality-gates.md)
+- [benchmarks/hand-stability-report.md](benchmarks/hand-stability-report.md)
 - [dev/implementation-order.md](dev/implementation-order.md)
 - [ml/model-roadmap-yolo-edge.md](ml/model-roadmap-yolo-edge.md)
 - [security/privacy.md](security/privacy.md)

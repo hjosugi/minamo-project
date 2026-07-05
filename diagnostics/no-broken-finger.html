@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minamo No-broken-finger Diagnostic</title>
+  <link rel="stylesheet" href="../assets/minamo.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="wordmark">Minamo</span>
+    <span class="page-name">hand stability</span>
+    <span class="spacer"></span>
+    <span class="status-chip" id="statusChip" data-state="open">synthetic clip</span>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <h2><span class="dot pose"></span>No-broken-finger visual test</h2>
+      <canvas id="fingerCanvas" class="hand-debug-canvas" width="960" height="320"></canvas>
+      <div class="stats">
+        <span>frames <b id="statFrames">0</b></span>
+        <span>clamps <b id="statClamps">0</b></span>
+        <span>max step <b id="statMaxStep">0</b></span>
+        <span>final <b id="statFinal">idle</b></span>
+      </div>
+      <ul class="warning-list" id="warningList"></ul>
+    </section>
+  </main>
+
+  <script type="module" src="./no-broken-finger.js"></script>
+</body>
+</html>

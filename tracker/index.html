@@ -63,6 +63,13 @@
           <input type="range" id="rngHeadLean" min="0" max="20" step="0.5" value="8" />
           <output id="outHeadLean">8 cm</output>
         </div>
+        <div class="field">
+          <span>body mode</span>
+          <select id="selBodyMode">
+            <option value="seated" selected>seated</option>
+            <option value="standing">standing</option>
+          </select>
+        </div>
       </div>
       <div class="stats">
         <span>fps <b id="statFps">--</b></span>
@@ -75,6 +82,7 @@
         <span>hands <b id="statHands">0</b></span>
         <span>dropped <b id="statDropped">0</b></span>
       </div>
+      <canvas id="handDebug" class="hand-debug-canvas" aria-label="Hand finger debug graph"></canvas>
       <ul class="warning-list" id="warningList"></ul>
       <div class="signal-checklist" aria-label="Camera exposure and lighting checklist">
         <div class="check-title">lighting checklist</div>
@@ -139,6 +147,7 @@
         <button id="btnMuteChannel">Mute channel</button>
         <button id="btnStartCalibration">Start guided calibration</button>
         <button id="btnStartGazeCalibration">Start gaze calibration</button>
+        <button id="btnStartHandCalibration">Start hand calibration</button>
         <button id="btnCalibrateNeutral">Capture neutral</button>
         <button id="btnExportProfile">Export profile</button>
         <button id="btnImportProfile">Import profile</button>
@@ -160,6 +169,14 @@
         </div>
         <progress id="gazeCalibrationProgress" max="1" value="0"></progress>
         <output id="gazeCalibrationResult">waiting</output>
+      </div>
+      <div id="handCalibrationGuide" class="calibration-guide" hidden>
+        <div class="calibration-guide-head">
+          <strong id="handCalibrationStep">Open palm</strong>
+          <span id="handCalibrationTime">10.0s</span>
+        </div>
+        <progress id="handCalibrationProgress" max="1" value="0"></progress>
+        <output id="handCalibrationResult">waiting</output>
       </div>
     </section>
 

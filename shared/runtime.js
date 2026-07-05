@@ -42,6 +42,17 @@ export const DEFAULT_SMOOTHING_SETTINGS = Object.freeze({
   hands: Object.freeze({ filterPreset: 'balanced', minCutoff: 1.8, beta: 0.5 }),
 });
 
+export const HAND_FINGER_NAMES = Object.freeze(['thumb', 'index', 'middle', 'ring', 'pinky']);
+export const HAND_INFERENCE_INTERVAL_MS = 1000 / 30;
+export const HAND_PROFILE_STORAGE_KEY = 'minamo.hand.profile.v1';
+export const HAND_CALIBRATION_STEPS = Object.freeze([
+  Object.freeze({ id: 'open', label: 'Open palm', kind: 'open', durationMs: 2500 }),
+  Object.freeze({ id: 'fist', label: 'Make a fist', kind: 'fist', durationMs: 2500 }),
+  Object.freeze({ id: 'point', label: 'Point index', kind: 'range', durationMs: 2500 }),
+  Object.freeze({ id: 'drum-grip', label: 'Drum grip', kind: 'range', durationMs: 2500 }),
+]);
+export const HAND_CALIBRATION_TOTAL_MS = HAND_CALIBRATION_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
+
 export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   mode: 'local',
   room: 'demo',
@@ -56,6 +67,7 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   resolution: '720p',
   fps: '60',
   headLeanRangeCm: 8,
+  bodyMode: 'seated',
   filterPreset: 'balanced',
   minCutoff: FILTER_PRESETS.balanced.minCutoff,
   beta: FILTER_PRESETS.balanced.beta,
@@ -71,6 +83,7 @@ export const DEFAULT_VIEWER_SETTINGS = Object.freeze({
   wtUrl: 'https://localhost:4433',
   wtHash: '',
   transparent: false,
+  armSolver: true,
 });
 
 export const RESOLUTION_CONSTRAINTS = Object.freeze({
@@ -376,6 +389,186 @@ export class TrackingLossSmoother {
     this.lastWeights.set(out);
     return { weights: out, active: t < 1, reacquired: false, phase: 'lost' };
   }
+}
+
+export class HandTargetStabilizer {
+  constructor({ holdMs = 250, maxCurlDelta = 0.24, maxSpreadDelta = 0.36 } = {}) {
+    this.holdMs = holdMs;
+    this.maxCurlDelta = maxCurlDelta;
+    this.maxSpreadDelta = maxSpreadDelta;
+    this.previous = new Map();
+    this.lastSeenMs = null;
+  }
+
+  reset() {
+    this.previous.clear();
+    this.lastSeenMs = null;
+  }
+
+  update(targets = [], nowMs = performanceNow()) {
+    const warnings = [];
+    if (targets.length) {
+      this.lastSeenMs = nowMs;
+      const next = targets.slice(0, 2).map((target) => {
+        const previous = this.previous.get(target.handedness);
+        const stabilized = stabilizeHandTarget(target, previous, this.maxCurlDelta, this.maxSpreadDelta, warnings);
+        this.previous.set(stabilized.handedness, stabilized);
+        return stabilized;
+      });
+      for (const key of Array.from(this.previous.keys())) {
+        if (!next.some((target) => target.handedness === key)) this.previous.delete(key);
+      }
+      return { targets: next, active: true, warnings };
+    }
+
+    if (this.lastSeenMs !== null && nowMs - this.lastSeenMs <= this.holdMs && this.previous.size) {
+      const age = nowMs - this.lastSeenMs;
+      const confidenceScale = clamp(1 - age / this.holdMs);
+      warnings.push('HAND_RECOVERY_HOLD');
+      return {
+        targets: Array.from(this.previous.values()).map((target) => ({
+          ...target,
+          confidence: clamp((target.confidence ?? 1) * confidenceScale),
+          flags: (target.flags || 0) | 0x02,
+        })),
+        active: true,
+        warnings,
+      };
+    }
+
+    this.previous.clear();
+    return { targets: [], active: false, warnings };
+  }
+}
+
+export function createHandCalibrationProfile(name = 'default') {
+  return {
+    schema: 'minamo.hand-calibration.v1',
+    name,
+    createdAt: new Date().toISOString(),
+    openCurls: Array(HAND_FINGER_NAMES.length).fill(0),
+    fistCurls: Array(HAND_FINGER_NAMES.length).fill(1),
+    spreadOffsets: Array(HAND_FINGER_NAMES.length).fill(0),
+  };
+}
+
+export function normalizeHandCalibrationProfile(profile) {
+  const base = createHandCalibrationProfile(profile?.name || 'default');
+  if (!profile || typeof profile !== 'object' || (profile.schema && profile.schema !== base.schema)) return base;
+  base.createdAt = typeof profile.createdAt === 'string' ? profile.createdAt : base.createdAt;
+  base.openCurls = normalizeHandArray(profile.openCurls, 0, 0, 1);
+  base.fistCurls = normalizeHandArray(profile.fistCurls, 1, 0, 1);
+  base.spreadOffsets = normalizeHandArray(profile.spreadOffsets, 0, -1.5, 1.5);
+  for (let i = 0; i < HAND_FINGER_NAMES.length; i++) {
+    if (base.fistCurls[i] - base.openCurls[i] < 0.12) {
+      base.openCurls[i] = 0;
+      base.fistCurls[i] = 1;
+    }
+  }
+  return base;
+}
+
+export function createHandCalibrationSession(name = 'hand-guided', startedAtMs = performanceNow()) {
+  return {
+    schema: 'minamo.hand-calibration.session.v1',
+    name,
+    startedAtMs,
+    openSamples: [],
+    fistSamples: [],
+    rangeSamples: [],
+  };
+}
+
+export function handCalibrationProgress(startedAtMs, nowMs = performanceNow()) {
+  return calibrationGuideProgress(startedAtMs, nowMs, HAND_CALIBRATION_STEPS);
+}
+
+export function collectHandCalibrationSample(session, handTargets = [], nowMs = performanceNow()) {
+  const progress = handCalibrationProgress(session.startedAtMs, nowMs);
+  if (progress.done) return progress;
+  const sample = handTargets[0] ? handTargetSample(handTargets[0]) : null;
+  if (!sample) return progress;
+  if (progress.step.kind === 'open') session.openSamples.push(sample);
+  else if (progress.step.kind === 'fist') session.fistSamples.push(sample);
+  else session.rangeSamples.push(sample);
+  return progress;
+}
+
+export function buildHandCalibrationProfile({
+  openSamples = [],
+  fistSamples = [],
+  rangeSamples = [],
+  name = 'hand-guided',
+  createdAt = new Date().toISOString(),
+} = {}) {
+  const profile = createHandCalibrationProfile(name);
+  profile.createdAt = createdAt;
+  for (let i = 0; i < HAND_FINGER_NAMES.length; i++) {
+    const openValues = openSamples.map((sample) => sample.curls[i]).filter(Number.isFinite);
+    const fistValues = fistSamples.map((sample) => sample.curls[i]).filter(Number.isFinite);
+    const spreadValues = [...openSamples, ...rangeSamples].map((sample) => sample.spreads[i]).filter(Number.isFinite);
+    profile.openCurls[i] = openValues.length ? percentile(openValues, 0.25) : 0;
+    profile.fistCurls[i] = fistValues.length ? percentile(fistValues, 0.75) : 1;
+    profile.spreadOffsets[i] = spreadValues.length ? average(spreadValues) : 0;
+    if (profile.fistCurls[i] - profile.openCurls[i] < 0.12) {
+      profile.openCurls[i] = 0;
+      profile.fistCurls[i] = 1;
+    }
+  }
+  return normalizeHandCalibrationProfile(profile);
+}
+
+export function applyHandCalibrationProfile(targets = [], profile = createHandCalibrationProfile()) {
+  const p = normalizeHandCalibrationProfile(profile);
+  return targets.map((target) => {
+    const curls = HAND_FINGER_NAMES.map((_, i) => {
+      const raw = Number(target.curls?.[i] || 0);
+      return clamp((raw - p.openCurls[i]) / Math.max(0.12, p.fistCurls[i] - p.openCurls[i]));
+    });
+    const spreads = HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.spreads?.[i] || 0) - p.spreadOffsets[i], -1.5, 1.5));
+    const next = { ...target, curls, spreads, flags: (target.flags || 0) | 0x01 };
+    next.gesture = classifyHandGesture(next);
+    return next;
+  });
+}
+
+export function classifyHandGesture(target = {}) {
+  const curls = HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.curls?.[i] || 0)));
+  const extended = curls.map((curl) => curl < 0.35);
+  const curled = curls.map((curl) => curl > 0.65);
+  const fingerCount = extended.filter(Boolean).length;
+  const point = extended[1] && curled[2] && curled[3] && curled[4];
+  const peace = extended[1] && extended[2] && curled[3] && curled[4];
+  const openPalm = fingerCount >= 4;
+  const fist = curled.filter(Boolean).length >= 4;
+  const drumGrip = curls[1] > 0.35 && curls[1] < 0.82
+    && curls[2] > 0.42 && curls[2] < 0.92
+    && curls[3] > 0.42 && curls[3] < 0.95
+    && curls[0] < 0.75;
+  return {
+    fingerCount,
+    openPalm,
+    fist,
+    point,
+    peace,
+    drumGrip,
+    label: point ? 'point' : peace ? 'peace' : drumGrip ? 'drum grip' : openPalm ? 'open' : fist ? 'fist' : `${fingerCount}`,
+  };
+}
+
+export function handTargetDebugRows(targets = []) {
+  return targets.flatMap((target) => {
+    const gesture = target.gesture || classifyHandGesture(target);
+    return HAND_FINGER_NAMES.map((name, i) => ({
+      handedness: target.handedness,
+      finger: name,
+      curl: clamp(Number(target.curls?.[i] || 0)),
+      spread: clamp(Number(target.spreads?.[i] || 0), -1.5, 1.5),
+      confidence: clamp(Number(target.confidence ?? 1)),
+      gesture: gesture.label,
+      recovered: Boolean((target.flags || 0) & 0x02),
+    }));
+  });
 }
 
 export function normalizeHeadLeanRangeCm(value) {
@@ -918,13 +1111,55 @@ function normalizeHand(hand) {
     handedness: hand?.handedness === 'Right' ? 'Right' : 'Left',
     confidence: clampOptionalNumber(hand?.confidence, 1),
     curls: Array.isArray(hand?.curls) ? hand.curls.slice(0, 5).map((v) => clampOptionalNumber(v, 0)) : [],
-    spreads: Array.isArray(hand?.spreads) ? hand.spreads.slice(0, 5).map((v) => clampOptionalNumber(v, 0, -1, 1)) : [],
+    spreads: Array.isArray(hand?.spreads) ? hand.spreads.slice(0, 5).map((v) => clampOptionalNumber(v, 0, -1.5, 1.5)) : [],
+    wrist: Array.isArray(hand?.wrist) ? hand.wrist.slice(0, 3).map((v) => clampOptionalNumber(v, 0, -1, 1)) : [0, 0, 0],
+    flags: Number.isInteger(hand?.flags) ? hand.flags & 0xff : 0,
   };
 }
 
 function clampOptionalNumber(value, fallback, min = 0, max = 1) {
   const n = Number(value);
   return Number.isFinite(n) ? clamp(n, min, max) : fallback;
+}
+
+function normalizeHandArray(values, fallback, min, max) {
+  const out = Array(HAND_FINGER_NAMES.length).fill(fallback);
+  if (!Array.isArray(values)) return out;
+  for (let i = 0; i < out.length; i++) out[i] = clampOptionalNumber(values[i], fallback, min, max);
+  return out;
+}
+
+function handTargetSample(target) {
+  if (!target || !Array.isArray(target.curls) || !Array.isArray(target.spreads)) return null;
+  return {
+    curls: HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.curls[i] || 0))),
+    spreads: HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.spreads[i] || 0), -1.5, 1.5)),
+  };
+}
+
+function stabilizeHandTarget(target, previous, maxCurlDelta, maxSpreadDelta, warnings) {
+  const next = {
+    ...target,
+    curls: HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.curls?.[i] || 0))),
+    spreads: HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.spreads?.[i] || 0), -1.5, 1.5)),
+    wrist: Array.isArray(target.wrist) ? target.wrist.slice(0, 3).map((v) => clampOptionalNumber(v, 0, -1, 1)) : [0, 0, 0],
+  };
+  if (previous) {
+    for (let i = 0; i < HAND_FINGER_NAMES.length; i++) {
+      const curl = limitDelta(next.curls[i], previous.curls?.[i] ?? next.curls[i], maxCurlDelta);
+      const spread = limitDelta(next.spreads[i], previous.spreads?.[i] ?? next.spreads[i], maxSpreadDelta);
+      if (curl !== next.curls[i]) warnings.push(`HAND_CURL_CLAMPED:${next.handedness}:${HAND_FINGER_NAMES[i]}`);
+      if (spread !== next.spreads[i]) warnings.push(`HAND_SPREAD_CLAMPED:${next.handedness}:${HAND_FINGER_NAMES[i]}`);
+      next.curls[i] = curl;
+      next.spreads[i] = spread;
+    }
+  }
+  next.gesture = classifyHandGesture(next);
+  return next;
+}
+
+function limitDelta(value, previous, maxDelta) {
+  return previous + clamp(value - previous, -maxDelta, maxDelta);
 }
 
 export function loadJson(storage, key, fallback) {

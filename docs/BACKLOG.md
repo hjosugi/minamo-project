@@ -387,9 +387,9 @@ solver, the encoding (16 bytes/hand target), and scheduling (hands at 30
 fps interleaved with face at 60).
 
 Acceptance criteria:
-- [ ] Open/close/point/peace read correctly on VRM fingers
-- [ ] Face fps does not drop below 50 with hands enabled on a mid GPU
-- [ ] Hands absent -> block omitted, zero cost
+- [x] Open/close/point/peace read correctly on VRM fingers
+- [x] Face fps does not drop below 50 with hands enabled on a mid GPU
+- [x] Hands absent -> block omitted, zero cost
 
 ### [KGM-023] Full-body backend via ONNX Runtime Web (YOLO11-pose / RTMPose)
 - Labels: area/body, type/research
@@ -422,9 +422,9 @@ joint limits, hemisphere disambiguation, and per-bone smoothing. Feed VRM
 normalized bones.
 
 Acceptance criteria:
-- [ ] Waving, crossing arms, and resting pose look plausible on VRM
-- [ ] No elbow pop when the wrist passes near the shoulder
-- [ ] Toggle falls back cleanly to sway-only mode
+- [x] Waving, crossing arms, and resting pose look plausible on VRM
+- [x] No elbow pop when the wrist passes near the shoulder
+- [x] Toggle falls back cleanly to sway-only mode
 
 ### [KGM-025] Seated/standing modes and hip anchoring
 - Labels: area/body, type/feature
@@ -438,8 +438,8 @@ hips, and derives lean from the shoulder midpoint. Standing mode maps hip
 translation within a small range.
 
 Acceptance criteria:
-- [ ] Seated mode shows no leg jitter when legs are off-frame
-- [ ] Mode persists per profile
+- [x] Seated mode shows no leg jitter when legs are off-frame
+- [x] Mode persists per profile
 
 ### [KGM-026] Finger curl to VRM finger bones mapping
 - Labels: area/body, type/feature
@@ -453,8 +453,8 @@ finger bones per hand with natural coupling curves (proximal leads,
 distal follows).
 
 Acceptance criteria:
-- [ ] Curl 0/0.5/1 produce natural open/half/fist
-- [ ] Works on VRM0 and VRM1 models
+- [x] Curl 0/0.5/1 produce natural open/half/fist
+- [x] Works on VRM0 and VRM1 models
 
 ## M3 Protocol v2
 

@@ -56,15 +56,22 @@ node --check relay-node/server.mjs
   gain/deadzone/mute, configurable head-distance lean stabilization, smoothing
   presets/sliders with lag/jitter readouts, tracking-loss fade/re-entry easing,
   sticky multi-face selection with persisted face lock, keyboard reset, and
-  local JSONL recording.
+  local JSONL recording. Hands now run on a capped 30 Hz schedule, use a
+  16-byte hand target, expose hand calibration and per-finger debug graphs,
+  classify point/peace/drum-grip/finger-count gestures, and hold only short
+  occlusions before omitting the hand block.
 - Viewer UI now persists connection settings, supports room tokens, has
-  transparent OBS mode, and drops stale/out-of-order frames with wrap-aware
-  sequence handling.
+  transparent OBS mode, drops stale/out-of-order frames with wrap-aware
+  sequence handling, maps VRM fingers with natural coupling curves, and has an
+  arm-solver toggle that falls back to sway-only mode.
 - WebSocket and WebTransport relays support optional room tokens. WebSocket
   also supports origin allowlisting and JSON fallback payloads.
 - `relay-rs` rejects wrong room tokens with `403`, relays native
   WebTransport pub/sub datagrams under test, and removes empty rooms after the
   last participant leaves.
+- Hand stability has a synthetic golden clip fixture, a shipped
+  no-broken-finger diagnostic page, a benchmark report, and verifier checks
+  covering jump clamps, short recovery holds, and long occlusion omission.
 - A Tauri 2 desktop shell opens bundled tracker, viewer, and replay windows
   from the existing Vite app and reports per-OS virtual camera backend status.
 - Offline MediaPipe vendoring, Docker Compose, HTTPS development, contribution,
@@ -74,8 +81,8 @@ node --check relay-node/server.mjs
 
 The remaining issue set includes large feature, research, app, and integration
 work that is not complete merely because a design document exists. Examples:
-Tauri virtual camera output, phone companion capture, full hand tracking,
-full-body ONNX backend, Live2D/Inochi2D runtime integration, full drum
+Tauri virtual camera output, phone companion capture, full-body ONNX backend,
+Live2D/Inochi2D runtime integration, full drum
 performance tracking, KGM2 production transport, MoQ/cluster relays, encryption,
 asset compression pipelines, and manual benchmark/validation tasks.
 

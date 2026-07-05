@@ -47,7 +47,7 @@ outputs into this order by name. Channels a model cannot produce are 0.
 Point order: nose, leftShoulder, rightShoulder, leftElbow, rightElbow,
 leftWrist, rightWrist (`POSE_POINTS` in `shared/blendshapes.js`).
 
-### HANDS block (1 + 12 bytes/hand, present if bit 2 set)
+### HANDS block (1 + 16 bytes/hand, present if bit 2 set)
 
 This is the compact hand target block used by the browser tracker/viewer path.
 It carries avatar-ready finger targets rather than raw landmarks.
@@ -55,10 +55,12 @@ It carries avatar-ready finger targets rather than raw landmarks.
 | Size | Type | Field | Notes |
 |---|---|---|---|
 | 1 | u8 | hand count | 0-2 |
+| 1 | u8 | flags | bit 0 calibrated, bit 1 short recovery hold |
 | 1 | u8 | handedness | 0 = Left, 1 = Right |
 | 1 | u8 | confidence | `round(v * 255)`, v in [0, 1] |
 | 5 | u8 x5 | finger curls | thumb, index, middle, ring, pinky |
 | 5 | i8 x5 | finger spreads | radians-ish, `round(v * 64)`, clamped |
+| 3 | i8 x3 | wrist target | compact normalized wrist x/y/z, `round(v * 127)` |
 
 Finger curl is normalized open-to-fist in `[0, 1]`. Spread is signed relative
 to the middle finger. Rich per-joint, pinch, contact, and occlusion state is
@@ -82,7 +84,7 @@ smallest runtime target needed to drive VRM fingers.
 |---|---|---|---|
 | FACE | 76 | 2.3 KB/s | 4.6 KB/s |
 | FACE + POSE | 119 | 3.6 KB/s | 7.1 KB/s |
-| FACE + HANDS x2 | 101 | 3.0 KB/s | 6.1 KB/s |
+| FACE + HANDS x2 | 109 | 3.2 KB/s | 6.4 KB/s |
 
 For comparison, streaming the webcam video for remote tracking would cost
 about 1-3 MB/s. Parametric motion is roughly 400x smaller.

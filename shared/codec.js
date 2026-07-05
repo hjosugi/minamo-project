@@ -16,10 +16,11 @@ export const HEADER_BYTES = 10;
 export const FACE_BYTES = 4 * 2 + 3 * 2 + NUM_CHANNELS; // quat + pos + weights = 66
 export const POSE_BYTES = 1 + NUM_POSE_POINTS * 3 * 2;  // count + points = 43
 export const HAND_FINGER_COUNT = 5;
-export const HAND_TARGET_BYTES = 2 + HAND_FINGER_COUNT + HAND_FINGER_COUNT; // handedness + confidence + curls + spreads
+export const HAND_TARGET_BYTES = 16; // flags + handedness + confidence + curls + spreads + wrist xyz
 
 const QUAT_SCALE = 32767;   // i16 full range for [-1, 1]
 const POS_SCALE = 1000;     // meters -> millimeters, i16 (+-32.7 m range)
+const HAND_WRIST_SCALE = 127; // normalized compact wrist target, i8
 
 function clampI16(v) {
   return Math.max(-32768, Math.min(32767, Math.round(v)));
@@ -29,7 +30,7 @@ function clampU8(v) {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-/** @typedef {{ handedness: string, confidence?: number, curls?: ArrayLike<number>, spreads?: ArrayLike<number> }} HandTarget */
+/** @typedef {{ flags?: number, handedness: string, confidence?: number, curls?: ArrayLike<number>, spreads?: ArrayLike<number>, wrist?: ArrayLike<number> }} HandTarget */
 /** @typedef {{ quat: ArrayLike<number>, pos: ArrayLike<number>, weights: ArrayLike<number> }} FaceBlock */
 /** @typedef {{ points: ArrayLike<number> }} PoseBlock */
 /** @typedef {{ t: number, seq: number, face?: FaceBlock | null, pose?: PoseBlock | null, hands?: HandTarget[] | null }} KgmFrame */
@@ -75,10 +76,12 @@ export function encodeFrame(frame) {
     dv.setUint8(o, count); o += 1;
     for (let h = 0; h < count; h++) {
       const hand = frame.hands[h];
+      dv.setUint8(o, (hand.flags || 0) & 0xff); o += 1;
       dv.setUint8(o, hand.handedness === 'Left' ? 0 : 1); o += 1;
       dv.setUint8(o, clampU8((hand.confidence ?? 1) * 255)); o += 1;
       for (let i = 0; i < HAND_FINGER_COUNT; i++) { dv.setUint8(o, clampU8((hand.curls?.[i] ?? 0) * 255)); o += 1; }
       for (let i = 0; i < HAND_FINGER_COUNT; i++) { dv.setInt8(o, Math.max(-128, Math.min(127, Math.round((hand.spreads?.[i] ?? 0) * 64)))); o += 1; }
+      for (let i = 0; i < 3; i++) { dv.setInt8(o, Math.max(-128, Math.min(127, Math.round((hand.wrist?.[i] ?? 0) * HAND_WRIST_SCALE)))); o += 1; }
     }
   }
 
@@ -138,13 +141,16 @@ export function decodeFrame(data) {
       if (buf.byteLength < o + count * HAND_TARGET_BYTES) return null;
       const hands = [];
       for (let h = 0; h < count; h++) {
+        const flags = dv.getUint8(o); o += 1;
         const handedness = dv.getUint8(o) === 0 ? 'Left' : 'Right'; o += 1;
         const confidence = dv.getUint8(o) / 255; o += 1;
         const curls = new Float32Array(HAND_FINGER_COUNT);
         for (let i = 0; i < HAND_FINGER_COUNT; i++) { curls[i] = dv.getUint8(o) / 255; o += 1; }
         const spreads = new Float32Array(HAND_FINGER_COUNT);
         for (let i = 0; i < HAND_FINGER_COUNT; i++) { spreads[i] = dv.getInt8(o) / 64; o += 1; }
-        hands.push({ handedness, confidence, curls, spreads });
+        const wrist = new Float32Array(3);
+        for (let i = 0; i < 3; i++) { wrist[i] = dv.getInt8(o) / HAND_WRIST_SCALE; o += 1; }
+        hands.push({ flags, handedness, confidence, curls, spreads, wrist });
       }
       frame.hands = hands;
     }

@@ -39,6 +39,16 @@ export interface HandSolveInput {
   dtSec?: number;
 }
 
+export interface HandGestureState {
+  fingerCount: number;
+  openPalm: boolean;
+  fist: boolean;
+  point: boolean;
+  peace: boolean;
+  drumGrip: boolean;
+  label: string;
+}
+
 export function landmarkToVec3(lm: Landmark): Vec3 {
   return { x: lm.x, y: lm.y, z: lm.z };
 }
@@ -156,6 +166,34 @@ export function solveHandState(input: HandSolveInput): HandState {
   };
   if (input.worldLandmarks) hand.worldLandmarks = input.worldLandmarks;
   return hand;
+}
+
+export function classifyHandGesture(hand: HandState): HandGestureState {
+  const curls = (Object.keys(FINGER_CHAINS) as FingerName[]).map((name) => hand.fingers[name].curl);
+  const extended = curls.map((curl) => curl < 0.35);
+  const curled = curls.map((curl) => curl > 0.65);
+  const fingerCount = extended.filter(Boolean).length;
+  const thumb = curls[0] ?? 0;
+  const index = curls[1] ?? 0;
+  const middle = curls[2] ?? 0;
+  const ring = curls[3] ?? 0;
+  const point = Boolean(extended[1] && curled[2] && curled[3] && curled[4]);
+  const peace = Boolean(extended[1] && extended[2] && curled[3] && curled[4]);
+  const openPalm = fingerCount >= 4;
+  const fist = curled.filter(Boolean).length >= 4;
+  const drumGrip = index > 0.35 && index < 0.82
+    && middle > 0.42 && middle < 0.92
+    && ring > 0.42 && ring < 0.95
+    && thumb < 0.75;
+  return {
+    fingerCount,
+    openPalm,
+    fist,
+    point,
+    peace,
+    drumGrip,
+    label: point ? 'point' : peace ? 'peace' : drumGrip ? 'drum grip' : openPalm ? 'open' : fist ? 'fist' : `${fingerCount}`,
+  };
 }
 
 export class FingerContactHysteresis {

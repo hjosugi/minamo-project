@@ -40,6 +40,7 @@ REQUIRED = [
     'shared/runtime.js',
     'shared/recording.js',
     'tests/fixtures/kgm1-synthetic.jsonl',
+    'tests/fixtures/hand-golden-clip.json',
     'tsconfig.browser-js.json',
     'scripts/fetch-models.sh',
     'scripts/release-smoke.mjs',
@@ -50,6 +51,9 @@ REQUIRED = [
     'desktop/index.html',
     'desktop/desktop.js',
     'desktop/styles.css',
+    'diagnostics/no-broken-finger.html',
+    'diagnostics/no-broken-finger.js',
+    'docs/benchmarks/hand-stability-report.md',
     'src-tauri/Cargo.toml',
     'src-tauri/Info.plist',
     'src-tauri/tauri.conf.json',
@@ -677,6 +681,108 @@ def validate_face_selection_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing face selection regression coverage: {needle}')
 
 
+def validate_body_hand_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    codec = read('shared/codec.js')
+    protocol = read('docs/PROTOCOL.md')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    diagnostic_html = read('diagnostics/no-broken-finger.html')
+    diagnostic_js = read('diagnostics/no-broken-finger.js')
+    report = read('docs/benchmarks/hand-stability-report.md')
+    vite = read('vite.config.ts')
+    tests = read('tests/run-tests.mjs')
+    core_tests = read('tests/core.test.ts')
+    adapter_tests = read('tests/adapters.test.ts')
+    vrm_mapper = read('src/adapters/vrm_mapper.ts')
+
+    for needle in [
+        'HAND_INFERENCE_INTERVAL_MS',
+        'HAND_CALIBRATION_TOTAL_MS',
+        'createHandCalibrationSession',
+        'collectHandCalibrationSample',
+        'buildHandCalibrationProfile',
+        'applyHandCalibrationProfile',
+        'classifyHandGesture',
+        'export class HandTargetStabilizer',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing hand runtime contract: {needle}')
+    for needle in [
+        'export const HAND_TARGET_BYTES = 16',
+        'flags + handedness + confidence + curls + spreads + wrist xyz',
+        'wrist = new Float32Array(3)',
+    ]:
+        if needle not in codec:
+            add_error('shared/codec.js', f'missing 16-byte hand codec contract: {needle}')
+    if 'HANDS block (1 + 16 bytes/hand' not in protocol or 'FACE + HANDS x2 | 109' not in protocol:
+        add_error('docs/PROTOCOL.md', 'protocol must document the 16-byte hand target and updated bandwidth')
+    for needle in [
+        'HAND_INFERENCE_INTERVAL_MS',
+        'state.handLandmarker.detectForVideo(video, nowMs)',
+        'applyHandCalibrationProfile(rawHandTargets, handProfile)',
+        'state.handTargetStabilizer.update',
+        'HAND_FAST_MOTION_BLUR',
+        'HAND_LOW_LIGHT',
+        'HAND_OUTSIDE_FRAME',
+        'drawHandDebug',
+        'settings.bodyMode ===',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker hand/body contract: {needle}')
+    for needle in [
+        'id="btnStartHandCalibration"',
+        'id="handCalibrationGuide"',
+        'id="handDebug"',
+        'id="selBodyMode"',
+    ]:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing hand/body UI contract: {needle}')
+    for needle in [
+        'chkArmSolver',
+        'applyVrmUpperBodyPose',
+        'applyArmChain',
+        'smoothstep',
+        'curlScale = j === 0 ? 1.0 : j === 1 ? 0.85 : 0.7',
+        'hand.wrist',
+    ]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing viewer arm/finger contract: {needle}')
+    if 'id="chkArmSolver"' not in viewer_html:
+        add_error('viewer/index.html', 'viewer must expose an arm-solver fallback toggle')
+    if 'proximal: curl' not in vrm_mapper or 'intermediate: curl * 0.85' not in vrm_mapper or 'distal: curl * 0.7' not in vrm_mapper:
+        add_error('src/adapters/vrm_mapper.ts', 'VRM finger mapper must use proximal/intermediate/distal coupling curves')
+    for needle in [
+        'HAND_TARGET_BYTES, 16',
+        'HAND_CALIBRATION_TOTAL_MS, 10_000',
+        'HAND_CURL_CLAMPED',
+        'short hand absence sets recovery flag',
+        'long hand absence omits hand block',
+        'tests/fixtures/hand-golden-clip.json',
+        'golden clip curl step clamped',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing hand runtime regression coverage: {needle}')
+    for needle in ['classifies finger count and drum grip gesture states', 'classifyHandGesture']:
+        if needle not in core_tests:
+            add_error('tests/core.test.ts', f'missing hand core gesture coverage: {needle}')
+    if 'index?.proximal' not in adapter_tests:
+        add_error('tests/adapters.test.ts', 'adapter tests must cover VRM finger coupling order')
+    if "handStability: page('diagnostics/no-broken-finger.html')" not in vite:
+        add_error('vite.config.ts', 'Vite build must include the no-broken-finger diagnostic page')
+    for needle in ['No-broken-finger visual test', 'fingerCanvas', 'no-broken-finger.js']:
+        if needle not in diagnostic_html:
+            add_error('diagnostics/no-broken-finger.html', f'missing diagnostic page contract: {needle}')
+    for needle in ['HandTargetStabilizer', 'handTargetDebugRows', 'HAND_CURL_CLAMPED', 'maxStep']:
+        if needle not in diagnostic_js:
+            add_error('diagnostics/no-broken-finger.js', f'missing diagnostic runtime contract: {needle}')
+    for needle in ['tests/fixtures/hand-golden-clip.json', 'diagnostics/no-broken-finger.html', 'Stabilized per-frame curl step <= 0.24']:
+        if needle not in report:
+            add_error('docs/benchmarks/hand-stability-report.md', f'missing hand benchmark report evidence: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -832,6 +938,7 @@ validate_blink_wink_contracts()
 validate_filter_tuning_contracts()
 validate_tracking_loss_contracts()
 validate_face_selection_contracts()
+validate_body_hand_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

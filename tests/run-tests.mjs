@@ -1,29 +1,38 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { encodeFrame, decodeFrame } from '../shared/codec.js';
+import { encodeFrame, decodeFrame, HAND_TARGET_BYTES } from '../shared/codec.js';
 import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
 import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
 import {
   CALIBRATION_GUIDE_TOTAL_MS,
+  HAND_CALIBRATION_TOTAL_MS,
+  HAND_INFERENCE_INTERVAL_MS,
   BlinkWinkStabilizer,
   FrameOrderGate,
   DroppedFrameDetector,
+  HandTargetStabilizer,
   HeadPositionStabilizer,
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   TrackingLossSmoother,
   applyCalibrationProfile,
   applyGazeToWeights,
+  applyHandCalibrationProfile,
   buildCalibrationProfileFromSamples,
   buildGazeCalibrationProfile,
+  buildHandCalibrationProfile,
   calibrationGuideProgress,
   blendshapeGaze,
+  classifyHandGesture,
+  collectHandCalibrationSample,
   collectGazeCalibrationSample,
   computeQualityScore,
   createCalibrationProfile,
   createGazeCalibrationSession,
   createGuidedCalibrationSession,
+  createHandCalibrationProfile,
+  createHandCalibrationSession,
   collectGuidedCalibrationSample,
   estimateIrisGaze,
   estimateLandmarkConfidence,
@@ -32,6 +41,7 @@ import {
   isEditableTarget,
   mirrorFacePayload,
   mirrorWeights,
+  normalizeHandCalibrationProfile,
   normalizeHeadLeanRangeCm,
   parseMotionJsonl,
   resolveGaze,
@@ -63,6 +73,7 @@ const required = [
   'replay/index.html',
   'replay/replay.js',
   'src/core/types.ts',
+  'tests/fixtures/hand-golden-clip.json',
   'issues/index.csv',
 ];
 for (const file of required) {
@@ -167,13 +178,25 @@ function faceBoxLandmarks(x, y, w, h) {
     seq: 8,
     face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights },
     hands: [
-      { handedness: 'Left', confidence: 0.9, curls: [0, 0.25, 0.5, 0.75, 1], spreads: [-0.2, -0.1, 0, 0.1, 0.2] },
-      { handedness: 'Right', confidence: 0.8, curls: [1, 0.75, 0.5, 0.25, 0], spreads: [0.2, 0.1, 0, -0.1, -0.2] },
+      { flags: 1, handedness: 'Left', confidence: 0.9, curls: [0, 0.25, 0.5, 0.75, 1], spreads: [-0.2, -0.1, 0, 0.1, 0.2], wrist: [0.2, -0.1, 0.05] },
+      { flags: 2, handedness: 'Right', confidence: 0.8, curls: [1, 0.75, 0.5, 0.25, 0], spreads: [0.2, 0.1, 0, -0.1, -0.2], wrist: [-0.2, 0.1, -0.05] },
     ],
   });
+  assert.equal(HAND_TARGET_BYTES, 16);
+  assert.equal(encodeFrame({
+    t: 567,
+    seq: 8,
+    face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights },
+    hands: [
+      { flags: 1, handedness: 'Left', confidence: 0.9, curls: [0, 0.25, 0.5, 0.75, 1], spreads: [-0.2, -0.1, 0, 0.1, 0.2], wrist: [0.2, -0.1, 0.05] },
+      { flags: 2, handedness: 'Right', confidence: 0.8, curls: [1, 0.75, 0.5, 0.25, 0], spreads: [0.2, 0.1, 0, -0.1, -0.2], wrist: [-0.2, 0.1, -0.05] },
+    ],
+  }).byteLength, 10 + 66 + 1 + HAND_TARGET_BYTES * 2);
   assert.equal(withHands.hands.length, 2);
+  assert.equal(withHands.hands[0].flags, 1);
   assert.equal(withHands.hands[0].handedness, 'Left');
   assert.ok(Math.abs(withHands.hands[0].curls[2] - 0.5) < 0.01);
+  assert.ok(Math.abs(withHands.hands[0].wrist[0] - 0.2) < 0.01);
 
   const emptyBlocks = roundTrip({ t: 789, seq: 0 });
   assert.equal(emptyBlocks.face, null);
@@ -347,6 +370,72 @@ function faceBoxLandmarks(x, y, w, h) {
   assert.equal(Math.round(adjusted[CHANNEL_INDEX.jawOpen] * 100) / 100, 0.6);
   profile.muted[CHANNEL_INDEX.jawOpen] = true;
   assert.equal(applyCalibrationProfile(raw, profile)[CHANNEL_INDEX.jawOpen], 0);
+}
+
+{
+  assert.equal(Math.round(HAND_INFERENCE_INTERVAL_MS), 33);
+  assert.equal(HAND_CALIBRATION_TOTAL_MS, 10_000);
+  const session = createHandCalibrationSession('hand-test', 1000);
+  const openTarget = { handedness: 'Right', confidence: 1, curls: [0.08, 0.05, 0.04, 0.05, 0.07], spreads: [0, 0.1, 0, -0.08, -0.12], wrist: [0, 0, 0] };
+  const fistTarget = { handedness: 'Right', confidence: 1, curls: [0.88, 0.95, 0.97, 0.94, 0.9], spreads: [0, 0.03, 0, -0.03, -0.04], wrist: [0, 0, 0] };
+  for (let t = 1000; t < 3500; t += 250) collectHandCalibrationSample(session, [openTarget], t);
+  for (let t = 3500; t < 6000; t += 250) collectHandCalibrationSample(session, [fistTarget], t);
+  for (let t = 6000; t < 11_000; t += 250) collectHandCalibrationSample(session, [{ ...fistTarget, curls: [0.4, 0.2, 0.7, 0.75, 0.72] }], t);
+  const handProfile = buildHandCalibrationProfile({
+    openSamples: session.openSamples,
+    fistSamples: session.fistSamples,
+    rangeSamples: session.rangeSamples,
+    name: 'hand-test',
+    createdAt: '2026-07-06T00:00:00.000Z',
+  });
+  assert.equal(handProfile.openCurls.length, 5);
+  assert.equal(handProfile.fistCurls.length, 5);
+  assert.ok(handProfile.fistCurls[1] > handProfile.openCurls[1]);
+  const calibrated = applyHandCalibrationProfile([{ ...openTarget, curls: [0.48, 0.5, 0.5, 0.5, 0.5] }], handProfile)[0];
+  assert.ok(calibrated.curls.every((curl) => curl > 0.4 && curl < 0.65), 'hand profile normalizes mid-curl');
+
+  assert.equal(classifyHandGesture({ curls: [0.1, 0.1, 0.1, 0.1, 0.1] }).label, 'open');
+  assert.equal(classifyHandGesture({ curls: [0.7, 0.1, 0.8, 0.82, 0.84] }).label, 'point');
+  assert.equal(classifyHandGesture({ curls: [0.55, 0.55, 0.62, 0.7, 0.72] }).drumGrip, true);
+
+  const stabilizer = new HandTargetStabilizer({ holdMs: 250, maxCurlDelta: 0.2, maxSpreadDelta: 0.3 });
+  stabilizer.update([openTarget], 0);
+  const jumped = stabilizer.update([fistTarget], 16);
+  assert.ok(jumped.warnings.some((warning) => warning.startsWith('HAND_CURL_CLAMPED')));
+  assert.ok(jumped.targets[0].curls[1] < 0.3, 'unnatural hand curl jump is suppressed');
+  const held = stabilizer.update([], 120);
+  assert.equal(held.active, true);
+  assert.ok(held.targets[0].flags & 0x02, 'short hand absence sets recovery flag');
+  assert.equal(stabilizer.update([], 320).active, false, 'long hand absence omits hand block');
+  assert.deepEqual(normalizeHandCalibrationProfile({ schema: 'wrong' }).openCurls, createHandCalibrationProfile().openCurls);
+
+  const golden = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/hand-golden-clip.json'), 'utf8'));
+  assert.equal(golden.schema, 'minamo.hand-golden-clip.v1');
+  const clipStabilizer = new HandTargetStabilizer({ holdMs: 250, maxCurlDelta: 0.24, maxSpreadDelta: 0.36 });
+  let clampWarnings = 0;
+  let maxCurlStep = 0;
+  let previousCurl = null;
+  let finalActive = true;
+  for (const frame of golden.frames) {
+    const targets = Array.isArray(frame.hands) && frame.hands.length === 0
+      ? []
+      : [{
+          handedness: frame.handedness,
+          confidence: frame.confidence,
+          curls: frame.curls,
+          spreads: frame.spreads,
+          wrist: [0, 0, 0],
+        }];
+    const out = clipStabilizer.update(targets, frame.t);
+    finalActive = out.active;
+    clampWarnings += out.warnings.filter((warning) => warning.startsWith('HAND_CURL_CLAMPED')).length;
+    const curl = out.targets[0]?.curls?.[1];
+    if (previousCurl !== null && curl !== undefined) maxCurlStep = Math.max(maxCurlStep, Math.abs(curl - previousCurl));
+    if (curl !== undefined) previousCurl = curl;
+  }
+  assert.ok(clampWarnings > 0, 'golden clip detects impossible finger jumps');
+  assert.ok(maxCurlStep <= 0.240001, `golden clip curl step clamped to <=0.24, got ${maxCurlStep}`);
+  assert.equal(finalActive, false, 'golden clip eventually omits hands after occlusion');
 }
 
 {
