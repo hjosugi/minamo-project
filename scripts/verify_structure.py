@@ -51,6 +51,7 @@ REQUIRED = [
     'shared/kgm-recording.js',
     'shared/e2ee.js',
     'shared/hud-metrics.js',
+    'shared/voice-activity.js',
     'shared/expression-mapping.js',
     'shared/layered-avatar.js',
     'shared/recording.js',
@@ -1486,6 +1487,33 @@ def validate_latency_quality_hud_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing HUD metric regression coverage: {needle}')
 
 
+def validate_voice_activity_accent_contracts() -> None:
+    voice = read('shared/voice-activity.js')
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+    dd = read('docs/design/DD-003-audio-lipsync.md')
+
+    for needle in ['voiceActivityLevelFromRms', 'applyVoiceActivityAccents', 'headNodAmount = 0.008', 'level <= 0']:
+        if needle not in voice:
+            add_error('shared/voice-activity.js', f'missing voice activity helper contract: {needle}')
+    if 'voiceAccents: false' not in runtime:
+        add_error('shared/runtime.js', 'voice accents must default off')
+    for needle in ['startVoiceAccents', 'stopVoiceAccents', 'sampleVoiceRms', 'applyVoiceActivityAccents(state.weights', 'voiceAccent.headNod', 'getUserMedia({\n      audio:']:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker voice accent contract: {needle}')
+    for needle in ['chkVoiceAccents', 'statVoiceAccent']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing voice accent UI contract: {needle}')
+    for needle in ['voiceActivityLevelFromRms(0.015)', 'applyVoiceActivityAccents(silentWeights, { enabled: true, rms: 0.005 })', 'headNod <= 0.008']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing voice accent regression coverage: {needle}')
+    for needle in ['Voice accents are default off', 'silent VAD level returns identity']:
+        if needle not in dd:
+            add_error('docs/design/DD-003-audio-lipsync.md', f'missing voice accent implementation note: {needle}')
+
+
 def validate_runtime_warning_taxonomy() -> None:
     runtime = read('shared/runtime.js')
     required_codes = [
@@ -1538,6 +1566,7 @@ validate_static_demo_entrypoints()
 validate_replay_validation_ui()
 validate_kgm_recording_contracts()
 validate_latency_quality_hud_contracts()
+validate_voice_activity_accent_contracts()
 validate_runtime_warning_taxonomy()
 
 if errors:

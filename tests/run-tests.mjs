@@ -48,6 +48,10 @@ import {
   percentileSample,
 } from '../shared/hud-metrics.js';
 import {
+  applyVoiceActivityAccents,
+  voiceActivityLevelFromRms,
+} from '../shared/voice-activity.js';
+import {
   ClockOffsetEstimator,
   KGM2_FACE_CHANNELS,
   KGM2_FACE_MASK_BYTES,
@@ -139,6 +143,7 @@ const required = [
   'landing/index.html',
   'replay/index.html',
   'replay/replay.js',
+  'shared/voice-activity.js',
   'src/core/types.ts',
   'tests/fixtures/hand-golden-clip.json',
   'issues/index.csv',
@@ -512,6 +517,23 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.equal(netem.lossOk, true);
   assert.equal(netem.latencyOk, true);
   assert.equal(percentileSample([4, 8, 16, 32, 64], 0.95), 64);
+}
+
+{
+  assert.equal(voiceActivityLevelFromRms(0.015), 0, 'noise floor is silent');
+  assert.equal(voiceActivityLevelFromRms(0.12), 1, 'speech RMS reaches full VAD level');
+  const silentWeights = new Float32Array(NUM_CHANNELS);
+  const silent = applyVoiceActivityAccents(silentWeights, { enabled: true, rms: 0.005 });
+  assert.equal(silent.level, 0);
+  assert.equal(silent.headNod, 0);
+  assert.equal(silent.weights[CHANNEL_INDEX.browInnerUp], 0, 'silent voice accents leave brows unchanged');
+  const disabled = applyVoiceActivityAccents(silentWeights, { enabled: false, rms: 1 });
+  assert.equal(disabled.level, 0, 'disabled voice accents ignore audio energy');
+  assert.equal(disabled.weights[CHANNEL_INDEX.browInnerUp], 0);
+  const active = applyVoiceActivityAccents(silentWeights, { enabled: true, rms: 0.12 });
+  assert.ok(active.weights[CHANNEL_INDEX.browInnerUp] > 0, 'speech energy raises brow subtly');
+  assert.ok(active.headNod > 0 && active.headNod <= 0.008, 'headNod <= 0.008');
+  assert.equal(silentWeights[CHANNEL_INDEX.browInnerUp], 0, 'accent helper does not mutate source weights');
 }
 
 {

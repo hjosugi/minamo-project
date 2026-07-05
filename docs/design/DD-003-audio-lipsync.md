@@ -49,6 +49,13 @@ mouthStretch*) so the protocol is unchanged.
 Audio never leaves the device; only the derived mouth channels do. State
 this explicitly in the UI the first time the mic is enabled.
 
+## Voice accents
+
+Voice accents are default off and share the same local-only microphone
+path. When enabled, VAD energy adds only bounded brow micro-raises and a
+sub-degree head pitch accent before KGM encoding. A silent VAD level returns identity weights and zero head-nod amplitude, so silence does not create
+extra motion.
+
 ## Risks
 
 - AudioWorklet + getUserMedia permission flow adds UX friction: mic is

@@ -69,6 +69,7 @@ import {
 import { createMotionRecord, createRecordingMetadata } from '../shared/recording.js';
 import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } from '../shared/kgm-recording.js';
 import { percentileSample } from '../shared/hud-metrics.js';
+import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 
 const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -154,6 +155,7 @@ const state = {
   quality: { state: 'idle', score: 0, reasons: [], warnings: [] },
   lastFps: 0,
   qualityCanvas: document.createElement('canvas'),
+  voice: { stream: null, context: null, analyser: null, buffer: null, rms: 0, level: 0 },
   recording: { enabled: false, lines: [], frames: [], metadata: null },
   calibrationSession: null,
   gazeCalibrationSession: null,
@@ -228,6 +230,7 @@ function normalizeTrackerSettings(raw) {
   base.headLeanRangeCm = normalizeHeadLeanRangeCm(base.headLeanRangeCm);
   if (!['seated', 'standing'].includes(base.bodyMode)) base.bodyMode = 'seated';
   base.faceLock = Boolean(base.faceLock);
+  base.voiceAccents = Boolean(base.voiceAccents);
   if (!raw?.smoothing?.face) {
     smoothing.face = {
       filterPreset: base.filterPreset || DEFAULT_SMOOTHING_SETTINGS.face.filterPreset,
@@ -334,6 +337,86 @@ async function startCamera() {
   const trackSettings = track?.getSettings?.() || {};
   $('statCamera').textContent = `${trackSettings.width || video.videoWidth}x${trackSettings.height || video.videoHeight}@${Math.round(trackSettings.frameRate || fps)}`;
   await refreshCameras();
+  if (settings.voiceAccents) await startVoiceAccents();
+}
+
+async function startVoiceAccents() {
+  if (!settings.voiceAccents || state.voice.analyser) return;
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone API is unavailable.');
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    const AudioContextCtor = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
+    if (!AudioContextCtor) throw new Error('Web Audio API is unavailable.');
+    const context = new AudioContextCtor();
+    const source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.35;
+    source.connect(analyser);
+    state.voice = {
+      stream,
+      context,
+      analyser,
+      buffer: new Float32Array(analyser.fftSize),
+      rms: 0,
+      level: 0,
+    };
+  } catch (error) {
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+    }
+    stopVoiceAccents();
+    settings.voiceAccents = false;
+    $('chkVoiceAccents').checked = false;
+    saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
+    chip.textContent = `voice accents unavailable: ${error.message}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+function stopVoiceAccents() {
+  if (state.voice.stream) {
+    for (const track of state.voice.stream.getTracks()) track.stop();
+  }
+  if (state.voice.context?.state !== 'closed') state.voice.context?.close?.().catch(() => {});
+  state.voice = { stream: null, context: null, analyser: null, buffer: null, rms: 0, level: 0 };
+}
+
+function sampleVoiceRms() {
+  if (!settings.voiceAccents || !state.voice.analyser || !state.voice.buffer) {
+    state.voice.rms = 0;
+    state.voice.level = 0;
+    return 0;
+  }
+  state.voice.analyser.getFloatTimeDomainData(state.voice.buffer);
+  let sum = 0;
+  for (let i = 0; i < state.voice.buffer.length; i++) sum += state.voice.buffer[i] * state.voice.buffer[i];
+  state.voice.rms = Math.sqrt(sum / state.voice.buffer.length);
+  return state.voice.rms;
+}
+
+function applyPitchOffset(quat, radians) {
+  if (!Number.isFinite(radians) || Math.abs(radians) < 1e-6) return quat;
+  const half = radians * 0.5;
+  const sx = Math.sin(half);
+  const cw = Math.cos(half);
+  const [x, y, z, w] = quat;
+  const next = [
+    x * cw + w * sx,
+    y * cw + z * sx,
+    z * cw - y * sx,
+    w * cw - x * sx,
+  ];
+  const len = Math.hypot(next[0], next[1], next[2], next[3]) || 1;
+  return [next[0] / len, next[1] / len, next[2] / len, next[3] / len];
 }
 
 async function configureCameraQualityControls(track) {
@@ -637,10 +720,19 @@ function loop() {
 
     // --- encode and send
     if (shouldSendFace) {
+      const voiceAccent = applyVoiceActivityAccents(state.weights, {
+        enabled: settings.voiceAccents,
+        rms: sampleVoiceRms(),
+      });
+      state.voice.level = voiceAccent.level;
+      const voiceNod = voiceAccent.headNod > 0
+        ? voiceAccent.headNod * Math.sin(nowMs * 0.018)
+        : 0;
+      const faceQuat = applyPitchOffset(state.quat, voiceNod);
       const frame = {
         t: Math.round(nowMs),
         seq: state.seq++,
-        face: { quat: state.quat, pos: state.pos, weights: state.weights },
+        face: { quat: faceQuat, pos: state.pos, weights: voiceAccent.weights },
         pose: state.hasPose ? { points: state.posePoints } : null,
         hands: state.handTargets,
       };
@@ -922,6 +1014,7 @@ function updateStats(nowMs) {
   $('statFilterLag').textContent = estimateOneEuroLagMs(settings.smoothing.face.minCutoff).toFixed(0);
   $('statJitter').textContent = state.dropDetector.rollingJitterMs(2500, nowMs).toFixed(1);
   $('statHands').textContent = state.hasHands ? String(state.hands.length) : '0';
+  $('statVoiceAccent').textContent = settings.voiceAccents ? `${Math.round(state.voice.level * 100)}%` : 'off';
   const transportStats = state.transport.getStats();
   $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
   $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
@@ -1007,6 +1100,7 @@ function applySettingsToUi() {
   $('chkMirror').checked = Boolean(settings.mirror);
   $('chkPose').checked = Boolean(settings.pose);
   $('chkHands').checked = Boolean(settings.hands);
+  $('chkVoiceAccents').checked = Boolean(settings.voiceAccents);
   $('chkFaceLock').checked = Boolean(settings.faceLock);
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
   $('selResolution').value = settings.resolution;
@@ -1034,6 +1128,7 @@ function readSettingsFromUi() {
   settings.mirror = $('chkMirror').checked;
   settings.pose = $('chkPose').checked;
   settings.hands = $('chkHands').checked;
+  settings.voiceAccents = $('chkVoiceAccents').checked;
   settings.faceLock = $('chkFaceLock').checked;
   settings.privacyLocalOnly = $('chkPrivacy').checked;
   settings.cameraId = $('selCamera').value;
@@ -1483,6 +1578,7 @@ $('btnStop').addEventListener('click', () => {
   cancelGuidedCalibration('calibration stopped');
   cancelGazeCalibration('gaze calibration stopped');
   cancelHandCalibration('hand calibration stopped');
+  stopVoiceAccents();
   if (video.srcObject) {
     for (const t of video.srcObject.getTracks()) t.stop();
     video.srcObject = null;
@@ -1526,6 +1622,11 @@ $('chkHands').addEventListener('change', async (e) => {
   }
 });
 
+$('chkVoiceAccents').addEventListener('change', async (e) => {
+  persistSettings();
+  if (e.target.checked && state.running) await startVoiceAccents();
+  else stopVoiceAccents();
+});
 $('chkPrivacy').addEventListener('change', persistSettings);
 $('chkFaceLock').addEventListener('change', () => {
   state.trackedFaceBox = null;
@@ -1634,6 +1735,7 @@ $('btnResetSettings').addEventListener('click', () => {
   saveProfile();
   saveJson(localStorage, HAND_PROFILE_STORAGE_KEY, handProfile);
   applySettingsToUi();
+  stopVoiceAccents();
   resetFilters();
   chip.textContent = 'settings reset';
   chip.dataset.state = 'idle';
