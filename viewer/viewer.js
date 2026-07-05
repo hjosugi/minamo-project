@@ -5,6 +5,9 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
 import { CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
@@ -24,6 +27,40 @@ const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
 const params = new URLSearchParams(location.search);
+
+const SCENE_PRESETS = Object.freeze({
+  soft: Object.freeze({
+    label: 'soft key',
+    backgroundColor: '#0f1220',
+    hemi: [0xdfe6ff, 0x1a1e33, 1.1],
+    key: [0xffffff, 1.6, [0.6, 1.8, 1.2]],
+    rim: [0x6fe3ff, 0.5, [-1.2, 1.4, -1.0]],
+    floor: 0x161a2c,
+    bloom: false,
+    vignette: false,
+  }),
+  anime: Object.freeze({
+    label: 'anime rim',
+    backgroundColor: '#151221',
+    hemi: [0xe9edff, 0x24142f, 0.85],
+    key: [0xfff3d5, 1.25, [0.3, 1.9, 1.3]],
+    rim: [0xff7aa2, 1.35, [-1.3, 1.5, -0.9]],
+    floor: 0x1d1830,
+    bloom: true,
+    vignette: true,
+  }),
+  flat: Object.freeze({
+    label: 'flat',
+    backgroundColor: '#24283a',
+    hemi: [0xffffff, 0xffffff, 1.4],
+    key: [0xffffff, 0.65, [0.2, 1.5, 1.5]],
+    rim: [0xffffff, 0, [-1.2, 1.4, -1.0]],
+    floor: 0x202436,
+    bloom: false,
+    vignette: false,
+  }),
+});
+
 const settings = loadJson(localStorage, VIEWER_STORAGE_KEY, DEFAULT_VIEWER_SETTINGS);
 applyQuerySettings(settings, params);
 document.body.classList.toggle('hud-hidden', params.get('hud') === '0' || params.get('preset') === 'obs');
@@ -37,12 +74,13 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = settings.transparent ? null : new THREE.Color(0x0f1220);
+scene.background = settings.transparent ? null : new THREE.Color(settings.backgroundColor);
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 30);
 applyLockedCamera();
 
-scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x1a1e33, 1.1));
+const hemi = new THREE.HemisphereLight(0xdfe6ff, 0x1a1e33, 1.1);
+scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffffff, 1.6);
 key.position.set(0.6, 1.8, 1.2);
 scene.add(key);
@@ -58,11 +96,20 @@ floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 applyBackground();
 
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.28, 0.35, 0.86);
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
+const vignette = $('sceneVignette');
+applySceneState();
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   if (params.get('camera') === 'locked' || params.get('preset') === 'obs') applyLockedCamera();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // Gaze target: a child of the camera, offset by decoded eye-look weights,
@@ -439,7 +486,8 @@ function render() {
   if (vrm) applyVrm(dt);
   else applyBot(dt);
 
-  renderer.render(scene, camera);
+  if (settings.bloom && !settings.transparent) composer.render();
+  else renderer.render(scene, camera);
 
   const now = performance.now();
   if (now - lastStats > 500) {
@@ -467,10 +515,14 @@ function applySettingsToUi() {
   $('inpToken').value = settings.token;
   $('inpWtUrl').value = settings.wtUrl;
   $('inpWtHash').value = settings.wtHash;
+  $('selScenePreset').value = settings.scenePreset;
+  $('inpBgColor').value = normalizeHexColor(settings.backgroundColor) || SCENE_PRESETS.soft.backgroundColor;
   $('chkTransparent').checked = Boolean(settings.transparent);
   $('chkArmSolver').checked = Boolean(settings.armSolver);
+  $('chkBloom').checked = Boolean(settings.bloom);
+  $('chkVignette').checked = Boolean(settings.vignette);
   updateModeFields();
-  applyBackground();
+  applySceneState();
 }
 
 function readSettingsFromUi() {
@@ -479,8 +531,12 @@ function readSettingsFromUi() {
   settings.token = $('inpToken').value;
   settings.wtUrl = $('inpWtUrl').value;
   settings.wtHash = $('inpWtHash').value;
+  settings.scenePreset = $('selScenePreset').value;
+  settings.backgroundColor = normalizeHexColor($('inpBgColor').value) || SCENE_PRESETS.soft.backgroundColor;
   settings.transparent = $('chkTransparent').checked;
   settings.armSolver = $('chkArmSolver').checked;
+  settings.bloom = $('chkBloom').checked;
+  settings.vignette = $('chkVignette').checked;
   return settings;
 }
 
@@ -495,9 +551,86 @@ function updateModeFields() {
 }
 
 function applyBackground() {
+  settings.backgroundColor = normalizeHexColor(settings.backgroundColor) || SCENE_PRESETS.soft.backgroundColor;
   renderer.setClearColor(0x000000, settings.transparent ? 0 : 1);
-  scene.background = settings.transparent ? null : new THREE.Color(0x0f1220);
+  scene.background = settings.transparent ? null : new THREE.Color(settings.backgroundColor);
   floor.visible = !settings.transparent;
+}
+
+function activeScenePreset() {
+  if (!SCENE_PRESETS[settings.scenePreset]) settings.scenePreset = 'soft';
+  return SCENE_PRESETS[settings.scenePreset];
+}
+
+function applyScenePresetDefaults(targetSettings, presetName) {
+  const preset = SCENE_PRESETS[presetName];
+  if (!preset) return;
+  targetSettings.scenePreset = presetName;
+  targetSettings.backgroundColor = preset.backgroundColor;
+  targetSettings.bloom = preset.bloom;
+  targetSettings.vignette = preset.vignette;
+}
+
+function applySceneState() {
+  const preset = activeScenePreset();
+  hemi.color.setHex(preset.hemi[0]);
+  hemi.groundColor.setHex(preset.hemi[1]);
+  hemi.intensity = preset.hemi[2];
+  key.color.setHex(preset.key[0]);
+  key.intensity = preset.key[1];
+  key.position.set(...preset.key[2]);
+  rim.color.setHex(preset.rim[0]);
+  rim.intensity = preset.rim[1];
+  rim.position.set(...preset.rim[2]);
+  floor.material.color.setHex(preset.floor);
+  bloomPass.enabled = Boolean(settings.bloom && !settings.transparent);
+  bloomPass.strength = settings.bloom ? 0.28 : 0;
+  renderer.toneMappingExposure = settings.bloom ? 1.05 : 1;
+  vignette.classList.toggle('enabled', Boolean(settings.vignette && !settings.transparent));
+  applyBackground();
+}
+
+function normalizeHexColor(value) {
+  const text = String(value || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(text)) return text.toLowerCase();
+  if (/^[0-9a-fA-F]{6}$/.test(text)) return `#${text.toLowerCase()}`;
+  return null;
+}
+
+function parseBoolParam(value) {
+  if (value === '1' || value === 'true') return true;
+  if (value === '0' || value === 'false') return false;
+  return null;
+}
+
+function serializeViewerSceneUrl() {
+  const url = new URL(location.href);
+  url.searchParams.set('mode', settings.mode);
+  url.searchParams.set('room', settings.room || 'demo');
+  if (settings.token) url.searchParams.set('token', settings.token);
+  else url.searchParams.delete('token');
+  if (settings.wtUrl) url.searchParams.set('wtUrl', settings.wtUrl);
+  if (settings.wtHash) url.searchParams.set('wtHash', settings.wtHash);
+  url.searchParams.set('scene', settings.scenePreset);
+  url.searchParams.set('bg', settings.transparent ? 'transparent' : 'solid');
+  url.searchParams.set('bgColor', settings.backgroundColor);
+  url.searchParams.set('bloom', settings.bloom ? '1' : '0');
+  url.searchParams.set('vignette', settings.vignette ? '1' : '0');
+  url.searchParams.set('camera', params.get('camera') || 'locked');
+  if (document.body.classList.contains('hud-hidden')) url.searchParams.set('hud', '0');
+  return url.toString();
+}
+
+async function copySceneUrl() {
+  const url = serializeViewerSceneUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    chip.textContent = 'scene URL copied';
+    chip.dataset.state = 'open';
+  } catch {
+    chip.textContent = url;
+    chip.dataset.state = 'open';
+  }
 }
 
 $('selMode').addEventListener('change', () => {
@@ -508,11 +641,32 @@ $('inpRoom').addEventListener('input', persistSettings);
 $('inpToken').addEventListener('input', persistSettings);
 $('inpWtUrl').addEventListener('input', persistSettings);
 $('inpWtHash').addEventListener('input', persistSettings);
+$('selScenePreset').addEventListener('change', () => {
+  applyScenePresetDefaults(settings, $('selScenePreset').value);
+  applySettingsToUi();
+  persistSettings();
+});
+$('inpBgColor').addEventListener('input', () => {
+  settings.backgroundColor = normalizeHexColor($('inpBgColor').value) || settings.backgroundColor;
+  settings.transparent = false;
+  $('chkTransparent').checked = false;
+  applySceneState();
+  persistSettings();
+});
 $('chkTransparent').addEventListener('change', () => {
   persistSettings();
-  applyBackground();
+  applySceneState();
 });
 $('chkArmSolver').addEventListener('change', persistSettings);
+$('chkBloom').addEventListener('change', () => {
+  persistSettings();
+  applySceneState();
+});
+$('chkVignette').addEventListener('change', () => {
+  persistSettings();
+  applySceneState();
+});
+$('btnCopySceneUrl').addEventListener('click', copySceneUrl);
 
 $('btnConnect').addEventListener('click', async () => {
   try {
@@ -649,6 +803,9 @@ function applyQuerySettings(targetSettings, query) {
   if (query.get('preset') === 'obs') {
     targetSettings.transparent = true;
   }
+  if (SCENE_PRESETS[query.get('scene')]) {
+    applyScenePresetDefaults(targetSettings, query.get('scene'));
+  }
   const mode = query.get('mode');
   if (['local', 'ws', 'wt'].includes(mode)) targetSettings.mode = mode;
   if (query.get('room')) targetSettings.room = query.get('room');
@@ -659,6 +816,15 @@ function applyQuerySettings(targetSettings, query) {
   if (query.get('arms') === '1') targetSettings.armSolver = true;
   if (query.get('bg') === 'transparent' || query.get('transparent') === '1') targetSettings.transparent = true;
   if (query.get('bg') === 'solid' || query.get('transparent') === '0') targetSettings.transparent = false;
+  const bgColor = normalizeHexColor(query.get('bgColor')) || normalizeHexColor(query.get('bg'));
+  if (bgColor) {
+    targetSettings.backgroundColor = bgColor;
+    targetSettings.transparent = false;
+  }
+  const bloom = parseBoolParam(query.get('bloom'));
+  if (bloom !== null) targetSettings.bloom = bloom;
+  const vignetteParam = parseBoolParam(query.get('vignette'));
+  if (vignetteParam !== null) targetSettings.vignette = vignetteParam;
 }
 
 function applyLockedCamera() {

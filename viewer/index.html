@@ -8,6 +8,16 @@
   <style>
     html, body { height: 100%; overflow: hidden; }
     #scene { position: fixed; inset: 0; }
+    #sceneVignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.36) 100%);
+      transition: opacity 160ms ease;
+    }
+    #sceneVignette.enabled { opacity: 1; }
     .hud {
       position: fixed;
       top: 14px; left: 14px;
@@ -30,6 +40,7 @@
 </head>
 <body>
   <div id="scene"></div>
+  <div id="sceneVignette"></div>
 
   <div class="hud">
     <div class="panel">
@@ -53,6 +64,18 @@
           <input type="text" id="inpRoom" value="demo" />
         </div>
         <div class="field">
+          <span>scene</span>
+          <select id="selScenePreset">
+            <option value="soft">soft key</option>
+            <option value="anime">anime rim</option>
+            <option value="flat">flat</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>background</span>
+          <input type="color" id="inpBgColor" value="#0f1220" />
+        </div>
+        <div class="field">
           <span>room token</span>
           <input type="password" id="inpToken" autocomplete="off" />
         </div>
@@ -69,8 +92,11 @@
         <button id="btnConnect" class="primary">Connect</button>
         <button id="btnCenter">Center</button>
         <button id="btnLoadVrm">Open VRM</button>
+        <button id="btnCopySceneUrl">Copy URL</button>
         <label class="check"><input type="checkbox" id="chkTransparent" />Transparent</label>
         <label class="check"><input type="checkbox" id="chkArmSolver" checked />Arm solver</label>
+        <label class="check"><input type="checkbox" id="chkBloom" />Bloom</label>
+        <label class="check"><input type="checkbox" id="chkVignette" />Vignette</label>
         <input type="file" id="fileVrm" accept=".vrm" hidden />
       </div>
       <div class="stats">

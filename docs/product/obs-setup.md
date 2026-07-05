@@ -29,6 +29,7 @@ viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked
 viewer/?preset=obs&mode=ws&room=stage&token=<token>&bg=transparent&hud=0&camera=locked
 viewer/?preset=obs&mode=wt&room=stage&token=<token>&wtUrl=https://localhost:4433&wtHash=<hex>&bg=transparent&hud=0&camera=locked
 viewer/?preset=obs&room=stage&vrm=<cors-url-to-model.vrm>&bg=transparent&hud=0&camera=locked
+viewer/?room=stage&scene=anime&bg=solid&bgColor=%23151221&bloom=1&vignette=1&camera=locked
 ```
 
 Room tokens are optional for local/private setups and required for shared
@@ -37,3 +38,15 @@ relays configured with `MINAMO_RELAY_TOKEN`.
 `bg=transparent` makes the renderer clear to alpha and hides the floor. `hud=0`
 removes every viewer control from the captured source. `camera=locked` keeps the
 default front-facing framing stable across OBS refreshes.
+
+## Scene presets
+
+The viewer ships three live-switchable scene presets:
+
+- `scene=soft`: neutral soft key light
+- `scene=anime`: warmer key, strong colored rim, bloom, and vignette
+- `scene=flat`: low-contrast flat lighting for PNG or heavily textured avatars
+
+Use `bgColor=%23rrggbb`, `bloom=0|1`, and `vignette=0|1` to serialize the full
+scene state. The viewer **Copy URL** button writes the current scene, transport,
+room, background, post-FX, HUD, and camera state into one reproducible URL.

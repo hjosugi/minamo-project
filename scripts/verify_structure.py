@@ -1036,6 +1036,44 @@ def validate_obs_viewer_contracts() -> None:
             add_error('README.md', f'missing README OBS setup detail: {needle}')
 
 
+def validate_scene_preset_contracts() -> None:
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    runtime = read('shared/runtime.js')
+    obs_doc = read('docs/product/obs-setup.md')
+    readme = read('README.md')
+
+    for needle in ['scenePreset', 'backgroundColor', 'bloom', 'vignette']:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing persisted viewer scene setting: {needle}')
+    for needle in [
+        'SCENE_PRESETS',
+        'soft key',
+        'anime rim',
+        'flat',
+        'EffectComposer',
+        'UnrealBloomPass',
+        'applySceneState',
+        'applyScenePresetDefaults',
+        'serializeViewerSceneUrl',
+        "query.get('scene')",
+        "query.get('bgColor')",
+        "query.get('bloom')",
+        "query.get('vignette')",
+    ]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing scene preset runtime contract: {needle}')
+    for needle in ['selScenePreset', 'inpBgColor', 'chkBloom', 'chkVignette', 'btnCopySceneUrl', 'sceneVignette']:
+        if needle not in viewer_html:
+            add_error('viewer/index.html', f'missing scene preset UI contract: {needle}')
+    for needle in ['scene=soft', 'scene=anime', 'scene=flat', 'bgColor=%23rrggbb', 'bloom=0|1', 'vignette=0|1', 'Copy URL']:
+        if needle not in obs_doc:
+            add_error('docs/product/obs-setup.md', f'missing scene preset documentation: {needle}')
+    for needle in ['scene=soft|anime|flat', 'bgColor=%23rrggbb', 'bloom=0|1', 'vignette=0|1']:
+        if needle not in readme:
+            add_error('README.md', f'missing README scene preset URL detail: {needle}')
+
+
 def validate_transport_contracts() -> None:
     transport = read('shared/transport.js')
     tests = read('tests/run-tests.mjs')
@@ -1315,6 +1353,7 @@ validate_protocol_v2_contracts()
 validate_e2ee_contracts()
 validate_avatar_mapping_contracts()
 validate_obs_viewer_contracts()
+validate_scene_preset_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

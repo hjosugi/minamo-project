@@ -26,6 +26,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -186,7 +187,7 @@ label.check {
   cursor: pointer;
 }
 
-input[type='text'], input[type='password'], input[type='number'], select {
+input[type='text'], input[type='password'], input[type='number'], input[type='color'], select {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink);
@@ -195,6 +196,10 @@ input[type='text'], input[type='password'], input[type='number'], select {
   border-radius: 8px;
   padding: 7px 10px;
   min-width: 0;
+}
+input[type='color'] {
+  min-height: 34px;
+  padding: 3px 6px;
 }
 input[type='range'] {
   width: 100%;

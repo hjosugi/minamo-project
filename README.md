@@ -111,7 +111,10 @@ viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked
 OBS settings: Browser Source, width 1920, height 1080, 60 FPS when the machine
 can sustain it, and custom CSS `body { background-color: rgba(0, 0, 0, 0); margin: 0; overflow: hidden; }`.
 Use `mode=ws` or `mode=wt` plus `token`, `wtUrl`, and `wtHash` for remote relay
-rooms. Full setup: [docs/product/obs-setup.md](docs/product/obs-setup.md).
+rooms. Scene state is URL-addressable with `scene=soft|anime|flat`,
+`bgColor=%23rrggbb`, `bloom=0|1`, and `vignette=0|1`; the viewer **Copy URL**
+button serializes the current setup. Full setup:
+[docs/product/obs-setup.md](docs/product/obs-setup.md).
 
 ## Repository layout
 

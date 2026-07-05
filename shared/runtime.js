@@ -84,6 +84,10 @@ export const DEFAULT_VIEWER_SETTINGS = Object.freeze({
   wtHash: '',
   transparent: false,
   armSolver: true,
+  scenePreset: 'soft',
+  backgroundColor: '#0f1220',
+  bloom: false,
+  vignette: false,
 });
 
 export const RESOLUTION_CONSTRAINTS = Object.freeze({
