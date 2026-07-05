@@ -22,6 +22,13 @@ import {
   packSmallestThreeQuat,
   unpackSmallestThreeQuat,
 } from '../shared/kgm2.js';
+import {
+  NewestOnlyMailbox,
+  classifyCongestion,
+  computeTransportLatencyMs,
+  transportFallbackPlan,
+  transportSecurityNote,
+} from '../shared/transport.js';
 import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
 import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
 import {
@@ -410,6 +417,30 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.ok(Math.abs(estimatorA.offsetMs() - 36) < 1);
   assert.ok(Math.abs(estimatorB.offsetMs() + 12) < 1);
   assert.ok(Math.abs((1000 + estimatorA.offsetMs()) - (1048 - 12)) < 1, 'sender clock sync supports multi-source phase alignment');
+}
+
+{
+  assert.deepEqual(transportFallbackPlan('local', { local: true, ws: true, wt: true }), ['local'], 'local loopback mode is never upgraded away');
+  assert.deepEqual(transportFallbackPlan('wt', { local: true, ws: true, wt: false }), ['ws', 'local'], 'WebTransport falls back to WebSocket then local');
+  assert.deepEqual(transportFallbackPlan('ws-json', { local: true, ws: true, wt: false }), ['ws-json', 'ws', 'local'], 'WebSocket JSON fallback is explicit');
+  assert.equal(computeTransportLatencyMs(1000, 1042), 42);
+  assert.equal(computeTransportLatencyMs(1000, 1042, -10), 32);
+  assert.equal(computeTransportLatencyMs(1000, 100_000), null, 'impossible clock skew is rejected instead of reported');
+  assert.equal(classifyCongestion({ bufferedBytes: 700_000, latencyMs: 50 }).state, 'severe');
+  assert.equal(classifyCongestion({ droppedFrames: 1 }).newestOnly, true);
+  assert.equal(classifyCongestion({ latencyMs: 20 }).state, 'clear');
+  const note = transportSecurityNote({ token: 'secret', origin: 'https://studio.example' });
+  assert.ok(note.includes('motion frames only'));
+  assert.ok(note.includes('room token enabled'));
+  assert.ok(note.includes('origin restricted'));
+  const mailbox = new NewestOnlyMailbox();
+  mailbox.push(new Uint8Array([1]));
+  mailbox.push(new Uint8Array([2]));
+  mailbox.push(new Uint8Array([3]));
+  assert.equal(mailbox.lagFrames(), 1, 'slow subscriber remains at most one frame behind');
+  assert.deepEqual(Array.from(mailbox.take()), [3]);
+  assert.equal(mailbox.replaced, 2, 'packet drop simulation replaces stale frames');
+  assert.equal(mailbox.lagFrames(), 0);
 }
 
 {

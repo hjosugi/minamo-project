@@ -885,6 +885,63 @@ def validate_protocol_v2_contracts() -> None:
             add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after protocol implementation')
 
 
+def validate_transport_contracts() -> None:
+    transport = read('shared/transport.js')
+    tests = read('tests/run-tests.mjs')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    transport_doc = read('docs/transport/webtransport-realtime.md')
+
+    for needle in [
+        'TRANSPORT_FALLBACKS',
+        'connectAuto',
+        'DEFAULT_CONNECT_TIMEOUT_MS = 3000',
+        'ws-json',
+        'WS_BACKPRESSURE_LIMIT_BYTES',
+        'NewestOnlyMailbox',
+        'computeTransportLatencyMs',
+        'classifyCongestion',
+        'transportSecurityNote',
+        '_wtNewestDatagram',
+    ]:
+        if needle not in transport:
+            add_error('shared/transport.js', f'missing transport contract: {needle}')
+    for needle in [
+        "transportFallbackPlan('local'",
+        "transportFallbackPlan('wt'",
+        'WebSocket JSON fallback is explicit',
+        'computeTransportLatencyMs(1000, 1042)',
+        'classifyCongestion',
+        'slow subscriber remains at most one frame behind',
+        'packet drop simulation replaces stale frames',
+        'motion frames only',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing transport regression coverage: {needle}')
+    for needle in ['connectAuto', 'getStats()', 'statTransportMode', 'statLatency', 'statTransportDrop']:
+        if needle not in tracker and needle not in tracker_html:
+            add_error('tracker/tracker.js', f'missing tracker transport UI contract: {needle}')
+    for needle in ['connectAuto', 'getStats()', 'statTransportMode', 'statLatency']:
+        if needle not in viewer and needle not in viewer_html:
+            add_error('viewer/viewer.js', f'missing viewer transport UI contract: {needle}')
+    for needle in [
+        'WebSocket JSON',
+        'connectAuto()',
+        '3 seconds',
+        'NewestOnlyMailbox',
+        'latency metric',
+        'MINAMO_ALLOWED_ORIGINS',
+        'transportSecurityNote()',
+    ]:
+        if needle not in transport_doc:
+            add_error('docs/transport/webtransport-realtime.md', f'missing transport documentation: {needle}')
+    kgm036 = read('docs/BACKLOG.md').split('### [KGM-036]', 1)[1].split('\n### ', 1)[0]
+    if '- [ ]' in kgm036:
+        add_error('docs/BACKLOG.md', 'KGM-036 acceptance criteria must remain checked after auto-fallback implementation')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -1042,6 +1099,7 @@ validate_tracking_loss_contracts()
 validate_face_selection_contracts()
 validate_body_hand_contracts()
 validate_protocol_v2_contracts()
+validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

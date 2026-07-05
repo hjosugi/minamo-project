@@ -609,8 +609,8 @@ Safari). Reconnect with exponential backoff, session resume by room+token,
 and a visible "degraded transport" indicator.
 
 Acceptance criteria:
-- [ ] Blocking UDP flips an active session to ws within 3 s
-- [ ] UI shows the active transport truthfully
+- [x] Blocking UDP flips an active session to ws within 3 s
+- [x] UI shows the active transport truthfully
 
 ### [KGM-037] End-to-end encryption of tracking frames
 - Labels: area/transport, type/feature

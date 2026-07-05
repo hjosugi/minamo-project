@@ -165,6 +165,13 @@ const state = {
   lastPacketBytes: 0,
 };
 
+state.transport.addEventListener('status', (/** @type {any} */ ev) => {
+  if (ev.detail.state === 'fallback') {
+    chip.textContent = ev.detail.detail;
+    chip.dataset.state = 'idle';
+  }
+});
+
 // ---------------------------------------------------------------- math
 
 // Column-major 4x4 -> unit quaternion [x, y, z, w].
@@ -905,6 +912,10 @@ function updateStats(nowMs) {
   $('statFilterLag').textContent = estimateOneEuroLagMs(settings.smoothing.face.minCutoff).toFixed(0);
   $('statJitter').textContent = state.dropDetector.rollingJitterMs(2500, nowMs).toFixed(1);
   $('statHands').textContent = state.hasHands ? String(state.hands.length) : '0';
+  const transportStats = state.transport.getStats();
+  $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
+  $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
+  $('statTransportDrop').textContent = String(transportStats.droppedOut);
   const rate = (state.transport.bytesOut - state.lastBytesOut) / dt / 1024;
   $('statRate').textContent = rate.toFixed(1);
   qualityChip.textContent = `${state.quality.state} ${Math.round((state.quality.score || 0) * 100)}%`;
@@ -1614,7 +1625,7 @@ $('btnResetTracking').addEventListener('click', resetTrackingRuntime);
 $('btnConnect').addEventListener('click', async () => {
   try {
     persistSettings();
-    await state.transport.connect({
+    const result = await state.transport.connectAuto({
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'pub',
@@ -1622,7 +1633,7 @@ $('btnConnect').addEventListener('click', async () => {
       certHashHex: $('inpWtHash').value,
       token: $('inpToken').value,
     });
-    chip.textContent = `tracking + ${$('selMode').value}:${$('inpRoom').value}`;
+    chip.textContent = `tracking + ${result.mode}:${$('inpRoom').value}`;
     chip.dataset.state = 'open';
     $('btnConnect').disabled = true;
     $('btnDisconnect').disabled = false;

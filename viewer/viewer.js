@@ -440,8 +440,11 @@ function render() {
   const now = performance.now();
   if (now - lastStats > 500) {
     const dts = (now - lastStats) / 1000;
+    const transportStats = transport.getStats();
     $('statFps').textContent = (recvFrames / dts).toFixed(0);
     $('statRate').textContent = ((transport.bytesIn - lastBytesIn) / dts / 1024).toFixed(1);
+    $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
+    $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
     $('statLoss').textContent = String(orderGate.lost);
     $('statReorder').textContent = String(orderGate.reordered);
     recvFrames = 0;
@@ -516,7 +519,7 @@ $('btnConnect').addEventListener('click', async () => {
     persistSettings();
     stopReplay();
     resetOrderGate();
-    await transport.connect({
+    await transport.connectAuto({
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'sub',
