@@ -126,6 +126,44 @@ export class ClockOffsetEstimator {
   }
 }
 
+export class MultiSourceClockSync {
+  constructor(limit = 12) {
+    this.limit = limit;
+    this.estimators = new Map();
+  }
+
+  sample(sourceId, probe) {
+    const key = String(sourceId);
+    if (!this.estimators.has(key)) this.estimators.set(key, new ClockOffsetEstimator(this.limit));
+    return this.estimators.get(key).sample(probe);
+  }
+
+  offsetMs(sourceId) {
+    return this.estimators.get(String(sourceId))?.offsetMs() ?? 0;
+  }
+
+  alignedTimeMs(sourceId, sourceTimestampMs) {
+    return Number(sourceTimestampMs) + this.offsetMs(sourceId);
+  }
+
+  phaseErrorMs(sourceA, timestampA, sourceB, timestampB) {
+    return Math.abs(this.alignedTimeMs(sourceA, timestampA) - this.alignedTimeMs(sourceB, timestampB));
+  }
+}
+
+export function createClockSyncProbe(clientSendMs = performanceNow()) {
+  return { clientSendMs };
+}
+
+export function completeClockSyncProbe(probe, { relayReceiveMs, relaySendMs, clientReceiveMs = performanceNow() }) {
+  return {
+    clientSendMs: probe.clientSendMs,
+    relayReceiveMs,
+    relaySendMs,
+    clientReceiveMs,
+  };
+}
+
 function encodeKeyframe(frame, keyId) {
   const weights = quantizeWeights(frame.face.weights);
   const size = KGM2_HEADER_BYTES + 4 + 6 + KGM2_FACE_CHANNELS;
@@ -245,4 +283,8 @@ function normalizeBuffer(data) {
   if (data instanceof ArrayBuffer) return data;
   if (ArrayBuffer.isView(data)) return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
   return null;
+}
+
+function performanceNow() {
+  return globalThis.performance?.now?.() ?? Date.now();
 }

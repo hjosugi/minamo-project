@@ -828,6 +828,8 @@ def validate_protocol_v2_contracts() -> None:
         'KGM2_FACE_MASK_BYTES = 7',
         'return null;',
         'ClockOffsetEstimator',
+        'MultiSourceClockSync',
+        'completeClockSyncProbe',
     ]:
         if needle not in kgm2:
             add_error('shared/kgm2.js', f'missing KGM2 contract: {needle}')
@@ -839,6 +841,8 @@ def validate_protocol_v2_contracts() -> None:
         'delta with missing base keyframe is rejected',
         'idle-face delta frame',
         '10% random loss plus a keyframe loss recovers at the next keyframe',
+        'two sources align below visible phase offset',
+        'ws/wt source alignment stays inside 10 ms target',
         'python3\', [\'-m\', \'kgm1_codec\'',
     ]:
         if needle not in tests:
@@ -887,6 +891,9 @@ def validate_protocol_v2_contracts() -> None:
         entry = backlog.split(f'### [{kgm}]', 1)[1].split('\n### ', 1)[0]
         if '- [ ]' in entry:
             add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after protocol implementation')
+    kgm030 = backlog.split('### [KGM-030]', 1)[1].split('\n### ', 1)[0]
+    if '- [ ]' in kgm030:
+        add_error('docs/BACKLOG.md', 'KGM-030 acceptance criteria must remain checked after clock sync implementation')
 
 
 def validate_e2ee_contracts() -> None:

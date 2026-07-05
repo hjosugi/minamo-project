@@ -516,8 +516,8 @@ clocks. Add a lightweight offset estimation (relay echoes receive time, or
 NTP-style probe frames) so sources can be aligned within ~10 ms.
 
 Acceptance criteria:
-- [ ] Two sources on one screen show no visible phase offset
-- [ ] Works over both ws and wt
+- [x] Two sources on one screen show no visible phase offset
+- [x] Works over both ws and wt
 
 ### [KGM-031] Reference codec implementations in Rust and Python
 - Labels: area/protocol, type/chore

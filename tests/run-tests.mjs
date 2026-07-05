@@ -26,6 +26,9 @@ import {
   KGM2_TYPE_KEYFRAME,
   Kgm2FaceDecoder,
   Kgm2FaceEncoder,
+  MultiSourceClockSync,
+  completeClockSyncProbe,
+  createClockSyncProbe,
   packSmallestThreeQuat,
   unpackSmallestThreeQuat,
 } from '../shared/kgm2.js';
@@ -424,6 +427,24 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.ok(Math.abs(estimatorA.offsetMs() - 36) < 1);
   assert.ok(Math.abs(estimatorB.offsetMs() + 12) < 1);
   assert.ok(Math.abs((1000 + estimatorA.offsetMs()) - (1048 - 12)) < 1, 'sender clock sync supports multi-source phase alignment');
+
+  const sync = new MultiSourceClockSync();
+  for (let i = 0; i < 8; i++) {
+    const aProbe = createClockSyncProbe(1000 + i * 100);
+    const bProbe = createClockSyncProbe(2000 + i * 100);
+    sync.sample('ws-source', completeClockSyncProbe(aProbe, {
+      relayReceiveMs: 1047 + i * 100,
+      relaySendMs: 1051 + i * 100,
+      clientReceiveMs: 1026 + i * 100,
+    }));
+    sync.sample('wt-source', completeClockSyncProbe(bProbe, {
+      relayReceiveMs: 1998 + i * 100,
+      relaySendMs: 2002 + i * 100,
+      clientReceiveMs: 2024 + i * 100,
+    }));
+  }
+  assert.ok(sync.phaseErrorMs('ws-source', 1000, 'wt-source', 1048) < 1, 'two sources align below visible phase offset');
+  assert.ok(sync.phaseErrorMs('ws-source', 1000, 'wt-source', 1040) < 10, 'ws/wt source alignment stays inside 10 ms target');
 }
 
 {

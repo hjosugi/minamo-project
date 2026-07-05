@@ -341,6 +341,24 @@ Quality warnings examples:
 | capture | 1-8 ms |
 | inference | 4-16 ms |
 | postprocess | 1-3 ms |
+
+## 9. Multi-source clock sync
+
+Collaboration rooms can mix WebSocket and WebTransport sources with different
+local clocks. `shared/kgm2.js` implements an NTP-style probe:
+
+```text
+clientSendMs -> relayReceiveMs -> relaySendMs -> clientReceiveMs
+```
+
+`ClockOffsetEstimator` keeps the lowest-RTT samples and estimates sender to
+relay offset. `MultiSourceClockSync` stores one estimator per source and
+aligns source timestamps onto a shared relay timeline. The probe payload is
+transport-agnostic: WebSocket sends it as a JSON control message, while
+WebTransport sends it on a reliable control stream.
+
+Regression tests cover a mixed `ws-source` and `wt-source` pair and assert the
+aligned phase error stays below the 10 ms target.
 | render mapping | 1-4 ms |
 | transport local/remote | 1-20 ms |
 | total local preview | under 33 ms target |
