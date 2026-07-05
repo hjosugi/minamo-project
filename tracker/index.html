@@ -67,6 +67,15 @@
         <span>dropped <b id="statDropped">0</b></span>
       </div>
       <ul class="warning-list" id="warningList"></ul>
+      <div class="signal-checklist" aria-label="Camera exposure and lighting checklist">
+        <div class="check-title">lighting checklist</div>
+        <ul>
+          <li id="checkExposure" data-state="idle"><b>wait</b><span>face exposure</span></li>
+          <li id="checkFps" data-state="idle"><b>wait</b><span>steady camera fps</span></li>
+          <li id="checkBlur" data-state="idle"><b>wait</b><span>low motion blur</span></li>
+          <li id="checkConfidence" data-state="idle"><b>wait</b><span>stable landmark confidence</span></li>
+        </ul>
+      </div>
     </section>
 
     <section class="panel">

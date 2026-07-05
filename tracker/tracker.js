@@ -609,6 +609,7 @@ function updateStats(nowMs) {
     ...state.warnings.filter((w) => typeof w === 'string').slice(0, 4),
   ];
   renderWarnings([...new Set(visibleWarnings)]);
+  renderLightingChecklist();
   state.lastBytesOut = state.transport.bytesOut;
   state.frames = 0;
   state.lastStats = nowMs;
@@ -620,6 +621,24 @@ function renderWarnings(messages) {
     li.textContent = message;
     return li;
   }));
+}
+
+function renderLightingChecklist() {
+  const active = state.running || state.quality.state !== 'idle';
+  setChecklistState('checkExposure', active, !hasQualityWarning(WARNING_TAXONOMY.lowLight));
+  setChecklistState('checkFps', active, !hasQualityWarning(WARNING_TAXONOMY.droppedFrames));
+  setChecklistState('checkBlur', active, !hasQualityWarning(WARNING_TAXONOMY.motionBlur));
+  setChecklistState('checkConfidence', active, !hasQualityWarning(WARNING_TAXONOMY.occlusion));
+}
+
+function hasQualityWarning(code) {
+  return state.quality.warnings.includes(code) || state.warnings.some((warning) => String(warning).startsWith(code));
+}
+
+function setChecklistState(id, active, ok) {
+  const item = $(id);
+  item.dataset.state = active ? (ok ? 'ok' : 'check') : 'idle';
+  item.querySelector('b').textContent = active ? (ok ? 'ok' : 'check') : 'wait';
 }
 
 // ---------------------------------------------------------------- ui
