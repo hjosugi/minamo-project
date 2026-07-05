@@ -1,12 +1,14 @@
 # Issue Registration Prompt
 
-`docs/BACKLOG.md` の全項目をGitHub Issuesに一括登録するためのプロンプト。
-リポジトリのルートで Claude Code(または gh CLI が使えるエージェント)に
-そのまま貼り付けて使う。
+> 日本語版: [ISSUE_REGISTRATION_PROMPT.ja.md](ISSUE_REGISTRATION_PROMPT.ja.md)
 
-前提:
-- `gh auth status` が通っていること
-- カレントディレクトリが対象リポジトリであること
+A prompt for bulk-registering every entry in `docs/BACKLOG.md` as GitHub Issues.
+Paste it as-is into Claude Code (or any agent that can use the gh CLI) at the
+root of the repository.
+
+Prerequisites:
+- `gh auth status` succeeds
+- The current directory is the target repository
 
 ---
 
@@ -81,12 +83,12 @@ of guessing.
 
 ---
 
-## 補足
+## Notes
 
-- 一部だけ登録したい場合はプロンプト末尾に
-  `Only register entries KGM-001 through KGM-012.` を足す。
-- ドライランしたい場合は
+- To register only a subset, append
+  `Only register entries KGM-001 through KGM-012.` to the end of the prompt.
+- For a dry run, append
   `First do a dry run: print every gh command you would execute without
-  running them, then wait for my confirmation.` を足す。
-- ラベル体系を変えた場合は BACKLOG.md 冒頭の taxonomy とこのプロンプトの
-  両方を更新すること(フォーマット契約)。
+  running them, then wait for my confirmation.`
+- If you change the label taxonomy, update both the taxonomy at the top of
+  BACKLOG.md and this prompt (format contract).

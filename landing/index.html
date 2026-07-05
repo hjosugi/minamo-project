@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KGM1 Avatar Tracking Hub</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav">
+        <div class="brand">KGM1</div>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#tracking">Tracking</a>
+        <a href="#issues">Issues</a>
+        <a href="../docs/PROTOCOL_V2_DRAFT.md">Protocol</a>
+      </nav>
+      <section class="hero-grid">
+        <div>
+          <p class="eyebrow">Local-first webcam avatar tracking</p>
+          <h1>Fingers, eyes, mouth — even drums — moving naturally, from an ordinary webcam.</h1>
+          <p class="lead">
+            KGM1 is a tracking foundation for starting 2D/3D avatar streaming on a budget.
+            It is designed around a stabilization layer that prevents jitter, bent joints, flips, and warping.
+          </p>
+          <div class="cta-row">
+            <button id="startDemo">Start demo</button>
+            <a class="button secondary" href="../docs/QUICKSTART.md">Read quickstart</a>
+          </div>
+          <div class="metrics">
+            <div><strong id="fps">0</strong><span>fps</span></div>
+            <div><strong id="confidence">0.00</strong><span>confidence</span></div>
+            <div><strong id="hits">0</strong><span>drum hits</span></div>
+          </div>
+        </div>
+        <div class="demo-card">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay" width="960" height="540"></canvas>
+          <div class="demo-note">If no webcam is available, it runs with mock tracking only.</div>
+        </div>
+      </section>
+    </header>
+
+    <main>
+      <section id="quickstart" class="section">
+        <p class="eyebrow">Quickstart</p>
+        <h2>Clone it, open it on a local server. That's it.</h2>
+        <pre><code>git clone https://github.com/hjosugi/minamo-project.git
+cd minamo-project
+python3 -m http.server 8000
+# open http://localhost:8000/landing/</code></pre>
+      </section>
+
+      <section id="tracking" class="section cards">
+        <article>
+          <h3>Finger-perfect</h3>
+          <p>Handles MCP/PIP/DIP/tip per finger, producing curl, spread, pinch, contact, velocity, and occlusion.</p>
+        </article>
+        <article>
+          <h3>Eyes and mouth</h3>
+          <p>Stabilizes blinks, gaze, iris, mouth opening, mouth width, lip rounding, smiles, and vowel-like mouth shapes.</p>
+        </article>
+        <article>
+          <h3>Drum tracking</h3>
+          <p>Integrates stick trajectories, drum-surface calibration, hit velocity, audio onsets, and foot pedals.</p>
+        </article>
+        <article>
+          <h3>Anti-jitter</h3>
+          <p>One Euro Filter, outlier rejection, velocity limits, skeletal constraints, and occlusion recovery prevent weird motion.</p>
+        </article>
+      </section>
+
+      <section id="issues" class="section">
+        <p class="eyebrow">Issue-ready backlog</p>
+        <h2>Ships with Markdown that's easy to file as GitHub issues later.</h2>
+        <p>`issues/backlog/` contains 100+ issue candidates. Register them in bulk with `scripts/create_github_issues.py`.</p>
+        <pre><code>python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0</code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <span>KGM1 Avatar Tracking System</span>
+      <span>Local-first, privacy-first, streamer-first.</span>
+    </footer>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
