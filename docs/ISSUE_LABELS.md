@@ -15,6 +15,8 @@ or more `area/*`, and a priority label when scheduling matters.
 - `area/app`: onboarding, settings, product pages, UX
 - `area/infra`: CI, Docker, deploy, dependency updates
 - `area/docs`: guides, ADRs, release/security checklists
+- `area/quality`: tracking quality reports, quality score thresholds, capture
+  diagnostics
 
 ## Types
 
@@ -23,6 +25,7 @@ or more `area/*`, and a priority label when scheduling matters.
 - `type/chore`: maintenance or operations
 - `type/research`: evaluation with a written decision
 - `type/docs`: documentation-only change
+- `type/test`: regression coverage and verification changes
 
 ## Priorities
 

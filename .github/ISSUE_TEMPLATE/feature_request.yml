@@ -1,6 +1,6 @@
 name: Feature request
 description: Add a feature to KGM1
-labels: ["type:feature"]
+labels: ["type/feature"]
 body:
   - type: textarea
     id: background

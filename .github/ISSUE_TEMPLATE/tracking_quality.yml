@@ -1,6 +1,6 @@
 name: Tracking quality report
 description: Report jitter, lost tracking, bad calibration, or unstable avatar motion
-labels: ["type:bug", "area/quality"]
+labels: ["type/bug", "area/quality"]
 body:
   - type: dropdown
     id: tracking_area
