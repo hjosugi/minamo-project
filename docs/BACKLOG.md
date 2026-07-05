@@ -595,7 +595,7 @@ delivery. Deliverable is a written evaluation and a prototype against a
 public MoQ relay, not production code.
 
 Acceptance criteria:
-- [ ] Report: mapping design, latency measurements, go/no-go recommendation
+- [x] Report: mapping design, latency measurements, go/no-go recommendation
 
 ### [KGM-036] Automatic transport negotiation and downgrade
 - Labels: area/transport, type/feature

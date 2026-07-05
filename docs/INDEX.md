@@ -61,6 +61,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [integrations/avatar-integrations.md](integrations/avatar-integrations.md)
 - [transport/webtransport-realtime.md](transport/webtransport-realtime.md)
 - [transport/kgm2-reference-codecs.md](transport/kgm2-reference-codecs.md)
+- [transport/moq-evaluation.md](transport/moq-evaluation.md)
 - [compression/avatar-compression.md](compression/avatar-compression.md)
 
 ## Engineering references

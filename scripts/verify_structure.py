@@ -24,6 +24,7 @@ REQUIRED = [
     'docs/GLOSSARY.md',
     'docs/IMPLEMENTATION_PROGRESS.md',
     'docs/transport/kgm2-reference-codecs.md',
+    'docs/transport/moq-evaluation.md',
     'docs/security/e2ee.md',
     'docs/adr/README.md',
     'docs/product/onboarding.md',
@@ -935,6 +936,7 @@ def validate_transport_contracts() -> None:
     viewer = read('viewer/viewer.js')
     viewer_html = read('viewer/index.html')
     transport_doc = read('docs/transport/webtransport-realtime.md')
+    moq_doc = read('docs/transport/moq-evaluation.md')
     relay_rs = read('relay-rs/src/main.rs')
     dashboard = read('relay-rs/grafana-dashboard.json')
 
@@ -1012,6 +1014,19 @@ def validate_transport_contracts() -> None:
         entry = backlog.split(f'### [{kgm}]', 1)[1].split('\n### ', 1)[0]
         if '- [ ]' in entry:
             add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after relay implementation')
+    for needle in [
+        'Mapping Design',
+        'Latency Findings',
+        'Decision: no-go',
+        'motion.delta',
+        'motion.keyframe',
+        'draft-ietf-moq-transport-18',
+    ]:
+        if needle not in moq_doc:
+            add_error('docs/transport/moq-evaluation.md', f'missing MoQ evaluation section: {needle}')
+    kgm035 = backlog.split('### [KGM-035]', 1)[1].split('\n### ', 1)[0]
+    if '- [ ]' in kgm035:
+        add_error('docs/BACKLOG.md', 'KGM-035 acceptance criteria must remain checked after MoQ evaluation')
 
 
 def validate_desktop_contracts() -> None:
