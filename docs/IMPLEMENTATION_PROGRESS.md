@@ -50,9 +50,10 @@ node --check relay-node/server.mjs
   scoring, calibration profile normalization/application, mirror tests,
   synthetic frame generation, warning taxonomy, and semantic face controls.
 - Tracker UI now has camera selection, resolution/FPS controls, settings
-  persistence, privacy mode copy, quality warnings, calibration profile
-  import/export, per-channel gain/deadzone/mute, smoothing presets/sliders,
-  keyboard reset, and local JSONL recording.
+  persistence, privacy mode copy, quality warnings, a 30-second guided
+  calibration flow, calibration profile import/export, per-channel
+  gain/deadzone/mute, smoothing presets/sliders, keyboard reset, and local
+  JSONL recording.
 - Viewer UI now persists connection settings, supports room tokens, has
   transparent OBS mode, and drops stale/out-of-order frames with wrap-aware
   sequence handling.

@@ -5,12 +5,17 @@ import { encodeFrame, decodeFrame } from '../shared/codec.js';
 import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
 import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
 import {
+  CALIBRATION_GUIDE_TOTAL_MS,
   FrameOrderGate,
   DroppedFrameDetector,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
+  buildCalibrationProfileFromSamples,
+  calibrationGuideProgress,
   computeQualityScore,
   createCalibrationProfile,
+  createGuidedCalibrationSession,
+  collectGuidedCalibrationSample,
   isEditableTarget,
   mirrorFacePayload,
   mirrorWeights,
@@ -204,6 +209,48 @@ function roundTrip(frame) {
   raw[CHANNEL_INDEX.jawOpen] = 0.4;
   const adjusted = applyCalibrationProfile(raw, profile);
   assert.equal(Math.round(adjusted[CHANNEL_INDEX.jawOpen] * 100) / 100, 0.6);
+}
+
+{
+  assert.equal(CALIBRATION_GUIDE_TOTAL_MS, 30_000);
+  const session = createGuidedCalibrationSession('guided-test', 1000);
+  const neutral = new Float32Array(NUM_CHANNELS);
+  neutral[CHANNEL_INDEX.jawOpen] = 0.12;
+  neutral[CHANNEL_INDEX.browDownLeft] = 0.15;
+
+  for (let t = 1000; t < 4000; t += 250) {
+    const progress = collectGuidedCalibrationSample(session, neutral, t);
+    assert.equal(progress.step.kind, 'neutral');
+  }
+
+  const range = new Float32Array(NUM_CHANNELS);
+  range[CHANNEL_INDEX.jawOpen] = 0.62;
+  range[CHANNEL_INDEX.browDownLeft] = 0.52;
+  range[CHANNEL_INDEX.mouthSmileLeft] = 0.7;
+  for (let t = 4000; t < 31_000; t += 250) {
+    collectGuidedCalibrationSample(session, range, t);
+  }
+
+  const finished = calibrationGuideProgress(1000, 31_000);
+  assert.equal(finished.done, true);
+  assert.ok(session.neutralSamples.length > 0);
+  assert.ok(session.rangeSamples.length > 0);
+
+  const guidedProfile = buildCalibrationProfileFromSamples({
+    neutralSamples: session.neutralSamples,
+    rangeSamples: session.rangeSamples,
+    name: 'guided-test',
+    createdAt: '2026-07-06T00:00:00.000Z',
+  });
+  assert.equal(guidedProfile.offsets.length, NUM_CHANNELS);
+  assert.equal(guidedProfile.gains.length, NUM_CHANNELS);
+  assert.ok(guidedProfile.offsets.every(Number.isFinite));
+  assert.ok(guidedProfile.gains.every(Number.isFinite));
+  assert.ok(guidedProfile.gains[CHANNEL_INDEX.jawOpen] > 1);
+  assert.ok(guidedProfile.gains[CHANNEL_INDEX.browDownLeft] > 1);
+
+  const calibratedNeutral = applyCalibrationProfile(neutral, guidedProfile);
+  assert.ok(Math.max(...calibratedNeutral) < 0.05, 'guided profile neutralizes resting offsets');
 }
 
 {

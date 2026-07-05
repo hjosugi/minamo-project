@@ -82,6 +82,16 @@ export const VIEWER_STORAGE_KEY = 'minamo.viewer.settings.v2';
 export const PROFILE_STORAGE_KEY = 'minamo.calibration.profile.v1';
 export const MOTION_JSONL_SCHEMA = 'minamo.kgm1.motion-jsonl.v1';
 export const MAX_MOTION_JSONL_FRAMES = 36_000;
+export const CALIBRATION_GUIDE_STEPS = Object.freeze([
+  Object.freeze({ id: 'neutral', label: 'Neutral hold', kind: 'neutral', durationMs: 3000 }),
+  Object.freeze({ id: 'jaw-open', label: 'Mouth open', kind: 'range', durationMs: 4500 }),
+  Object.freeze({ id: 'wide-smile', label: 'Wide smile', kind: 'range', durationMs: 4500 }),
+  Object.freeze({ id: 'brow-raise', label: 'Brow raise', kind: 'range', durationMs: 4500 }),
+  Object.freeze({ id: 'hard-blink', label: 'Hard blink', kind: 'range', durationMs: 4500 }),
+  Object.freeze({ id: 'look-around', label: 'Look around', kind: 'range', durationMs: 4500 }),
+  Object.freeze({ id: 'mouth-pucker', label: 'Mouth pucker', kind: 'range', durationMs: 4500 }),
+]);
+export const CALIBRATION_GUIDE_TOTAL_MS = CALIBRATION_GUIDE_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
 
 export function clamp(value, min = 0, max = 1) {
   if (!Number.isFinite(value)) return min;
@@ -219,6 +229,88 @@ export function createCalibrationProfile(name = 'default') {
     deadzones: Array(NUM_CHANNELS).fill(0),
     muted: Array(NUM_CHANNELS).fill(false),
   };
+}
+
+export function calibrationGuideProgress(startedAtMs, nowMs = performanceNow(), steps = CALIBRATION_GUIDE_STEPS) {
+  const totalMs = steps.reduce((sum, step) => sum + step.durationMs, 0);
+  const elapsedMs = Math.max(0, nowMs - startedAtMs);
+  let cursor = 0;
+  for (let index = 0; index < steps.length; index++) {
+    const step = steps[index];
+    const stepEnd = cursor + step.durationMs;
+    if (elapsedMs < stepEnd) {
+      return {
+        done: false,
+        elapsedMs,
+        totalMs,
+        step,
+        stepIndex: index,
+        stepElapsedMs: elapsedMs - cursor,
+        stepRemainingMs: stepEnd - elapsedMs,
+        progress: totalMs ? elapsedMs / totalMs : 1,
+      };
+    }
+    cursor = stepEnd;
+  }
+  return {
+    done: true,
+    elapsedMs: totalMs,
+    totalMs,
+    step: steps[steps.length - 1],
+    stepIndex: steps.length - 1,
+    stepElapsedMs: steps[steps.length - 1]?.durationMs || 0,
+    stepRemainingMs: 0,
+    progress: 1,
+  };
+}
+
+export function createGuidedCalibrationSession(name = 'guided', startedAtMs = performanceNow()) {
+  return {
+    schema: 'minamo.calibration.session.v1',
+    name,
+    startedAtMs,
+    neutralSamples: [],
+    rangeSamples: [],
+  };
+}
+
+export function collectGuidedCalibrationSample(session, weights, nowMs = performanceNow(), steps = CALIBRATION_GUIDE_STEPS) {
+  const progress = calibrationGuideProgress(session.startedAtMs, nowMs, steps);
+  if (progress.done) return progress;
+  const sample = Array.from(weights, (value) => clamp(Number(value)));
+  if (progress.step.kind === 'neutral') session.neutralSamples.push(sample);
+  else session.rangeSamples.push(sample);
+  return progress;
+}
+
+export function buildCalibrationProfileFromSamples({
+  neutralSamples = [],
+  rangeSamples = [],
+  name = 'guided',
+  baseProfile = null,
+  createdAt = new Date().toISOString(),
+} = {}) {
+  const base = normalizeProfile(baseProfile || createCalibrationProfile(name));
+  const profile = createCalibrationProfile(name || base.name);
+  profile.createdAt = createdAt;
+  profile.muted = base.muted.slice();
+
+  for (let channel = 0; channel < NUM_CHANNELS; channel++) {
+    const neutralValues = channelValues(neutralSamples, channel);
+    const rangeValues = channelValues(rangeSamples, channel);
+    const offset = neutralValues.length ? percentile(neutralValues, 0.95) : base.offsets[channel];
+    const adjustedRange = rangeValues.map((value) => Math.max(0, value - offset));
+    const peak = adjustedRange.length ? percentile(adjustedRange, 0.95) : 0;
+    const gain = peak > 0.05 ? clamp(1 / peak, 0.5, 2) : base.gains[channel];
+    const neutralResidual = neutralValues.map((value) => Math.max(0, value - offset) * gain);
+    const neutralMax = neutralResidual.length ? Math.max(...neutralResidual) : 0;
+
+    profile.offsets[channel] = clamp(offset);
+    profile.gains[channel] = clamp(gain, 0, 2);
+    profile.deadzones[channel] = clamp(Math.max(base.deadzones[channel], neutralMax + 0.001), 0, 0.2);
+  }
+
+  return normalizeProfile(profile);
 }
 
 export function validateCalibrationProfile(profile) {
@@ -485,6 +577,23 @@ function defaultProfileValue(key) {
   if (key === 'gains') return 1;
   if (key === 'muted') return false;
   return 0;
+}
+
+function channelValues(samples, channel) {
+  return samples
+    .map((sample) => clamp(Number(sample?.[channel] || 0)))
+    .filter((value) => Number.isFinite(value));
+}
+
+function percentile(values, q) {
+  if (!values.length) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const pos = (sorted.length - 1) * q;
+  const lower = Math.floor(pos);
+  const upper = Math.ceil(pos);
+  if (lower === upper) return sorted[lower];
+  const weight = pos - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
 function clampProfileNumber(value, min, max, name, warnings) {

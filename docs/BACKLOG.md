@@ -243,9 +243,9 @@ expressions) that computes per-channel offset and gain, applied before
 filtering. Store per profile.
 
 Acceptance criteria:
-- [ ] 30-second guided flow produces offset/gain per channel
-- [ ] Calibrated neutral shows all channels < 0.05
-- [ ] Profiles can be saved, loaded, exported as JSON
+- [x] 30-second guided flow produces offset/gain per channel
+- [x] Calibrated neutral shows all channels < 0.05
+- [x] Profiles can be saved, loaded, exported as JSON
 
 ### [KGM-014] Interactive mixer: per-channel gain, deadzone, and mute
 - Labels: area/tracking, type/feature

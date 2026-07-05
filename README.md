@@ -26,8 +26,8 @@ webcam — free, low-latency, and local-first.
 - In-browser inference (MediaPipe Face Landmarker, GPU/WASM); 52 expression
   channels + head pose + experimental upper body, smoothed with One Euro filters
 - Camera device/resolution/fps controls, persisted tracker/viewer settings,
-  calibration profiles, local JSONL recording and replay, signal quality
-  warnings, and wrap-safe viewer jitter handling
+  guided calibration profiles, local JSONL recording and replay, signal
+  quality warnings, and wrap-safe viewer jitter handling
 - Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
   WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
 - Tauri desktop shell that launches the bundled tracker, viewer, and replay

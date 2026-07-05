@@ -9,6 +9,7 @@ import { OneEuroArray, OneEuroQuat } from '../shared/filters.js';
 import { encodeFrame } from '../shared/codec.js';
 import { MinamoTransport } from '../shared/transport.js';
 import {
+  CALIBRATION_GUIDE_TOTAL_MS,
   DEFAULT_SMOOTHING_SETTINGS,
   DEFAULT_TRACKER_SETTINGS,
   FILTER_PRESETS,
@@ -20,8 +21,12 @@ import {
   DroppedFrameDetector,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
+  buildCalibrationProfileFromSamples,
+  calibrationGuideProgress,
   computeQualityScore,
   createCalibrationProfile,
+  createGuidedCalibrationSession,
+  collectGuidedCalibrationSample,
   isEditableTarget,
   loadJson,
   mirrorFacePayload,
@@ -106,6 +111,7 @@ const state = {
   lastFps: 0,
   qualityCanvas: document.createElement('canvas'),
   recording: { enabled: false, lines: [] },
+  calibrationSession: null,
   // stats
   frames: 0,
   lastStats: performance.now(),
@@ -454,6 +460,7 @@ function loop() {
       // --- safety, calibration, and One Euro filtering
       const sanitized = sanitizeWeights(state.raw);
       frameWarnings.push(...sanitized.warnings);
+      sampleGuidedCalibration(sanitized.weights);
       state.weights.set(applyCalibrationProfile(sanitized.weights, profile));
       state.weightFilter.filter(state.weights, tSec);
       state.quat = state.quatFilter.filter(quat, tSec);
@@ -518,6 +525,7 @@ function loop() {
     state.frames++;
   }
 
+  tickGuidedCalibration();
   updateStats(nowMs);
   requestAnimationFrame(loop);
 }
@@ -902,6 +910,85 @@ function saveProfile() {
   updateChannelControls();
 }
 
+function startGuidedCalibration() {
+  if (!state.running) {
+    chip.textContent = 'start tracking before calibration';
+    chip.dataset.state = 'error';
+    return;
+  }
+  state.calibrationSession = createGuidedCalibrationSession(`guided-${new Date().toISOString()}`, performance.now());
+  $('btnStartCalibration').disabled = true;
+  $('calibrationGuide').hidden = false;
+  $('calibrationResult').textContent = 'collecting samples';
+  updateGuidedCalibrationUi({
+    done: false,
+    elapsedMs: 0,
+    totalMs: CALIBRATION_GUIDE_TOTAL_MS,
+    step: { label: 'Neutral hold' },
+    stepIndex: 0,
+    stepElapsedMs: 0,
+    stepRemainingMs: 3000,
+    progress: 0,
+  });
+  chip.textContent = 'guided calibration';
+  chip.dataset.state = 'idle';
+}
+
+function sampleGuidedCalibration(weights) {
+  if (!state.calibrationSession) return;
+  const progress = collectGuidedCalibrationSample(state.calibrationSession, weights, performance.now());
+  updateGuidedCalibrationUi(progress);
+  if (progress.done) finishGuidedCalibration();
+}
+
+function tickGuidedCalibration() {
+  if (!state.calibrationSession) return;
+  const progress = calibrationGuideProgress(state.calibrationSession.startedAtMs, performance.now());
+  updateGuidedCalibrationUi(progress);
+  if (progress.done) finishGuidedCalibration();
+}
+
+function updateGuidedCalibrationUi(progress) {
+  $('calibrationStep').textContent = progress.step?.label || 'Calibration';
+  $('calibrationTime').textContent = `${Math.max(0, (progress.totalMs - progress.elapsedMs) / 1000).toFixed(1)}s`;
+  $('calibrationProgress').value = String(progress.progress || 0);
+}
+
+function finishGuidedCalibration() {
+  const session = state.calibrationSession;
+  if (!session) return;
+  state.calibrationSession = null;
+  $('btnStartCalibration').disabled = false;
+
+  if (session.neutralSamples.length === 0 || session.rangeSamples.length === 0) {
+    $('calibrationResult').textContent = 'calibration failed: no face samples';
+    chip.textContent = 'calibration failed';
+    chip.dataset.state = 'error';
+    return;
+  }
+
+  profile = buildCalibrationProfileFromSamples({
+    neutralSamples: session.neutralSamples,
+    rangeSamples: session.rangeSamples,
+    name: session.name,
+    baseProfile: profile,
+  });
+  saveProfile();
+  resetFilters();
+  $('calibrationResult').textContent = `saved ${session.neutralSamples.length} neutral / ${session.rangeSamples.length} range samples`;
+  chip.textContent = 'calibration saved';
+  chip.dataset.state = 'open';
+}
+
+function cancelGuidedCalibration(message = 'calibration cancelled') {
+  if (!state.calibrationSession) return;
+  state.calibrationSession = null;
+  $('btnStartCalibration').disabled = false;
+  $('calibrationResult').textContent = message;
+  $('calibrationTime').textContent = `${(CALIBRATION_GUIDE_TOTAL_MS / 1000).toFixed(1)}s`;
+  $('calibrationProgress').value = '0';
+}
+
 async function restartCameraIfRunning() {
   persistSettings();
   if (state.running) {
@@ -966,6 +1053,7 @@ $('btnStart').addEventListener('click', async () => {
 
 $('btnStop').addEventListener('click', () => {
   state.running = false;
+  cancelGuidedCalibration('calibration stopped');
   if (video.srcObject) {
     for (const t of video.srcObject.getTracks()) t.stop();
     video.srcObject = null;
@@ -1066,6 +1154,7 @@ $('btnMuteChannel').addEventListener('click', () => {
   profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
   saveProfile();
 });
+$('btnStartCalibration').addEventListener('click', startGuidedCalibration);
 $('btnCalibrateNeutral').addEventListener('click', () => {
   profile.offsets = Array.from(state.raw);
   profile.createdAt = new Date().toISOString();
@@ -1096,6 +1185,7 @@ $('fileProfile').addEventListener('change', async (e) => {
   }
 });
 $('btnResetSettings').addEventListener('click', () => {
+  cancelGuidedCalibration('calibration reset');
   Object.assign(settings, normalizeTrackerSettings(DEFAULT_TRACKER_SETTINGS));
   profile = createCalibrationProfile('default');
   saveJson(localStorage, TRACKER_STORAGE_KEY, settings);

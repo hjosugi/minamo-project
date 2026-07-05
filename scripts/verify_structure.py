@@ -369,6 +369,46 @@ def validate_foundation_contracts() -> None:
         add_error('relay-rs/Dockerfile', 'relay-rs container must declare a compose stop signal')
 
 
+def validate_calibration_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+    backlog = read('docs/BACKLOG.md')
+
+    for needle in [
+        'CALIBRATION_GUIDE_TOTAL_MS',
+        'createGuidedCalibrationSession',
+        'collectGuidedCalibrationSample',
+        'buildCalibrationProfileFromSamples',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing guided calibration helper: {needle}')
+    for needle in ['btnStartCalibration', 'calibrationGuide', 'calibrationProgress', 'calibrationResult']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing guided calibration UI element: {needle}')
+    for needle in [
+        'sampleGuidedCalibration(sanitized.weights)',
+        'tickGuidedCalibration();',
+        'calibrationGuideProgress',
+        'buildCalibrationProfileFromSamples',
+        'saveProfile()',
+        'resetFilters()',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing guided calibration tracker contract: {needle}')
+    for needle in [
+        'assert.equal(CALIBRATION_GUIDE_TOTAL_MS, 30_000)',
+        'calibratedNeutral',
+        'Math.max(...calibratedNeutral) < 0.05',
+        'guidedProfile.gains.length',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing guided calibration regression coverage: {needle}')
+    if '[KGM-013]' not in backlog or '30-second guided flow produces offset/gain per channel' not in backlog:
+        add_error('docs/BACKLOG.md', 'KGM-013 acceptance criteria must stay documented')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -515,6 +555,7 @@ validate_documented_package_scripts()
 validate_glossary_examples()
 validate_dependency_guardrails()
 validate_foundation_contracts()
+validate_calibration_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

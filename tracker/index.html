@@ -129,11 +129,20 @@
       </div>
       <div class="controls">
         <button id="btnMuteChannel">Mute channel</button>
+        <button id="btnStartCalibration">Start guided calibration</button>
         <button id="btnCalibrateNeutral">Capture neutral</button>
         <button id="btnExportProfile">Export profile</button>
         <button id="btnImportProfile">Import profile</button>
         <button id="btnResetSettings">Reset settings</button>
         <input type="file" id="fileProfile" accept="application/json,.json" hidden />
+      </div>
+      <div id="calibrationGuide" class="calibration-guide" hidden>
+        <div class="calibration-guide-head">
+          <strong id="calibrationStep">Neutral hold</strong>
+          <span id="calibrationTime">30.0s</span>
+        </div>
+        <progress id="calibrationProgress" max="1" value="0"></progress>
+        <output id="calibrationResult">waiting</output>
       </div>
     </section>
 
