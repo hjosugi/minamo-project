@@ -999,6 +999,43 @@ def validate_avatar_mapping_contracts() -> None:
         add_error('vite.config.ts', 'Vite build must include the avatar mapping diagnostic page')
 
 
+def validate_obs_viewer_contracts() -> None:
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    obs_doc = read('docs/product/obs-setup.md')
+    readme = read('README.md')
+
+    for needle in [
+        "query.get('preset') === 'obs'",
+        "query.get('bg') === 'transparent'",
+        "params.get('hud') === '0'",
+        "params.get('camera') === 'locked'",
+        'floor.visible = !settings.transparent',
+        'transport.connectAuto({',
+    ]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing OBS viewer contract: {needle}')
+    if 'body.hud-hidden .hud { display: none; }' not in viewer_html:
+        add_error('viewer/index.html', 'viewer must fully hide HUD for OBS hud=0 URLs')
+    for needle in [
+        'viewer/?preset=obs&room=<room>&bg=transparent&hud=0&camera=locked',
+        'Width: 1920',
+        'Height: 1080',
+        'background-color: rgba(0, 0, 0, 0)',
+        '`bg=transparent` makes the renderer clear to alpha and hides the floor',
+    ]:
+        if needle not in obs_doc:
+            add_error('docs/product/obs-setup.md', f'missing OBS setup documentation: {needle}')
+    for needle in [
+        'OBS Browser Source',
+        'viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked',
+        'width 1920',
+        'height 1080',
+    ]:
+        if needle not in readme:
+            add_error('README.md', f'missing README OBS setup detail: {needle}')
+
+
 def validate_transport_contracts() -> None:
     transport = read('shared/transport.js')
     tests = read('tests/run-tests.mjs')
@@ -1277,6 +1314,7 @@ validate_body_hand_contracts()
 validate_protocol_v2_contracts()
 validate_e2ee_contracts()
 validate_avatar_mapping_contracts()
+validate_obs_viewer_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

@@ -100,6 +100,19 @@ npm run desktop:dev
 
 Desktop packaging details: [docs/product/desktop-app.md](docs/product/desktop-app.md).
 
+### 5. OBS Browser Source
+
+Use the viewer as a transparent OBS source:
+
+```text
+viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked
+```
+
+OBS settings: Browser Source, width 1920, height 1080, 60 FPS when the machine
+can sustain it, and custom CSS `body { background-color: rgba(0, 0, 0, 0); margin: 0; overflow: hidden; }`.
+Use `mode=ws` or `mode=wt` plus `token`, `wtUrl`, and `wtHash` for remote relay
+rooms. Full setup: [docs/product/obs-setup.md](docs/product/obs-setup.md).
+
 ## Repository layout
 
 ```

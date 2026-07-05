@@ -23,7 +23,10 @@ import {
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
+const params = new URLSearchParams(location.search);
 const settings = loadJson(localStorage, VIEWER_STORAGE_KEY, DEFAULT_VIEWER_SETTINGS);
+applyQuerySettings(settings, params);
+document.body.classList.toggle('hud-hidden', params.get('hud') === '0' || params.get('preset') === 'obs');
 
 // ---------------------------------------------------------------- scene
 
@@ -37,8 +40,7 @@ const scene = new THREE.Scene();
 scene.background = settings.transparent ? null : new THREE.Color(0x0f1220);
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 30);
-camera.position.set(0, 1.42, 1.4);
-camera.lookAt(0, 1.38, 0);
+applyLockedCamera();
 
 scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x1a1e33, 1.1));
 const key = new THREE.DirectionalLight(0xffffff, 1.6);
@@ -54,10 +56,12 @@ const floor = new THREE.Mesh(
 );
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
+applyBackground();
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  if (params.get('camera') === 'locked' || params.get('preset') === 'obs') applyLockedCamera();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
@@ -457,11 +461,6 @@ render();
 
 // ---------------------------------------------------------------- ui
 
-const params = new URLSearchParams(location.search);
-if (params.get('room')) settings.room = params.get('room');
-if (params.get('token')) settings.token = params.get('token');
-if (params.get('arms') === '0') settings.armSolver = false;
-
 function applySettingsToUi() {
   $('selMode').value = settings.mode;
   $('inpRoom').value = settings.room;
@@ -498,6 +497,7 @@ function updateModeFields() {
 function applyBackground() {
   renderer.setClearColor(0x000000, settings.transparent ? 0 : 1);
   scene.background = settings.transparent ? null : new THREE.Color(0x0f1220);
+  floor.visible = !settings.transparent;
 }
 
 $('selMode').addEventListener('change', () => {
@@ -635,5 +635,33 @@ if (params.get('vrm')) {
 // auto-connect local mode when opened from the tracker link
 applySettingsToUi();
 if (params.get('room')) {
-  transport.connect({ mode: 'local', room: settings.room, role: 'sub', token: settings.token }).catch(() => {});
+  transport.connectAuto({
+    mode: settings.mode,
+    room: settings.room,
+    role: 'sub',
+    wtUrl: settings.wtUrl,
+    certHashHex: settings.wtHash,
+    token: settings.token,
+  }).catch(() => {});
+}
+
+function applyQuerySettings(targetSettings, query) {
+  if (query.get('preset') === 'obs') {
+    targetSettings.transparent = true;
+  }
+  const mode = query.get('mode');
+  if (['local', 'ws', 'wt'].includes(mode)) targetSettings.mode = mode;
+  if (query.get('room')) targetSettings.room = query.get('room');
+  if (query.get('token')) targetSettings.token = query.get('token');
+  if (query.get('wtUrl')) targetSettings.wtUrl = query.get('wtUrl');
+  if (query.get('wtHash')) targetSettings.wtHash = query.get('wtHash');
+  if (query.get('arms') === '0') targetSettings.armSolver = false;
+  if (query.get('arms') === '1') targetSettings.armSolver = true;
+  if (query.get('bg') === 'transparent' || query.get('transparent') === '1') targetSettings.transparent = true;
+  if (query.get('bg') === 'solid' || query.get('transparent') === '0') targetSettings.transparent = false;
+}
+
+function applyLockedCamera() {
+  camera.position.set(0, 1.42, 1.4);
+  camera.lookAt(0, 1.38, 0);
 }
