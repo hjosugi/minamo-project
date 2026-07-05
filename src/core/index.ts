@@ -4,5 +4,6 @@ export * from './oneEuroFilter';
 export * from './anatomy';
 export * from './kgm1';
 export * from './face';
+export * from './hand';
 export * from './drum';
 export * from './mockFrame';

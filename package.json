@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "lint": "node scripts/lint.mjs",
     "preview": "vite preview",
-    "test": "node tests/run-tests.mjs",
+    "test": "node tests/run-tests.mjs && vitest run",
     "verify": "python3 scripts/verify_structure.py"
   },
   "dependencies": {
