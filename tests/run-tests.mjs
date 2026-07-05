@@ -12,6 +12,7 @@ import {
   HeadPositionStabilizer,
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
+  TrackingLossSmoother,
   applyCalibrationProfile,
   applyGazeToWeights,
   buildCalibrationProfileFromSamples,
@@ -282,6 +283,25 @@ function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, inne
   assert.equal(sanitized.weights[CHANNEL_INDEX.mouthSmileLeft], 0);
   assert.equal(sanitized.weights[CHANNEL_INDEX.mouthSmileRight], 1);
   assert.ok(sanitized.warnings.length >= 2);
+}
+
+{
+  const smoother = new TrackingLossSmoother({ fadeMs: 400, reacquireMs: 250 });
+  const tracked = new Float32Array(NUM_CHANNELS);
+  tracked[CHANNEL_INDEX.jawOpen] = 1;
+  assert.equal(smoother.update(true, tracked, 0).weights[CHANNEL_INDEX.jawOpen], 1);
+  assert.equal(smoother.update(false, tracked, 0).weights[CHANNEL_INDEX.jawOpen], 1);
+  assert.ok(Math.abs(smoother.update(false, tracked, 200).weights[CHANNEL_INDEX.jawOpen] - 0.5) < 0.01);
+  assert.equal(smoother.update(false, tracked, 400).active, false);
+
+  const reentry = new Float32Array(NUM_CHANNELS);
+  reentry[CHANNEL_INDEX.jawOpen] = 0.8;
+  const firstReentry = smoother.update(true, reentry, 500);
+  assert.equal(firstReentry.reacquired, true);
+  assert.ok(firstReentry.weights[CHANNEL_INDEX.jawOpen] < 0.1, 're-entry starts near neutral');
+  const easedReentry = smoother.update(true, reentry, 625);
+  assert.ok(easedReentry.weights[CHANNEL_INDEX.jawOpen] > 0.3 && easedReentry.weights[CHANNEL_INDEX.jawOpen] < 0.6);
+  assert.ok(Math.abs(smoother.update(true, reentry, 750).weights[CHANNEL_INDEX.jawOpen] - 0.8) < 0.01);
 }
 
 {

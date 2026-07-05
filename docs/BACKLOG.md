@@ -354,8 +354,8 @@ on re-acquire the avatar snaps. Fade weights toward neutral over ~400 ms on
 loss, reset filters on re-acquire, and ease back over ~250 ms.
 
 Acceptance criteria:
-- [ ] Covering the camera relaxes the avatar to neutral smoothly
-- [ ] Re-entry produces no snap
+- [x] Covering the camera relaxes the avatar to neutral smoothly
+- [x] Re-entry produces no snap
 
 ### [KGM-021] Multi-face selection policy
 - Labels: area/tracking, type/bug

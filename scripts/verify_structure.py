@@ -617,6 +617,36 @@ def validate_filter_tuning_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing filter tuning regression coverage: {needle}')
 
 
+def validate_tracking_loss_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in [
+        'export class TrackingLossSmoother',
+        'fadeMs = 400',
+        'reacquireMs = 250',
+        "phase: 'lost'",
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing tracking loss runtime contract: {needle}')
+    for needle in [
+        'trackingLossSmoother: new TrackingLossSmoother()',
+        'state.trackingLossSmoother.update(false',
+        'resetFilters({ resetTrackingLoss: false })',
+        'shouldSendFace = lossState.active',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracking loss tracker contract: {needle}')
+    for needle in [
+        'new TrackingLossSmoother({ fadeMs: 400, reacquireMs: 250 })',
+        're-entry starts near neutral',
+        'firstReentry.reacquired, true',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing tracking loss regression coverage: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -770,6 +800,7 @@ validate_gaze_contracts()
 validate_head_position_contracts()
 validate_blink_wink_contracts()
 validate_filter_tuning_contracts()
+validate_tracking_loss_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

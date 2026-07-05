@@ -25,6 +25,7 @@ import {
   HeadPositionStabilizer,
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
+  TrackingLossSmoother,
   applyCalibrationProfile,
   applyGazeToWeights,
   buildCalibrationProfileFromSamples,
@@ -119,6 +120,7 @@ const state = {
   handCurlFilter: new OneEuroArray(10, filterOptions('hands')),
   handSpreadFilter: new OneEuroArray(10, filterOptions('hands')),
   blinkWinkStabilizer: new BlinkWinkStabilizer(),
+  trackingLossSmoother: new TrackingLossSmoother(),
   dropDetector: new DroppedFrameDetector(Number(settings.fps) || 60),
   confidenceTracker: new LandmarkConfidenceTracker(),
   cameraControls: { supported: [], attempted: [], unavailable: true, lowLightNudged: false },
@@ -371,12 +373,13 @@ function filterOptions(group = 'face') {
   };
 }
 
-function resetFilters() {
+function resetFilters({ resetTrackingLoss = true } = {}) {
   state.weightFilter = new OneEuroArray(NUM_CHANNELS, filterOptions('face'));
   state.quatFilter = new OneEuroQuat(filterOptions('headRotation'));
   state.posFilter = new OneEuroArray(3, filterOptions('headPosition'));
   state.headPositionStabilizer.reset();
   state.blinkWinkStabilizer.reset();
+  if (resetTrackingLoss) state.trackingLossSmoother.reset();
   state.poseFilter = new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose'));
   state.handCurlFilter = new OneEuroArray(10, filterOptions('hands'));
   state.handSpreadFilter = new OneEuroArray(10, filterOptions('hands'));
@@ -446,6 +449,7 @@ function loop() {
 
     const tSec = nowMs / 1000;
     const hasFace = faceRes.faceBlendshapes && faceRes.faceBlendshapes.length > 0;
+    let shouldSendFace = false;
     const frameWarnings = [];
 
     if (hasFace) {
@@ -490,13 +494,21 @@ function loop() {
       const sanitized = sanitizeWeights(state.raw);
       frameWarnings.push(...sanitized.warnings);
       sampleGuidedCalibration(sanitized.weights);
-      state.weights.set(applyCalibrationProfile(sanitized.weights, profile));
+      const calibratedWeights = applyCalibrationProfile(sanitized.weights, profile);
+      const lossState = state.trackingLossSmoother.update(true, calibratedWeights, nowMs);
+      if (lossState.reacquired) resetFilters({ resetTrackingLoss: false });
+      state.weights.set(lossState.weights);
       state.weightFilter.filter(state.weights, tSec);
       state.quat = state.quatFilter.filter(quat, tSec);
       const stabilizedPos = state.headPositionStabilizer.stabilize(pos, nowMs, { leanRangeCm: settings.headLeanRangeCm });
       const p = new Float32Array(stabilizedPos);
       state.posFilter.filter(p, tSec);
       state.pos = [p[0], p[1], p[2]];
+      shouldSendFace = true;
+    } else {
+      const lossState = state.trackingLossSmoother.update(false, state.weights, nowMs);
+      state.weights.set(lossState.weights);
+      shouldSendFace = lossState.active;
     }
 
     // --- pose points (upper body), hip-centered world meters
@@ -537,7 +549,7 @@ function loop() {
     state.warnings = [...new Set([...frameWarnings, ...state.quality.warnings])];
 
     // --- encode and send
-    if (hasFace) {
+    if (shouldSendFace) {
       const frame = {
         t: Math.round(nowMs),
         seq: state.seq++,

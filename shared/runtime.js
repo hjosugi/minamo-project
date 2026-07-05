@@ -331,6 +331,52 @@ export class BlinkWinkStabilizer {
   }
 }
 
+export class TrackingLossSmoother {
+  constructor({ fadeMs = 400, reacquireMs = 250, channels = NUM_CHANNELS } = {}) {
+    this.fadeMs = fadeMs;
+    this.reacquireMs = reacquireMs;
+    this.channels = channels;
+    this.lastWeights = new Float32Array(channels);
+    this.lossFrom = new Float32Array(channels);
+    this.lostAt = null;
+    this.reacquireAt = null;
+  }
+
+  reset() {
+    this.lastWeights.fill(0);
+    this.lossFrom.fill(0);
+    this.lostAt = null;
+    this.reacquireAt = null;
+  }
+
+  update(hasFace, weights = this.lastWeights, nowMs = performanceNow()) {
+    const input = new Float32Array(weights);
+    const out = new Float32Array(this.channels);
+    let reacquired = false;
+    if (hasFace) {
+      if (this.lostAt !== null) {
+        this.reacquireAt = nowMs;
+        this.lostAt = null;
+        reacquired = true;
+      }
+      const t = this.reacquireAt === null ? 1 : clamp((nowMs - this.reacquireAt) / this.reacquireMs);
+      for (let i = 0; i < this.channels; i++) out[i] = this.lastWeights[i] * (1 - t) + input[i] * t;
+      if (t >= 1) this.reacquireAt = null;
+      this.lastWeights.set(out);
+      return { weights: out, active: true, reacquired, phase: reacquired ? 'reacquire' : 'tracking' };
+    }
+
+    if (this.lostAt === null) {
+      this.lostAt = nowMs;
+      this.lossFrom.set(this.lastWeights);
+    }
+    const t = clamp((nowMs - this.lostAt) / this.fadeMs);
+    for (let i = 0; i < this.channels; i++) out[i] = this.lossFrom[i] * (1 - t);
+    this.lastWeights.set(out);
+    return { weights: out, active: t < 1, reacquired: false, phase: 'lost' };
+  }
+}
+
 export function normalizeHeadLeanRangeCm(value) {
   return Math.round(clamp(Number(value ?? DEFAULT_TRACKER_SETTINGS.headLeanRangeCm), 0, 20) * 10) / 10;
 }
