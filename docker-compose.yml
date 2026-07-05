@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile.relay-node
     environment:
       PORT: "8787"
-      KAGAMI_RELAY_TOKEN: ${KAGAMI_RELAY_TOKEN:-}
-      KAGAMI_ALLOWED_ORIGINS: ${KAGAMI_ALLOWED_ORIGINS:-}
+      MINAMO_RELAY_TOKEN: ${MINAMO_RELAY_TOKEN:-}
+      MINAMO_ALLOWED_ORIGINS: ${MINAMO_ALLOWED_ORIGINS:-}
     ports:
       - "8787:8787"
 
@@ -15,6 +15,6 @@ services:
       context: ./relay-rs
       dockerfile: Dockerfile
     environment:
-      KAGAMI_RELAY_TOKEN: ${KAGAMI_RELAY_TOKEN:-}
+      MINAMO_RELAY_TOKEN: ${MINAMO_RELAY_TOKEN:-}
     ports:
       - "4433:4433/udp"

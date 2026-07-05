@@ -1,6 +1,6 @@
 # Dependency Update Policy
 
-KAGAMI is local-first tracking software, so dependency changes must preserve
+Minamo is local-first tracking software, so dependency changes must preserve
 privacy, latency, and reproducibility.
 
 ## Policy

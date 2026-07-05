@@ -12,7 +12,7 @@ Two independent gaps sit between a webcam and a good-looking avatar:
    VRM wants 52 channels 1:1; a 5-expression VRoid model wants a curated
    mapping; an Inochi2D puppet wants named parameters. (Retargeting)
 
-KAGAMI separates them: calibration lives tracker-side and travels on the
+Minamo separates them: calibration lives tracker-side and travels on the
 wire already normalized; retargeting lives renderer-side per avatar.
 
 ## Calibration (tracker-side)

@@ -58,7 +58,7 @@ export function classifyMotionBlur(laplacianVariance: number): QualityClassifica
 
 export function privacyPreservingDatasetRecord(landmarks: Landmark[], label: string): string {
   return JSON.stringify({
-    schema: 'kagami.dataset.landmarks.v1',
+    schema: 'minamo.dataset.landmarks.v1',
     label,
     landmarks: landmarks.map((lm) => ({
       x: round4(lm.x),

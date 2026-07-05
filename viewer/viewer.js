@@ -1,4 +1,4 @@
-// KAGAMI viewer.
+// Minamo viewer.
 // Receives KGM1 frames, decodes them, and drives either a loaded VRM avatar
 // or a built-in primitive bot. Incoming values are treated as targets and
 // the render loop eases toward them, so network jitter never reaches bones.
@@ -9,7 +9,7 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
 import { CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
 import { decodeFrame } from '../shared/codec.js';
-import { KagamiTransport } from '../shared/transport.js';
+import { MinamoTransport } from '../shared/transport.js';
 import {
   DEFAULT_VIEWER_SETTINGS,
   VIEWER_STORAGE_KEY,
@@ -313,7 +313,7 @@ function gazeY(w) {
 
 // ---------------------------------------------------------------- receive
 
-const transport = new KagamiTransport();
+const transport = new MinamoTransport();
 const orderGate = new FrameOrderGate();
 let recvFrames = 0;
 let lastBytesIn = 0;

@@ -1,8 +1,8 @@
 [package]
-name = "kagami-relay"
+name = "minamo-relay"
 version = "0.1.0"
 edition = "2021"
-description = "KAGAMI low-latency tracking relay over WebTransport datagrams"
+description = "Minamo low-latency tracking relay over WebTransport datagrams"
 license = "0BSD"
 
 [dependencies]

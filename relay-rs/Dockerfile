@@ -5,6 +5,6 @@ COPY src ./src
 RUN cargo build --release
 
 FROM gcr.io/distroless/cc-debian12
-COPY --from=build /src/target/release/kagami-relay /usr/local/bin/kagami-relay
+COPY --from=build /src/target/release/minamo-relay /usr/local/bin/minamo-relay
 EXPOSE 4433/udp
-CMD ["/usr/local/bin/kagami-relay"]
+CMD ["/usr/local/bin/minamo-relay"]

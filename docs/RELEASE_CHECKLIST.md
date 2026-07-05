@@ -26,9 +26,9 @@ cd relay-node && node --check server.mjs
 ## Manual Smoke Tests
 
 - Local mode: tracker -> viewer works through BroadcastChannel.
-- WebSocket relay works without `KAGAMI_RELAY_TOKEN`.
+- WebSocket relay works without `MINAMO_RELAY_TOKEN`.
 - WebSocket relay rejects missing or wrong tokens when
-  `KAGAMI_RELAY_TOKEN` is set.
+  `MINAMO_RELAY_TOKEN` is set.
 - WebTransport relay starts and prints a certificate hash.
 - Viewer drops stale/out-of-order frames without freezing.
 - Tracker can start, stop, reset calibration, and keep settings local.

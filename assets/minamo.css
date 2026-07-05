@@ -1,4 +1,4 @@
-/* KAGAMI design system.
+/* Minamo design system.
    Concept: a broadcast signal chain. Every tracked data channel has a color,
    and that color is used consistently in overlays, meters, and status text:
      face channel = pink, pose channel = cyan.

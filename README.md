@@ -1,4 +1,4 @@
-# KAGAMI
+# Minamo
 
 [![ci](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml)
 
@@ -73,7 +73,7 @@ cd relay-node && npm install && npm start   # serves the site + relays on :8787
 ```
 
 Set mode: ws on both tracker and viewer, use the same room name, Connect.
-Set `KAGAMI_RELAY_TOKEN` to require the room token field.
+Set `MINAMO_RELAY_TOKEN` to require the room token field.
 
 ### 3. WebTransport relay (lowest latency)
 

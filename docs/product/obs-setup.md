@@ -25,4 +25,4 @@ viewer/?room=stage&token=<token>&vrm=<cors-url-to-model.vrm>
 ```
 
 Room tokens are optional for local/private setups and required for shared
-relays configured with `KAGAMI_RELAY_TOKEN`.
+relays configured with `MINAMO_RELAY_TOKEN`.

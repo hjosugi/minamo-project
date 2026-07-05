@@ -1,4 +1,4 @@
-// KAGAMI relay (Node).
+// Minamo relay (Node).
 // One process does two jobs:
 //   1. serves the repo as a static site (tracker / viewer pages)
 //   2. relays KGM1 binary frames between rooms over WebSocket
@@ -17,8 +17,8 @@ import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = normalize(join(fileURLToPath(import.meta.url), '..', '..')); // repo root
-const ROOM_TOKEN = process.env.KAGAMI_RELAY_TOKEN || process.env.ROOM_TOKEN || '';
-const ALLOWED_ORIGINS = (process.env.KAGAMI_ALLOWED_ORIGINS || '')
+const ROOM_TOKEN = process.env.MINAMO_RELAY_TOKEN || process.env.ROOM_TOKEN || '';
+const ALLOWED_ORIGINS = (process.env.MINAMO_ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -76,7 +76,7 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  ws.kagami = { room, role };
+  ws.minamo = { room, role };
 
   if (!rooms.has(room)) rooms.set(room, new Set());
   rooms.get(room).add(ws);
@@ -116,10 +116,10 @@ wss.on('connection', (ws) => {
 wss.on('close', () => clearInterval(beat));
 
 http.listen(PORT, () => {
-  console.log(`KAGAMI relay-node`);
+  console.log(`Minamo relay-node`);
   console.log(`  site : http://localhost:${PORT}`);
   console.log(`  ws   : ws://localhost:${PORT}/ws?room=<room>&role=<pub|sub>`);
-  if (ROOM_TOKEN) console.log(`  auth : KAGAMI_RELAY_TOKEN required`);
+  if (ROOM_TOKEN) console.log(`  auth : MINAMO_RELAY_TOKEN required`);
   if (ALLOWED_ORIGINS.length) console.log(`  origins: ${ALLOWED_ORIGINS.join(', ')}`);
 });
 

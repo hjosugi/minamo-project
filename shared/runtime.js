@@ -59,10 +59,10 @@ export const RESOLUTION_CONSTRAINTS = Object.freeze({
   '1080p': Object.freeze({ width: 1920, height: 1080 }),
 });
 
-export const TRACKER_STORAGE_KEY = 'kagami.tracker.settings.v2';
-export const VIEWER_STORAGE_KEY = 'kagami.viewer.settings.v2';
-export const PROFILE_STORAGE_KEY = 'kagami.calibration.profile.v1';
-export const MOTION_JSONL_SCHEMA = 'kagami.kgm1.motion-jsonl.v1';
+export const TRACKER_STORAGE_KEY = 'minamo.tracker.settings.v2';
+export const VIEWER_STORAGE_KEY = 'minamo.viewer.settings.v2';
+export const PROFILE_STORAGE_KEY = 'minamo.calibration.profile.v1';
+export const MOTION_JSONL_SCHEMA = 'minamo.kgm1.motion-jsonl.v1';
 export const MAX_MOTION_JSONL_FRAMES = 36_000;
 
 export function clamp(value, min = 0, max = 1) {
@@ -177,7 +177,7 @@ export function computeQualityScore({
 
 export function createCalibrationProfile(name = 'default') {
   return {
-    schema: 'kagami.calibration.v1',
+    schema: 'minamo.calibration.v1',
     name,
     createdAt: new Date().toISOString(),
     offsets: Array(NUM_CHANNELS).fill(0),

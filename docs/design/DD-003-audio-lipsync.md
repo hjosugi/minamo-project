@@ -7,7 +7,7 @@ Status: design. Backlog: KGM-045, KGM-046.
 Visual mouth tracking fails exactly when streamers need it: low light, face
 partially off-frame, camera below 30 fps. Audio always knows when you are
 talking. VSeeFace-class tools treat audio lipsync as a fallback switch;
-KAGAMI should fuse both continuously.
+Minamo should fuse both continuously.
 
 ## Goals
 

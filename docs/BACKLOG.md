@@ -1,4 +1,4 @@
-# KAGAMI Backlog
+# Minamo Backlog
 
 Issue-ready backlog. Every entry follows the same fixed format so it can be
 parsed and registered to GitHub Issues automatically. See
@@ -640,7 +640,7 @@ Acceptance criteria:
 
 Render `.inp/.inx` 2D puppets in the viewer by compiling inox2d to WASM
 (wgpu/WebGL backend) and mapping KGM channels to Inochi2D parameters. This
-is the high-quality 2D path that makes KAGAMI cover the Live2D-style use
+is the high-quality 2D path that makes Minamo cover the Live2D-style use
 case with an open format.
 
 Acceptance criteria:
@@ -673,7 +673,7 @@ Acceptance criteria:
 
 Viewer query params: `?bg=transparent` (alpha canvas + no floor), `?hud=0`,
 locked camera. Document the OBS Browser Source recipe (custom CSS,
-resolution). This single issue makes KAGAMI usable in real streams.
+resolution). This single issue makes Minamo usable in real streams.
 
 Acceptance criteria:
 - [ ] Transparent background verified in OBS Browser Source
@@ -687,7 +687,7 @@ Acceptance criteria:
 - Milestone: M5 Render backends
 - Design doc: -
 
-For hosted avatars, add a CLI (`kagami-pack`) that runs gltfpack
+For hosted avatars, add a CLI (`minamo-pack`) that runs gltfpack
 (EXT_meshopt_compression) or Draco plus KTX2/BasisU texture encoding on
 VRM files, and wire the corresponding three.js loaders in the viewer.
 Typical VRM shrinks 60-80% and textures stay compressed on GPU.
@@ -862,7 +862,7 @@ Acceptance criteria:
 - Design doc: -
 
 Deploy the static site (tracker+viewer, local mode) to GitHub Pages so
-anyone can try KAGAMI with zero setup. Branch-based Pages publish from main.
+anyone can try Minamo with zero setup. Branch-based Pages publish from main.
 
 Acceptance criteria:
 - [ ] Public URL runs local-mode demo end to end

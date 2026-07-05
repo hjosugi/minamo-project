@@ -1,4 +1,4 @@
-// KAGAMI tracker.
+// Minamo tracker.
 // Pipeline: webcam -> MediaPipe Face Landmarker (GPU, in-browser)
 //        -> head pose + 52 blendshapes -> One Euro filtering
 //        -> KGM1 binary encode -> transport (local / ws / wt).
@@ -14,7 +14,7 @@ import {
 import { ARKIT_52, NUM_CHANNELS, MIRROR_INDEX, POSE_POINTS, NUM_POSE_POINTS } from '../shared/blendshapes.js';
 import { OneEuroArray, OneEuroQuat } from '../shared/filters.js';
 import { encodeFrame } from '../shared/codec.js';
-import { KagamiTransport } from '../shared/transport.js';
+import { MinamoTransport } from '../shared/transport.js';
 import {
   DEFAULT_TRACKER_SETTINGS,
   FILTER_PRESETS,
@@ -71,7 +71,7 @@ const state = {
   faceLandmarker: null,
   poseLandmarker: null,
   handLandmarker: null,
-  transport: new KagamiTransport(),
+  transport: new MinamoTransport(),
   seq: 0,
   weights: new Float32Array(NUM_CHANNELS),
   raw: new Float32Array(NUM_CHANNELS),
@@ -882,7 +882,7 @@ $('btnCalibrateNeutral').addEventListener('click', () => {
   chip.dataset.state = 'open';
 });
 $('btnExportProfile').addEventListener('click', () => {
-  downloadText('kagami-calibration-profile.json', `${JSON.stringify(profile, null, 2)}\n`);
+  downloadText('minamo-calibration-profile.json', `${JSON.stringify(profile, null, 2)}\n`);
 });
 $('btnImportProfile').addEventListener('click', () => $('fileProfile').click());
 $('fileProfile').addEventListener('change', async (e) => {
@@ -937,7 +937,7 @@ $('chkRecord').addEventListener('change', (e) => {
 
 $('btnDownloadRecording').addEventListener('click', () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  downloadText(`kagami-motion-${stamp}.jsonl`, `${state.recording.lines.join('\n')}\n`, 'application/x-ndjson');
+  downloadText(`minamo-motion-${stamp}.jsonl`, `${state.recording.lines.join('\n')}\n`, 'application/x-ndjson');
 });
 
 window.addEventListener('keydown', (ev) => {

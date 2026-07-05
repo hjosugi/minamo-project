@@ -1,4 +1,4 @@
-# KAGAMI Architecture
+# Minamo Architecture
 
 ## Goal
 
@@ -95,10 +95,10 @@ Two different problems:
 
 ## Relation to prior art
 
-| Project | What it does | What KAGAMI takes / changes |
+| Project | What it does | What Minamo takes / changes |
 |---|---|---|
 | Kalidokit | JS solvers from MediaPipe landmarks to rig params | Same role as our solver layer; we use the newer Face Landmarker blendshape output directly instead of heuristic solving |
-| OpenSeeFace / VSeeFace | Python UDP tracker + Unity renderer | Same "parameters over the wire" idea; KAGAMI replaces UDP with WebTransport so it works from a browser |
+| OpenSeeFace / VSeeFace | Python UDP tracker + Unity renderer | Same "parameters over the wire" idea; Minamo replaces UDP with WebTransport so it works from a browser |
 | VTube Studio | Commercial 2D tracking app | Reference for calibration UX and quality bar |
 | Inochi2D / inox2d | 2D puppet format + Rust renderer | Planned 2D render backend (DD-004) |
 | moeru-ai/airi | AI VTuber companion stack | Potential consumer of KGM1 frames to drive its avatars |
@@ -107,7 +107,7 @@ Two different problems:
 ## Repository layout
 
 ```
-kagami/
+minamo/
   index.html          landing hub
   tracker/            webcam -> KGM1 publisher page
   viewer/             KGM1 -> VRM / built-in bot renderer page

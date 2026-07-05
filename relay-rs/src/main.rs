@@ -1,4 +1,4 @@
-// KAGAMI relay (Rust, WebTransport).
+// Minamo relay (Rust, WebTransport).
 // The low-latency path: KGM1 frames travel as QUIC datagrams.
 // Datagrams are unreliable and unordered by design. A late pose frame is a
 // useless pose frame, so we never retransmit; the next frame replaces it.
@@ -45,12 +45,12 @@ async fn main() -> anyhow::Result<()> {
     let endpoint = Endpoint::server(config)?;
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
     let relay_token = Arc::new(
-        std::env::var("KAGAMI_RELAY_TOKEN")
+        std::env::var("MINAMO_RELAY_TOKEN")
             .or_else(|_| std::env::var("ROOM_TOKEN"))
             .unwrap_or_default(),
     );
 
-    println!("KAGAMI relay-rs (WebTransport)");
+    println!("Minamo relay-rs (WebTransport)");
     println!("  url  : https://localhost:{PORT}/room/<room>/<pub|sub>");
     println!("  cert sha-256 (paste into the tracker/viewer UI):");
     println!("    {}", digest.fmt(Sha256DigestFmt::DottedHex));

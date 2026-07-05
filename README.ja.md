@@ -1,4 +1,4 @@
-# KAGAMI
+# Minamo
 
 > English version: [README.md](README.md)
 

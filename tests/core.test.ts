@@ -99,8 +99,8 @@ describe('ML support helpers', () => {
   });
 
   it('verifies model hashes and serializes privacy-preserving landmark records', async () => {
-    const data = new TextEncoder().encode('kagami');
-    expect(await verifyModelHash(data, '1aae6cdb4b76336d57a2ec8a4854415116fb374a3821df1d8f6fb1dfa6314023')).toBe(true);
+    const data = new TextEncoder().encode('minamo');
+    expect(await verifyModelHash(data, '87e6748e5dbb1148dbbd729f61f7ccb0bb1bd35ce46d7f334c67f750b5f1e71a')).toBe(true);
     const record = JSON.parse(privacyPreservingDatasetRecord([{ x: 0.123456, y: 0.2, z: -0.3, visibility: 0.98765 }], 'open-hand'));
     expect(record.landmarks[0].x).toBe(0.1235);
     expect(record.label).toBe('open-hand');

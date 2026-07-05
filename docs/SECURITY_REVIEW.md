@@ -16,7 +16,7 @@ artifacts.
 ## Relay And Transport
 
 - Optional room tokens are enabled for shared or public relays.
-- `KAGAMI_ALLOWED_ORIGINS` is set for public WebSocket deployments.
+- `MINAMO_ALLOWED_ORIGINS` is set for public WebSocket deployments.
 - Token checks use constant-time comparison.
 - New network features document downgrade, replay, and origin behavior.
 - Stale or reordered frames are rejected by sequence-aware receiver logic.

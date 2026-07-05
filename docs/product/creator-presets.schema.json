@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kagami.local/schemas/creator-presets.schema.json",
-  "title": "KAGAMI Creator Preset",
+  "$id": "https://minamo.local/schemas/creator-presets.schema.json",
+  "title": "Minamo Creator Preset",
   "type": "object",
   "required": ["schema", "name", "tracking", "viewer"],
   "properties": {
-    "schema": { "const": "kagami.creator-preset.v1" },
+    "schema": { "const": "minamo.creator-preset.v1" },
     "name": { "type": "string", "minLength": 1 },
     "tracking": {
       "type": "object",

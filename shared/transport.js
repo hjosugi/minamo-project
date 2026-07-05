@@ -5,7 +5,7 @@
 //           lowest latency. A dropped pose frame should be dropped, not
 //           retransmitted late — that is why datagrams fit tracking data.
 
-export class KagamiTransport extends EventTarget {
+export class MinamoTransport extends EventTarget {
   constructor() {
     super();
     this.mode = null;
@@ -36,7 +36,7 @@ export class KagamiTransport extends EventTarget {
     this.token = token;
 
     if (mode === 'local') {
-      this._bc = new BroadcastChannel(`kagami:${room}:${token || 'open'}`);
+      this._bc = new BroadcastChannel(`minamo:${room}:${token || 'open'}`);
       this._bc.onmessage = (ev) => {
         if (ev.data instanceof ArrayBuffer) this._frame(new Uint8Array(ev.data));
       };

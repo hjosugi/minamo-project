@@ -89,7 +89,7 @@ function pause(label) {
 function publish(record) {
   const room = $('inpRoom').value || 'demo';
   const token = $('inpToken').value || 'open';
-  const channel = new BroadcastChannel(`kagami:${room}:${token}`);
+  const channel = new BroadcastChannel(`minamo:${room}:${token}`);
   const frame = {
     t: Math.round(record.t),
     seq: record.seq,

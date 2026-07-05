@@ -63,7 +63,7 @@ function walk(dir) {
 
 walk(vendor);
 const manifest = {
-  schema: 'kagami.mediapipe-vendor.v1',
+  schema: 'minamo.mediapipe-vendor.v1',
   tasksVisionVersion: version,
   generatedAt: new Date().toISOString(),
   files: files.sort().map((file) => {
