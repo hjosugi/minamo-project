@@ -57,15 +57,23 @@ async fn main() -> anyhow::Result<()> {
     println!("  note : self-signed; restart regenerates it (14-day browser limit)");
 
     loop {
-        let incoming = endpoint.accept().await;
-        let rooms = rooms.clone();
-        let relay_token = relay_token.clone();
-        tokio::spawn(async move {
-            if let Err(e) = handle_session(incoming, rooms, relay_token).await {
-                eprintln!("[session] {e}");
+        tokio::select! {
+            incoming = endpoint.accept() => {
+                let rooms = rooms.clone();
+                let relay_token = relay_token.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_session(incoming, rooms, relay_token).await {
+                        eprintln!("[session] {e}");
+                    }
+                });
             }
-        });
+            _ = tokio::signal::ctrl_c() => {
+                println!("shutting down");
+                break;
+            }
+        }
     }
+    Ok(())
 }
 
 async fn handle_session(
@@ -167,4 +175,45 @@ fn constant_time_equal(a: &str, b: &str) -> bool {
         diff |= l ^ r;
     }
     diff == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_compare_handles_matches_mismatches_and_length_changes() {
+        assert!(constant_time_equal("secret", "secret"));
+        assert!(!constant_time_equal("secret", "wrong"));
+        assert!(!constant_time_equal("secret", "secret-extra"));
+        assert!(!constant_time_equal("", "secret"));
+    }
+
+    #[tokio::test]
+    async fn gc_room_removes_room_after_last_participant_leaves() {
+        let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+        {
+            let mut map = rooms.lock().await;
+            map.insert(
+                "demo".to_string(),
+                Room {
+                    tx: broadcast::channel(ROOM_CAPACITY).0,
+                    participants: 2,
+                },
+            );
+        }
+
+        gc_room(&rooms, "demo").await;
+        assert_eq!(rooms.lock().await.get("demo").unwrap().participants, 1);
+
+        gc_room(&rooms, "demo").await;
+        assert!(!rooms.lock().await.contains_key("demo"));
+    }
+
+    #[tokio::test]
+    async fn gc_room_ignores_missing_rooms() {
+        let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+        gc_room(&rooms, "missing").await;
+        assert!(rooms.lock().await.is_empty());
+    }
 }

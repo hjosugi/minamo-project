@@ -6,6 +6,7 @@ VERSION="0.10.35"
 VENDOR="$ROOT/vendor/mediapipe"
 WASM_DIR="$VENDOR/tasks-vision@$VERSION/wasm"
 MODEL_DIR="$VENDOR/models"
+TASKS_BUNDLE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@$VERSION/vision_bundle.mjs"
 WASM_BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@$VERSION/wasm"
 FACE_MODEL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 POSE_MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
@@ -26,6 +27,8 @@ download() {
   fi
 }
 
+download "$TASKS_BUNDLE" "$VENDOR/tasks-vision@$VERSION/vision_bundle.mjs"
+
 for file in \
   vision_wasm_internal.js \
   vision_wasm_internal.wasm \
@@ -44,7 +47,7 @@ download "$HAND_MODEL" "$MODEL_DIR/hand_landmarker.task"
   find . -type f ! -name SHA256SUMS ! -name manifest.json -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 )
 
-node --input-type=module <<'NODE' "$VENDOR" "$VERSION"
+node --input-type=module - "$VENDOR" "$VERSION" <<'NODE'
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';

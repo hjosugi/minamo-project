@@ -283,6 +283,71 @@ def validate_dependency_guardrails() -> None:
     for url in external_model_urls:
         if not re.search(r'/float16/\d+/', url):
             add_error('scripts/fetch-models.sh', f'MediaPipe model URL lacks pinned model version: {url}')
+    tracker = read('tracker/tracker.js')
+    fetch_script = read('scripts/fetch-models.sh')
+    if 'vision_bundle.mjs' not in fetch_script:
+        add_error('scripts/fetch-models.sh', 'MediaPipe vendor script must download vision_bundle.mjs for offline use')
+    if "from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision" in tracker:
+        add_error('tracker/tracker.js', 'MediaPipe Tasks must not be statically imported from CDN')
+    if 'LOCAL_TASKS_VISION_BUNDLE' not in tracker or 'importVerifiedModule' not in tracker:
+        add_error('tracker/tracker.js', 'tracker must prefer local MediaPipe bundle and integrity-check CDN fallback')
+    if not re.search(r"CDN_TASKS_VISION_INTEGRITY = 'sha256-[A-Za-z0-9+/=]+'", tracker):
+        add_error('tracker/tracker.js', 'CDN MediaPipe bundle SRI hash must be pinned')
+
+
+def validate_foundation_contracts() -> None:
+    ci = read('.github/workflows/ci.yml')
+    release_smoke = read('scripts/release-smoke.mjs')
+    relay_node_package = json.loads(read('relay-node/package.json'))
+    relay_node = read('relay-node/server.mjs')
+    relay_node_test = read('relay-node/server.node-test.mjs')
+    relay_rs = read('relay-rs/src/main.rs')
+    tracker = read('tracker/tracker.js')
+
+    for needle in ['npm run lint', 'npm test', 'npm run verify', 'npm run typecheck:js', 'npm run build']:
+        if needle not in ci:
+            add_error('.github/workflows/ci.yml', f'CI missing JavaScript gate: {needle}')
+    if 'cargo test --manifest-path relay-rs/Cargo.toml' not in ci:
+        add_error('.github/workflows/ci.yml', 'CI must run relay-rs tests')
+    if 'npm test' not in ci or 'working-directory: relay-node' not in ci:
+        add_error('.github/workflows/ci.yml', 'CI must run relay-node tests')
+    if relay_node_package.get('scripts', {}).get('test') != 'node --test server.node-test.mjs':
+        add_error('relay-node/package.json', 'relay-node must expose node:test script')
+    if "['npm', ['test', '--prefix', 'relay-node']]" not in release_smoke:
+        add_error('scripts/release-smoke.mjs', 'release smoke must run relay-node tests')
+    if "['cargo', ['test', '--manifest-path', 'relay-rs/Cargo.toml']]" not in release_smoke:
+        add_error('scripts/release-smoke.mjs', 'release smoke must run relay-rs tests')
+
+    for export_name in ['constantTimeEqual', 'originAllowed', 'isKgm1Json', 'leaveRoom']:
+        if f'export function {export_name}' not in relay_node:
+            add_error('relay-node/server.mjs', f'missing testable export {export_name}')
+        if export_name not in relay_node_test:
+            add_error('relay-node/server.node-test.mjs', f'missing test coverage for {export_name}')
+    if 'beat.unref' not in relay_node:
+        add_error('relay-node/server.mjs', 'relay heartbeat interval must not keep imported tests alive')
+    for needle in ['constant_time_equal("secret", "secret")', 'gc_room_removes_room_after_last_participant_leaves']:
+        if needle not in relay_rs:
+            add_error('relay-rs/src/main.rs', f'missing relay-rs regression test: {needle}')
+
+    if 'blockingCapabilityMessage' not in tracker or 'stageHint' not in tracker:
+        add_error('tracker/tracker.js', 'tracker must show blocking capability failures in the stage hint before startup')
+    if 'devicechange' not in tracker or 'restartCameraIfRunning' not in tracker:
+        add_error('tracker/tracker.js', 'tracker must support live camera device refresh and switching')
+    if 'btnResetSettings' not in tracker or 'TRACKER_STORAGE_KEY' not in tracker:
+        add_error('tracker/tracker.js', 'tracker settings persistence must include a reset path')
+    if 'FrameOrderGate' not in read('viewer/viewer.js') or 'seq: 65535' not in read('tests/run-tests.mjs'):
+        add_error('viewer/viewer.js', 'viewer jitter buffer must have wrap-aware test coverage')
+    if 'gcr.io/distroless/nodejs22-debian12' not in read('Dockerfile.relay-node'):
+        add_error('Dockerfile.relay-node', 'relay-node runtime image must be distroless')
+    if 'STOPSIGNAL SIGINT' not in read('Dockerfile.relay-node') or 'function shutdown()' not in relay_node:
+        add_error('Dockerfile.relay-node', 'relay-node container must stop cleanly under compose down')
+    relay_rs_dockerfile = read('relay-rs/Dockerfile')
+    if 'gcr.io/distroless/cc-debian12' not in relay_rs_dockerfile:
+        add_error('relay-rs/Dockerfile', 'relay-rs runtime image must be distroless')
+    if 'FROM rust:1.88-bookworm AS build' not in relay_rs_dockerfile or 'COPY Cargo.lock ./' not in relay_rs_dockerfile:
+        add_error('relay-rs/Dockerfile', 'relay-rs Docker build must use Rust 1.88 and the locked dependency graph')
+    if 'STOPSIGNAL SIGINT' not in relay_rs_dockerfile:
+        add_error('relay-rs/Dockerfile', 'relay-rs container must declare a compose stop signal')
 
 
 def validate_static_demo_entrypoints() -> None:
@@ -362,6 +427,7 @@ validate_local_docs_links()
 validate_documented_package_scripts()
 validate_glossary_examples()
 validate_dependency_guardrails()
+validate_foundation_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()
 validate_runtime_warning_taxonomy()

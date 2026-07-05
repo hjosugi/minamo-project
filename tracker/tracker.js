@@ -4,13 +4,6 @@
 //        -> KGM1 binary encode -> transport (local / ws / wt).
 // The camera image never leaves this page. Only ~76 bytes/frame go out.
 
-import {
-  FilesetResolver,
-  FaceLandmarker,
-  HandLandmarker,
-  PoseLandmarker,
-} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs';
-
 import { ARKIT_52, NUM_CHANNELS, MIRROR_INDEX, POSE_POINTS, NUM_POSE_POINTS } from '../shared/blendshapes.js';
 import { OneEuroArray, OneEuroQuat } from '../shared/filters.js';
 import { encodeFrame } from '../shared/codec.js';
@@ -41,14 +34,21 @@ import {
 import { createMotionRecord, createRecordingMetadata } from '../shared/recording.js';
 
 const MEDIAPIPE_VERSION = '0.10.35';
+const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
+const CDN_TASKS_VISION_INTEGRITY = 'sha256-VderYk+7cNzFrcSubX6pz8tWkTnT2/vysd6vy5ZrwP4=';
 const CDN_WASM_ROOT = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
 const CDN_FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 const CDN_POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 const CDN_HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const LOCAL_TASKS_VISION_BUNDLE = `../vendor/mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 const LOCAL_WASM_ROOT = `../vendor/mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
 const LOCAL_FACE_MODEL = '../vendor/mediapipe/models/face_landmarker.task';
 const LOCAL_POSE_MODEL = '../vendor/mediapipe/models/pose_landmarker_lite.task';
 const LOCAL_HAND_MODEL = '../vendor/mediapipe/models/hand_landmarker.task';
+let FilesetResolver;
+let FaceLandmarker;
+let HandLandmarker;
+let PoseLandmarker;
 
 /** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
@@ -177,6 +177,7 @@ function normalizeTrackerSettings(raw) {
 
 async function loadModels() {
   chip.textContent = 'loading models...';
+  await loadMediaPipeTasksVision();
   const assets = await resolveModelAssets();
   const fileset = await FilesetResolver.forVisionTasks(assets.wasmRoot);
   state.faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
@@ -201,6 +202,37 @@ async function loadModels() {
     });
   }
   state._fileset = fileset;
+}
+
+async function loadMediaPipeTasksVision() {
+  if (FilesetResolver) return;
+  const localAvailable = await assetExists(LOCAL_TASKS_VISION_BUNDLE);
+  const vision = localAvailable
+    ? await import(LOCAL_TASKS_VISION_BUNDLE)
+    : await importVerifiedModule(CDN_TASKS_VISION_BUNDLE, CDN_TASKS_VISION_INTEGRITY);
+  ({ FilesetResolver, FaceLandmarker, HandLandmarker, PoseLandmarker } = vision);
+}
+
+async function importVerifiedModule(url, integrity) {
+  if (!globalThis.crypto?.subtle) throw new Error('Cannot verify CDN MediaPipe integrity in this browser context.');
+  const response = await fetch(url, { cache: 'force-cache' });
+  if (!response.ok) throw new Error(`MediaPipe CDN bundle failed: ${response.status}`);
+  const source = await response.text();
+  const actual = await sha256Integrity(source);
+  if (actual !== integrity) throw new Error('MediaPipe CDN bundle integrity check failed.');
+  const blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+  try {
+    return await import(blobUrl);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
+async function sha256Integrity(source) {
+  const bytes = new TextEncoder().encode(source);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  const raw = String.fromCharCode(...new Uint8Array(digest));
+  return `sha256-${btoa(raw)}`;
 }
 
 async function startCamera() {
@@ -342,7 +374,20 @@ function checkCapabilities() {
     wtOption.disabled = false;
   }
   renderWarnings(warnings.map((w) => w.text));
+  if (!state.running && warnings.length) {
+    $('stageHint').textContent = warnings.map((w) => w.text).join('\n');
+    $('stageHint').hidden = false;
+  }
   return warnings;
+}
+
+function blockingCapabilityMessage(warnings) {
+  const fatal = warnings.find((warning) => [
+    WARNING_TAXONOMY.insecureContext,
+    WARNING_TAXONOMY.noCameraApi,
+    WARNING_TAXONOMY.noWebgl2,
+  ].includes(warning.code));
+  return fatal?.text || '';
 }
 
 // ---------------------------------------------------------------- loop
@@ -898,7 +943,9 @@ function cameraErrorMessage(e) {
 $('btnStart').addEventListener('click', async () => {
   $('btnStart').disabled = true;
   try {
-    checkCapabilities();
+    const capabilityWarnings = checkCapabilities();
+    const blocked = blockingCapabilityMessage(capabilityWarnings);
+    if (blocked) throw new Error(blocked);
     if (!state.faceLandmarker) await loadModels();
     await startCamera();
     $('stageHint').hidden = true;

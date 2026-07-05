@@ -13,6 +13,7 @@ if (fs.existsSync('relay-rs/Cargo.toml')) {
   checks.push(['cargo', ['fmt', '--manifest-path', 'relay-rs/Cargo.toml', '--', '--check']]);
   checks.push(['cargo', ['clippy', '--manifest-path', 'relay-rs/Cargo.toml', '--all-targets', '--', '-D', 'warnings']]);
   checks.push(['cargo', ['build', '--manifest-path', 'relay-rs/Cargo.toml', '--release']]);
+  checks.push(['cargo', ['test', '--manifest-path', 'relay-rs/Cargo.toml']]);
 }
 
 if (fs.existsSync('crates/kgm1-codec/Cargo.toml')) {
@@ -21,6 +22,7 @@ if (fs.existsSync('crates/kgm1-codec/Cargo.toml')) {
 
 if (fs.existsSync('relay-node/server.mjs')) {
   checks.push(['node', ['--check', 'relay-node/server.mjs']]);
+  checks.push(['npm', ['test', '--prefix', 'relay-node']]);
 }
 
 for (const [cmd, args] of checks) {

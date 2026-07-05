@@ -12,7 +12,7 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT || 8787);
@@ -92,11 +92,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    const set = rooms.get(room);
-    if (set) {
-      set.delete(ws);
-      if (set.size === 0) rooms.delete(room);
-    }
+    leaveRoom(rooms, room, ws);
     console.log(`[ws] leave room=${room} role=${role}`);
   });
 });
@@ -109,26 +105,31 @@ const beat = setInterval(() => {
     ws.ping();
   }
 }, 30_000);
+beat.unref?.();
 wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 });
 wss.on('close', () => clearInterval(beat));
 
-http.listen(PORT, () => {
-  console.log(`Minamo relay-node`);
-  console.log(`  site : http://localhost:${PORT}`);
-  console.log(`  ws   : ws://localhost:${PORT}/ws?room=<room>&role=<pub|sub>`);
-  if (ROOM_TOKEN) console.log(`  auth : MINAMO_RELAY_TOKEN required`);
-  if (ALLOWED_ORIGINS.length) console.log(`  origins: ${ALLOWED_ORIGINS.join(', ')}`);
-});
-
-function originAllowed(origin) {
-  if (!ALLOWED_ORIGINS.length || !origin) return true;
-  return ALLOWED_ORIGINS.includes(origin);
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  http.listen(PORT, () => {
+    console.log(`Minamo relay-node`);
+    console.log(`  site : http://localhost:${PORT}`);
+    console.log(`  ws   : ws://localhost:${PORT}/ws?room=<room>&role=<pub|sub>`);
+    if (ROOM_TOKEN) console.log(`  auth : MINAMO_RELAY_TOKEN required`);
+    if (ALLOWED_ORIGINS.length) console.log(`  origins: ${ALLOWED_ORIGINS.join(', ')}`);
+  });
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 
-function constantTimeEqual(a, b) {
+export function originAllowed(origin, allowedOrigins = ALLOWED_ORIGINS) {
+  if (!allowedOrigins.length || !origin) return true;
+  return allowedOrigins.includes(origin);
+}
+
+export function constantTimeEqual(a, b) {
   const left = Buffer.from(String(a));
   const right = Buffer.from(String(b));
   const max = Math.max(left.length, right.length, 1);
@@ -139,11 +140,28 @@ function constantTimeEqual(a, b) {
   return timingSafeEqual(leftPadded, rightPadded) && left.length === right.length;
 }
 
-function isKgm1Json(data) {
+export function isKgm1Json(data) {
   try {
     const msg = JSON.parse(String(data));
     return msg && msg.type === 'kgm1' && typeof msg.payload === 'string';
   } catch {
     return false;
   }
+}
+
+export function leaveRoom(roomMap, room, ws) {
+  const set = roomMap.get(room);
+  if (!set) return 0;
+  set.delete(ws);
+  if (set.size === 0) roomMap.delete(room);
+  return roomMap.get(room)?.size ?? 0;
+}
+
+function shutdown() {
+  clearInterval(beat);
+  for (const ws of wss.clients) ws.close(1001, 'server shutdown');
+  wss.close(() => {
+    http.close(() => process.exit(0));
+  });
+  setTimeout(() => process.exit(0), 2000).unref();
 }
