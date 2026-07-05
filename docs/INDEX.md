@@ -49,6 +49,11 @@ Primary language is English; documents that originated in Japanese keep a
 
 - [product/landing-page-hub.md](product/landing-page-hub.md) ([日本語](product/landing-page-hub.ja.md))
 - [product/creator-ux.md](product/creator-ux.md) ([日本語](product/creator-ux.ja.md))
+- [product/onboarding.md](product/onboarding.md)
+- [product/obs-setup.md](product/obs-setup.md)
+- [product/drummer-setup.md](product/drummer-setup.md)
+- [product/troubleshooting.md](product/troubleshooting.md)
+- [product/creator-presets.schema.json](product/creator-presets.schema.json)
 
 ## Integrations, transport, compression
 
