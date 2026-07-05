@@ -4,12 +4,14 @@ import path from 'node:path';
 const root = process.cwd();
 const include = new Set(['.js', '.mjs', '.ts', '.html', '.css', '.md', '.yml', '.yaml', '.json', '.rs']);
 const skipDirs = new Set(['.git', 'node_modules', 'dist', 'target', '.wrangler', 'vendor']);
+const skipPaths = new Set([path.join(root, 'src-tauri', 'gen')]);
 const failures = [];
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (skipDirs.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
+    if (skipPaths.has(full)) continue;
     if (entry.isDirectory()) {
       walk(full);
       continue;

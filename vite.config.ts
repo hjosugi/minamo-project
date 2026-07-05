@@ -15,6 +15,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       input: {
+        desktop: page('desktop/index.html'),
         index: page('index.html'),
         landing: page('landing/index.html'),
         replay: page('replay/index.html'),

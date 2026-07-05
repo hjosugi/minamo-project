@@ -25,6 +25,7 @@ REQUIRED = [
     'docs/IMPLEMENTATION_PROGRESS.md',
     'docs/adr/README.md',
     'docs/product/onboarding.md',
+    'docs/product/desktop-app.md',
     'docs/product/obs-setup.md',
     'docs/product/drummer-setup.md',
     'docs/product/troubleshooting.md',
@@ -46,6 +47,17 @@ REQUIRED = [
     '.nojekyll',
     'docker-compose.yml',
     'issues/index.csv',
+    'desktop/index.html',
+    'desktop/desktop.js',
+    'desktop/styles.css',
+    'src-tauri/Cargo.toml',
+    'src-tauri/Info.plist',
+    'src-tauri/tauri.conf.json',
+    'src-tauri/capabilities/default.json',
+    'src-tauri/icons/icon.png',
+    'src-tauri/icons/icon.svg',
+    'src-tauri/src/lib.rs',
+    'src-tauri/src/main.rs',
 ]
 
 errors: list[str] = []
@@ -357,6 +369,74 @@ def validate_foundation_contracts() -> None:
         add_error('relay-rs/Dockerfile', 'relay-rs container must declare a compose stop signal')
 
 
+def validate_desktop_contracts() -> None:
+    package = json.loads(read('package.json'))
+    ci = read('.github/workflows/ci.yml')
+    release_smoke = read('scripts/release-smoke.mjs')
+    vite = read('vite.config.ts')
+    tauri_config = json.loads(read('src-tauri/tauri.conf.json'))
+    tauri_cargo = read('src-tauri/Cargo.toml')
+    tauri_lib = read('src-tauri/src/lib.rs')
+    desktop_html = read('desktop/index.html')
+    desktop_js = read('desktop/desktop.js')
+    desktop_doc = read('docs/product/desktop-app.md')
+
+    scripts = package.get('scripts', {})
+    for script in ['desktop:dev', 'desktop:build', 'desktop:check']:
+        if script not in scripts:
+            add_error('package.json', f'missing desktop package script "{script}"')
+    dev_dependencies = package.get('devDependencies', {})
+    if '@tauri-apps/cli' not in dev_dependencies:
+        add_error('package.json', 'desktop shell must pin @tauri-apps/cli')
+    if "desktop: page('desktop/index.html')" not in vite:
+        add_error('vite.config.ts', 'Vite build must include the desktop control surface')
+    for needle in [
+        "['cargo', ['fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check']]",
+        "['cargo', ['check', '--manifest-path', 'src-tauri/Cargo.toml']]",
+        "['cargo', ['test', '--manifest-path', 'src-tauri/Cargo.toml']]",
+    ]:
+        if needle not in release_smoke:
+            add_error('scripts/release-smoke.mjs', 'release smoke must run desktop Tauri checks')
+    for needle in [
+        'libwebkit2gtk-4.1-dev',
+        'cargo check --manifest-path src-tauri/Cargo.toml',
+        'cargo test --manifest-path src-tauri/Cargo.toml',
+    ]:
+        if needle not in ci:
+            add_error('.github/workflows/ci.yml', f'CI missing desktop gate: {needle}')
+
+    if tauri_config.get('productName') != 'Minamo Studio':
+        add_error('src-tauri/tauri.conf.json', 'Tauri productName must be Minamo Studio')
+    if tauri_config.get('build', {}).get('frontendDist') != '../dist':
+        add_error('src-tauri/tauri.conf.json', 'Tauri must package the existing Vite dist output')
+    app_config = tauri_config.get('app', {})
+    if app_config.get('withGlobalTauri') is not True:
+        add_error('src-tauri/tauri.conf.json', 'desktop renderer must have Tauri invoke access')
+    windows = app_config.get('windows', [])
+    if not windows or windows[0].get('url') != 'desktop/index.html':
+        add_error('src-tauri/tauri.conf.json', 'main desktop window must open desktop/index.html')
+    if 'tauri = { version = "2.11.5"' not in tauri_cargo:
+        add_error('src-tauri/Cargo.toml', 'desktop app must pin the checked Tauri 2 version')
+    icon_png = ROOT / 'src-tauri' / 'icons' / 'icon.png'
+    if icon_png.stat().st_size > 150_000:
+        add_error('src-tauri/icons/icon.png', 'desktop app icon must stay lightweight')
+    for command in ['desktop_status', 'virtual_camera_status', 'open_tracker', 'open_viewer', 'open_replay']:
+        if command not in tauri_lib:
+            add_error('src-tauri/src/lib.rs', f'missing Tauri command {command}')
+        if command not in desktop_html and command.startswith('open_'):
+            add_error('desktop/index.html', f'desktop UI must invoke {command}')
+    for route in ['tracker/index.html', 'viewer/index.html', 'replay/index.html']:
+        if route not in tauri_lib:
+            add_error('src-tauri/src/lib.rs', f'desktop app must expose bundled page route {route}')
+    for target in ['v4l2loopback', 'Media Foundation softcam', 'CoreMediaIO camera extension']:
+        if target not in tauri_lib or target not in desktop_doc:
+            add_error('src-tauri/src/lib.rs', f'missing virtual camera backend target {target}')
+    if 'signalCanvas' not in desktop_html or 'drawSignal' not in desktop_js:
+        add_error('desktop/index.html', 'desktop shell must include the KGM1 signal monitor canvas')
+    if 'Keep issue KGM-050 open' not in desktop_doc:
+        add_error('docs/product/desktop-app.md', 'desktop docs must keep KGM-050 open until virtual camera output is proven')
+
+
 def validate_static_demo_entrypoints() -> None:
     nojekyll = ROOT / '.nojekyll'
     if not nojekyll.is_file():
@@ -435,6 +515,7 @@ validate_documented_package_scripts()
 validate_glossary_examples()
 validate_dependency_guardrails()
 validate_foundation_contracts()
+validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()
 validate_runtime_warning_taxonomy()

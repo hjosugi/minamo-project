@@ -30,6 +30,8 @@ webcam — free, low-latency, and local-first.
   warnings, and wrap-safe viewer jitter handling
 - Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
   WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
+- Tauri desktop shell that launches the bundled tracker, viewer, and replay
+  tools, with virtual camera backend status surfaced per OS
 - VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
 - A landing hub with a mock tracking visualization demo under [landing/](landing/)
 
@@ -89,15 +91,26 @@ docs and is built, linted, and tested in CI.
 More setup detail: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).
 
+### 4. Desktop shell
+
+```sh
+npm run desktop:check
+npm run desktop:dev
+```
+
+Desktop packaging details: [docs/product/desktop-app.md](docs/product/desktop-app.md).
+
 ## Repository layout
 
 ```
 tracker/     webcam -> 52ch expressions + head pose -> KGM1 publisher
 viewer/      KGM1 receiver -> VRM / built-in bot rendering (OBS browser source)
 replay/      local KGM1 motion JSONL replay publisher
+desktop/     Tauri desktop control surface, built by Vite
 shared/      canonical blendshapes, One Euro, KGM1 codec, transports (JS)
 src/         TypeScript core for the next-gen pipeline (types, filters,
              anatomy constraints, adapters for MediaPipe/VRM/Live2D/Inochi2D)
+src-tauri/   Minamo Studio native shell and desktop window commands
 crates/      Rust KGM1 binary header codec
 relay-node/  static serving + WebSocket relay (Node, ws only)
 relay-rs/    WebTransport datagram relay (Rust / wtransport)

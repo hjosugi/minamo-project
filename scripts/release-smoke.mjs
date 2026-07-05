@@ -20,6 +20,12 @@ if (fs.existsSync('crates/kgm1-codec/Cargo.toml')) {
   checks.push(['cargo', ['test', '--manifest-path', 'crates/kgm1-codec/Cargo.toml']]);
 }
 
+if (fs.existsSync('src-tauri/Cargo.toml')) {
+  checks.push(['cargo', ['fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check']]);
+  checks.push(['cargo', ['check', '--manifest-path', 'src-tauri/Cargo.toml']]);
+  checks.push(['cargo', ['test', '--manifest-path', 'src-tauri/Cargo.toml']]);
+}
+
 if (fs.existsSync('relay-node/server.mjs')) {
   checks.push(['node', ['--check', 'relay-node/server.mjs']]);
   checks.push(['npm', ['test', '--prefix', 'relay-node']]);
@@ -35,4 +41,4 @@ for (const [cmd, args] of checks) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-console.log('\nRelease smoke checks passed. Manual browser, camera, relay-token, and WebTransport checks are still required before release.');
+console.log('\nRelease smoke checks passed. Manual browser, camera, desktop GUI, relay-token, virtual-camera, and WebTransport checks are still required before release.');

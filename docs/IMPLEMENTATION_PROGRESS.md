@@ -61,6 +61,8 @@ node --check relay-node/server.mjs
 - `relay-rs` rejects wrong room tokens with `403`, relays native
   WebTransport pub/sub datagrams under test, and removes empty rooms after the
   last participant leaves.
+- A Tauri 2 desktop shell opens bundled tracker, viewer, and replay windows
+  from the existing Vite app and reports per-OS virtual camera backend status.
 - Offline MediaPipe vendoring, Docker Compose, HTTPS development, contribution,
   security, release, dependency, label, glossary, and roadmap docs exist.
 
