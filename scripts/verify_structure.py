@@ -52,6 +52,7 @@ REQUIRED = [
     'shared/e2ee.js',
     'shared/hud-metrics.js',
     'shared/voice-activity.js',
+    'shared/audio-lipsync.js',
     'shared/expression-mapping.js',
     'shared/layered-avatar.js',
     'shared/recording.js',
@@ -91,6 +92,7 @@ REQUIRED = [
     'packages/kgm1-codec-py/pyproject.toml',
     'packages/kgm1-codec-py/kgm1_codec/__init__.py',
     'packages/kgm1-codec-py/kgm1_codec/__main__.py',
+    'tracker/audio-lipsync-worklet.js',
 ]
 
 errors: list[str] = []
@@ -1500,7 +1502,7 @@ def validate_voice_activity_accent_contracts() -> None:
             add_error('shared/voice-activity.js', f'missing voice activity helper contract: {needle}')
     if 'voiceAccents: false' not in runtime:
         add_error('shared/runtime.js', 'voice accents must default off')
-    for needle in ['startVoiceAccents', 'stopVoiceAccents', 'sampleVoiceRms', 'applyVoiceActivityAccents(state.weights', 'voiceAccent.headNod', 'getUserMedia({\n      audio:']:
+    for needle in ['startVoiceAccents', 'stopVoiceAccents', 'sampleVoiceRms', 'applyVoiceActivityAccents(lipsync.weights', 'voiceAccent.headNod', 'getUserMedia({\n      audio:']:
         if needle not in tracker:
             add_error('tracker/tracker.js', f'missing tracker voice accent contract: {needle}')
     for needle in ['chkVoiceAccents', 'statVoiceAccent']:
@@ -1512,6 +1514,37 @@ def validate_voice_activity_accent_contracts() -> None:
     for needle in ['Voice accents are default off', 'silent VAD level returns identity']:
         if needle not in dd:
             add_error('docs/design/DD-003-audio-lipsync.md', f'missing voice accent implementation note: {needle}')
+
+
+def validate_audio_lipsync_contracts() -> None:
+    lipsync = read('shared/audio-lipsync.js')
+    worklet = read('tracker/audio-lipsync-worklet.js')
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+    dd = read('docs/design/DD-003-audio-lipsync.md')
+
+    for needle in ['AUDIO_LIPSYNC_TARGET_LATENCY_MS = 80', 'estimateAudioLipsyncFrame', 'fuseAudioLipsyncWeights', 'audioLipsyncWithinLatency', 'latencyMs > maxLatencyMs']:
+        if needle not in lipsync:
+            add_error('shared/audio-lipsync.js', f'missing audio lipsync helper contract: {needle}')
+    for needle in ['class MinamoAudioLipsyncProcessor extends AudioWorkletProcessor', "registerProcessor('minamo-audio-lipsync'", 'TARGET_POST_INTERVAL_MS = 20', 'this.port.postMessage']:
+        if needle not in worklet:
+            add_error('tracker/audio-lipsync-worklet.js', f'missing AudioWorklet contract: {needle}')
+    if 'audioLipsync: false' not in runtime:
+        add_error('shared/runtime.js', 'audio lipsync must default off until the mic is opted in')
+    for needle in ['startAudioLipsync', 'attachAudioLipsyncWorklet', "new URL('./audio-lipsync-worklet.js', import.meta.url)", 'fuseAudioLipsyncWeights(state.weights', 'currentAudioLipsyncLatencyMs', 'AUDIO_LIPSYNC_TARGET_LATENCY_MS']:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker audio lipsync contract: {needle}')
+    for needle in ['chkAudioLipsync', 'statAudioLipsync', 'Audio lipsync']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing audio lipsync UI contract: {needle}')
+    for needle in ['estimateAudioLipsyncFrame({ rms: 0.12', 'speaking with a still face produces plausible mouth motion', 'AUDIO_LIPSYNC_TARGET_LATENCY_MS + 1', 'audioLipsyncWithinLatency(79)']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing audio lipsync regression coverage: {needle}')
+    for needle in ['Audio lipsync implementation', 'AudioWorklet posts viseme frames every 20 ms', 'no cloud ASR']:
+        if needle not in dd:
+            add_error('docs/design/DD-003-audio-lipsync.md', f'missing audio lipsync implementation documentation: {needle}')
 
 
 def validate_runtime_warning_taxonomy() -> None:
@@ -1567,6 +1600,7 @@ validate_replay_validation_ui()
 validate_kgm_recording_contracts()
 validate_latency_quality_hud_contracts()
 validate_voice_activity_accent_contracts()
+validate_audio_lipsync_contracts()
 validate_runtime_warning_taxonomy()
 
 if errors:

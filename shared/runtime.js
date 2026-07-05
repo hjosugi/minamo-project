@@ -63,6 +63,7 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   pose: false,
   hands: false,
   voiceAccents: false,
+  audioLipsync: false,
   faceLock: false,
   cameraId: '',
   resolution: '720p',

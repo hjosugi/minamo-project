@@ -52,6 +52,14 @@ import {
   voiceActivityLevelFromRms,
 } from '../shared/voice-activity.js';
 import {
+  AUDIO_LIPSYNC_TARGET_LATENCY_MS,
+  audioLipsyncWithinLatency,
+  createSilentAudioLipsyncFrame,
+  estimateAudioLipsyncFrame,
+  fuseAudioLipsyncWeights,
+  smoothAudioLipsyncFrame,
+} from '../shared/audio-lipsync.js';
+import {
   ClockOffsetEstimator,
   KGM2_FACE_CHANNELS,
   KGM2_FACE_MASK_BYTES,
@@ -144,6 +152,7 @@ const required = [
   'replay/index.html',
   'replay/replay.js',
   'shared/voice-activity.js',
+  'shared/audio-lipsync.js',
   'src/core/types.ts',
   'tests/fixtures/hand-golden-clip.json',
   'issues/index.csv',
@@ -534,6 +543,34 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.ok(active.weights[CHANNEL_INDEX.browInnerUp] > 0, 'speech energy raises brow subtly');
   assert.ok(active.headNod > 0 && active.headNod <= 0.008, 'headNod <= 0.008');
   assert.equal(silentWeights[CHANNEL_INDEX.browInnerUp], 0, 'accent helper does not mutate source weights');
+}
+
+{
+  const speechFrame = estimateAudioLipsyncFrame({ rms: 0.12, low: 0.05, mid: 0.08, high: 0.02, contextTimeMs: 40 });
+  assert.equal(speechFrame.speech, 1, 'speech RMS produces a full audio lipsync frame');
+  assert.ok(speechFrame.openness > 0.6, 'audio lipsync estimates jaw openness from speech energy');
+  const stillFace = new Float32Array(NUM_CHANNELS);
+  const fused = fuseAudioLipsyncWeights(stillFace, speechFrame, {
+    enabled: true,
+    visualConfidence: 1,
+    latencyMs: 42,
+  });
+  assert.ok(fused.weights[CHANNEL_INDEX.jawOpen] > 0.55, 'speaking with a still face produces plausible mouth motion');
+  assert.ok(
+    fused.weights[CHANNEL_INDEX.mouthFunnel] > 0 || fused.weights[CHANNEL_INDEX.mouthStretchLeft] > 0,
+    'audio lipsync drives reusable ARKit mouth shape channels'
+  );
+  assert.equal(stillFace[CHANNEL_INDEX.jawOpen], 0, 'audio lipsync fusion does not mutate source weights');
+  const stale = fuseAudioLipsyncWeights(stillFace, speechFrame, {
+    enabled: true,
+    visualConfidence: 1,
+    latencyMs: AUDIO_LIPSYNC_TARGET_LATENCY_MS + 1,
+  });
+  assert.equal(stale.weights[CHANNEL_INDEX.jawOpen], 0, 'stale audio lipsync frames are ignored past the 80 ms budget');
+  assert.equal(audioLipsyncWithinLatency(79), true);
+  assert.equal(audioLipsyncWithinLatency(80), false);
+  const released = smoothAudioLipsyncFrame(speechFrame, createSilentAudioLipsyncFrame({ contextTimeMs: 160 }), 120);
+  assert.ok(released.openness < speechFrame.openness, 'audio lipsync release decays mouth motion');
 }
 
 {

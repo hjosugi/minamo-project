@@ -70,6 +70,12 @@ import { createMotionRecord, createRecordingMetadata } from '../shared/recording
 import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } from '../shared/kgm-recording.js';
 import { percentileSample } from '../shared/hud-metrics.js';
 import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
+import {
+  AUDIO_LIPSYNC_TARGET_LATENCY_MS,
+  audioLipsyncWithinLatency,
+  createSilentAudioLipsyncFrame,
+  fuseAudioLipsyncWeights,
+} from '../shared/audio-lipsync.js';
 
 const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -155,7 +161,19 @@ const state = {
   quality: { state: 'idle', score: 0, reasons: [], warnings: [] },
   lastFps: 0,
   qualityCanvas: document.createElement('canvas'),
-  voice: { stream: null, context: null, analyser: null, buffer: null, rms: 0, level: 0 },
+  voice: {
+    stream: null,
+    context: null,
+    source: null,
+    analyser: null,
+    buffer: null,
+    worklet: null,
+    rms: 0,
+    level: 0,
+    lipsync: createSilentAudioLipsyncFrame(),
+    lipsyncLatencyMs: null,
+    lipsyncReceivedAtMs: 0,
+  },
   recording: { enabled: false, lines: [], frames: [], metadata: null },
   calibrationSession: null,
   gazeCalibrationSession: null,
@@ -231,6 +249,7 @@ function normalizeTrackerSettings(raw) {
   if (!['seated', 'standing'].includes(base.bodyMode)) base.bodyMode = 'seated';
   base.faceLock = Boolean(base.faceLock);
   base.voiceAccents = Boolean(base.voiceAccents);
+  base.audioLipsync = Boolean(base.audioLipsync);
   if (!raw?.smoothing?.face) {
     smoothing.face = {
       filterPreset: base.filterPreset || DEFAULT_SMOOTHING_SETTINGS.face.filterPreset,
@@ -338,10 +357,29 @@ async function startCamera() {
   $('statCamera').textContent = `${trackSettings.width || video.videoWidth}x${trackSettings.height || video.videoHeight}@${Math.round(trackSettings.frameRate || fps)}`;
   await refreshCameras();
   if (settings.voiceAccents) await startVoiceAccents();
+  if (settings.audioLipsync) await startAudioLipsync();
 }
 
 async function startVoiceAccents() {
-  if (!settings.voiceAccents || state.voice.analyser) return;
+  if (!settings.voiceAccents) return;
+  await ensureAudioInput();
+}
+
+async function startAudioLipsync() {
+  if (!settings.audioLipsync) return;
+  await ensureAudioInput();
+}
+
+async function ensureAudioInput() {
+  if (!settings.voiceAccents && !settings.audioLipsync) return;
+  if (state.voice.stream && state.voice.context && state.voice.source && state.voice.analyser) {
+    try {
+      if (settings.audioLipsync && !state.voice.worklet) await attachAudioLipsyncWorklet();
+    } catch (error) {
+      handleAudioInputError(error);
+    }
+    return;
+  }
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone API is unavailable.');
   let stream = null;
   try {
@@ -364,30 +402,103 @@ async function startVoiceAccents() {
     state.voice = {
       stream,
       context,
+      source,
       analyser,
       buffer: new Float32Array(analyser.fftSize),
+      worklet: null,
       rms: 0,
       level: 0,
+      lipsync: createSilentAudioLipsyncFrame(),
+      lipsyncLatencyMs: null,
+      lipsyncReceivedAtMs: 0,
     };
+    if (settings.audioLipsync) await attachAudioLipsyncWorklet();
   } catch (error) {
     if (stream) {
       for (const track of stream.getTracks()) track.stop();
     }
-    stopVoiceAccents();
-    settings.voiceAccents = false;
-    $('chkVoiceAccents').checked = false;
-    saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
-    chip.textContent = `voice accents unavailable: ${error.message}`;
-    chip.dataset.state = 'error';
+    handleAudioInputError(error);
   }
 }
 
+function handleAudioInputError(error) {
+  stopAudioInput();
+  settings.voiceAccents = false;
+  settings.audioLipsync = false;
+  $('chkVoiceAccents').checked = false;
+  $('chkAudioLipsync').checked = false;
+  saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
+  chip.textContent = `audio input unavailable: ${error?.message || String(error)}`;
+  chip.dataset.state = 'error';
+}
+
 function stopVoiceAccents() {
+  state.voice.rms = 0;
+  state.voice.level = 0;
+  if (!settings.audioLipsync) stopAudioInput();
+}
+
+function stopAudioLipsync() {
+  detachAudioLipsyncWorklet();
+  state.voice.lipsync = createSilentAudioLipsyncFrame();
+  state.voice.lipsyncLatencyMs = null;
+  state.voice.lipsyncReceivedAtMs = 0;
+  if (!settings.voiceAccents) stopAudioInput();
+}
+
+function stopAudioInput() {
+  detachAudioLipsyncWorklet();
+  state.voice.source?.disconnect?.();
+  state.voice.analyser?.disconnect?.();
   if (state.voice.stream) {
     for (const track of state.voice.stream.getTracks()) track.stop();
   }
   if (state.voice.context?.state !== 'closed') state.voice.context?.close?.().catch(() => {});
-  state.voice = { stream: null, context: null, analyser: null, buffer: null, rms: 0, level: 0 };
+  state.voice = {
+    stream: null,
+    context: null,
+    source: null,
+    analyser: null,
+    buffer: null,
+    worklet: null,
+    rms: 0,
+    level: 0,
+    lipsync: createSilentAudioLipsyncFrame(),
+    lipsyncLatencyMs: null,
+    lipsyncReceivedAtMs: 0,
+  };
+}
+
+async function attachAudioLipsyncWorklet() {
+  if (!settings.audioLipsync || !state.voice.context || !state.voice.source || state.voice.worklet) return;
+  if (!state.voice.context.audioWorklet || typeof AudioWorkletNode === 'undefined') {
+    throw new Error('AudioWorklet is unavailable in this browser.');
+  }
+  await state.voice.context.audioWorklet.addModule(new URL('./audio-lipsync-worklet.js', import.meta.url));
+  const worklet = new AudioWorkletNode(state.voice.context, 'minamo-audio-lipsync', {
+    numberOfInputs: 1,
+    numberOfOutputs: 0,
+  });
+  worklet.port.onmessage = (event) => {
+    if (event.data?.type !== 'viseme') return;
+    const context = state.voice.context;
+    if (!context) return;
+    state.voice.lipsync = event.data;
+    state.voice.lipsyncReceivedAtMs = performance.now();
+    state.voice.lipsyncLatencyMs = Math.max(0, context.currentTime * 1000 - Number(event.data.contextTimeMs || 0));
+  };
+  state.voice.source.connect(worklet);
+  state.voice.worklet = worklet;
+}
+
+function detachAudioLipsyncWorklet() {
+  if (!state.voice.worklet) return;
+  state.voice.worklet.port.onmessage = null;
+  state.voice.worklet.port.close?.();
+  try {
+    state.voice.worklet.disconnect?.();
+  } catch {}
+  state.voice.worklet = null;
 }
 
 function sampleVoiceRms() {
@@ -401,6 +512,11 @@ function sampleVoiceRms() {
   for (let i = 0; i < state.voice.buffer.length; i++) sum += state.voice.buffer[i] * state.voice.buffer[i];
   state.voice.rms = Math.sqrt(sum / state.voice.buffer.length);
   return state.voice.rms;
+}
+
+function currentAudioLipsyncLatencyMs(nowMs = performance.now()) {
+  if (!settings.audioLipsync || !state.voice.lipsyncReceivedAtMs || state.voice.lipsyncLatencyMs === null) return Infinity;
+  return state.voice.lipsyncLatencyMs + Math.max(0, nowMs - state.voice.lipsyncReceivedAtMs);
 }
 
 function applyPitchOffset(quat, radians) {
@@ -720,7 +836,14 @@ function loop() {
 
     // --- encode and send
     if (shouldSendFace) {
-      const voiceAccent = applyVoiceActivityAccents(state.weights, {
+      const lipsyncLatencyMs = currentAudioLipsyncLatencyMs(nowMs);
+      const lipsync = fuseAudioLipsyncWeights(state.weights, state.voice.lipsync, {
+        enabled: settings.audioLipsync,
+        visualConfidence: state.quality.score,
+        latencyMs: lipsyncLatencyMs,
+        maxLatencyMs: AUDIO_LIPSYNC_TARGET_LATENCY_MS,
+      });
+      const voiceAccent = applyVoiceActivityAccents(lipsync.weights, {
         enabled: settings.voiceAccents,
         rms: sampleVoiceRms(),
       });
@@ -1015,6 +1138,10 @@ function updateStats(nowMs) {
   $('statJitter').textContent = state.dropDetector.rollingJitterMs(2500, nowMs).toFixed(1);
   $('statHands').textContent = state.hasHands ? String(state.hands.length) : '0';
   $('statVoiceAccent').textContent = settings.voiceAccents ? `${Math.round(state.voice.level * 100)}%` : 'off';
+  const audioLatencyMs = currentAudioLipsyncLatencyMs(nowMs);
+  $('statAudioLipsync').textContent = settings.audioLipsync
+    ? `${Math.round((state.voice.lipsync?.speech || 0) * 100)}% ${audioLipsyncWithinLatency(audioLatencyMs) ? `${Math.round(audioLatencyMs)}ms` : 'stale'}`
+    : 'off';
   const transportStats = state.transport.getStats();
   $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
   $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
@@ -1101,6 +1228,7 @@ function applySettingsToUi() {
   $('chkPose').checked = Boolean(settings.pose);
   $('chkHands').checked = Boolean(settings.hands);
   $('chkVoiceAccents').checked = Boolean(settings.voiceAccents);
+  $('chkAudioLipsync').checked = Boolean(settings.audioLipsync);
   $('chkFaceLock').checked = Boolean(settings.faceLock);
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
   $('selResolution').value = settings.resolution;
@@ -1129,6 +1257,7 @@ function readSettingsFromUi() {
   settings.pose = $('chkPose').checked;
   settings.hands = $('chkHands').checked;
   settings.voiceAccents = $('chkVoiceAccents').checked;
+  settings.audioLipsync = $('chkAudioLipsync').checked;
   settings.faceLock = $('chkFaceLock').checked;
   settings.privacyLocalOnly = $('chkPrivacy').checked;
   settings.cameraId = $('selCamera').value;
@@ -1578,7 +1707,7 @@ $('btnStop').addEventListener('click', () => {
   cancelGuidedCalibration('calibration stopped');
   cancelGazeCalibration('gaze calibration stopped');
   cancelHandCalibration('hand calibration stopped');
-  stopVoiceAccents();
+  stopAudioInput();
   if (video.srcObject) {
     for (const t of video.srcObject.getTracks()) t.stop();
     video.srcObject = null;
@@ -1626,6 +1755,11 @@ $('chkVoiceAccents').addEventListener('change', async (e) => {
   persistSettings();
   if (e.target.checked && state.running) await startVoiceAccents();
   else stopVoiceAccents();
+});
+$('chkAudioLipsync').addEventListener('change', async (e) => {
+  persistSettings();
+  if (e.target.checked && state.running) await startAudioLipsync();
+  else stopAudioLipsync();
 });
 $('chkPrivacy').addEventListener('change', persistSettings);
 $('chkFaceLock').addEventListener('change', () => {
@@ -1735,7 +1869,7 @@ $('btnResetSettings').addEventListener('click', () => {
   saveProfile();
   saveJson(localStorage, HAND_PROFILE_STORAGE_KEY, handProfile);
   applySettingsToUi();
-  stopVoiceAccents();
+  stopAudioInput();
   resetFilters();
   chip.textContent = 'settings reset';
   chip.dataset.state = 'idle';

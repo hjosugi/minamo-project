@@ -56,6 +56,16 @@ path. When enabled, VAD energy adds only bounded brow micro-raises and a
 sub-degree head pitch accent before KGM encoding. A silent VAD level returns identity weights and zero head-nod amplitude, so silence does not create
 extra motion.
 
+## Audio lipsync implementation
+
+Audio lipsync is an opt-in tracker feature that reuses the local microphone
+path and no cloud ASR. An AudioWorklet posts viseme frames every 20 ms from
+RMS plus low/mid/high energy bands. The tracker fuses those frames into the
+existing ARKit mouth channels before KGM encoding, with audio driving
+jawOpen timing and visual confidence deciding how much audio shape detail
+fills mouthFunnel, mouthPucker, and mouthStretch*. Frames older than the
+80 ms target are ignored instead of being replayed late.
+
 ## Risks
 
 - AudioWorklet + getUserMedia permission flow adds UX friction: mic is
