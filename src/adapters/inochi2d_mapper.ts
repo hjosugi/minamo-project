@@ -11,8 +11,12 @@ export function mapKGM1ToInochi2D(frame: KGM1Frame): InochiParamOutput[] {
   return [
     { name: 'eye_l_open', value: 1 - face.leftEye.blink },
     { name: 'eye_r_open', value: 1 - face.rightEye.blink },
+    { name: 'eye_x', value: (face.leftEye.gaze.x + face.rightEye.gaze.x) * 0.5 },
+    { name: 'eye_y', value: (face.leftEye.gaze.y + face.rightEye.gaze.y) * 0.5 },
     { name: 'mouth_open', value: face.mouth.open },
     { name: 'mouth_wide', value: face.mouth.wide },
     { name: 'mouth_pucker', value: face.mouth.pucker },
+    { name: 'smile_l', value: face.mouth.smileLeft },
+    { name: 'smile_r', value: face.mouth.smileRight },
   ];
 }
