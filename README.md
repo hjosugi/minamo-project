@@ -75,4 +75,7 @@ ARCHITECTURE.md の比較表を参照。
 
 ## License
 
+0BSD. You can use, copy, modify, and distribute this project for almost any purpose.
+
+
 MIT

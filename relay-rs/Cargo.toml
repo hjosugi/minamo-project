@@ -3,7 +3,7 @@ name = "kagami-relay"
 version = "0.1.0"
 edition = "2021"
 description = "KAGAMI low-latency tracking relay over WebTransport datagrams"
-license = "MIT"
+license = "0BSD"
 
 [dependencies]
 # API verified against wtransport 0.7.x docs (docs.rs) and the official

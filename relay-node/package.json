@@ -8,5 +8,6 @@
   },
   "dependencies": {
     "ws": "^8.18.0"
-  }
+  },
+  "license": "0BSD"
 }
