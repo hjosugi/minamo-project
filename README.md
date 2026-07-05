@@ -84,7 +84,7 @@ cd relay-rs && cargo run --release
 Paste the `cert sha-256` from the startup log into the cert field of tracker
 and viewer, set mode: wt, Connect. The certificate is self-signed (14-day
 limit) and regenerates on restart. relay-rs follows the wtransport 0.7 API
-docs but CI compilation is tracked in KGM-009.
+docs and is built, linted, and tested in CI.
 
 More setup detail: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).

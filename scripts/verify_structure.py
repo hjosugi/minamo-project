@@ -325,9 +325,16 @@ def validate_foundation_contracts() -> None:
             add_error('relay-node/server.node-test.mjs', f'missing test coverage for {export_name}')
     if 'beat.unref' not in relay_node:
         add_error('relay-node/server.mjs', 'relay heartbeat interval must not keep imported tests alive')
-    for needle in ['constant_time_equal("secret", "secret")', 'gc_room_removes_room_after_last_participant_leaves']:
+    for needle in [
+        'constant_time_equal("secret", "secret")',
+        'gc_room_removes_room_after_last_participant_leaves',
+        'rejects_wrong_webtransport_room_token',
+        'webtransport_pub_sub_echoes_datagram_through_room',
+    ]:
         if needle not in relay_rs:
             add_error('relay-rs/src/main.rs', f'missing relay-rs regression test: {needle}')
+    if 'request.forbidden().await' not in relay_rs:
+        add_error('relay-rs/src/main.rs', 'relay-rs must reject wrong room tokens with a forbidden response')
 
     if 'blockingCapabilityMessage' not in tracker or 'stageHint' not in tracker:
         add_error('tracker/tracker.js', 'tracker must show blocking capability failures in the stage hint before startup')

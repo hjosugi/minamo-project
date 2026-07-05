@@ -58,7 +58,9 @@ node --check relay-node/server.mjs
   sequence handling.
 - WebSocket and WebTransport relays support optional room tokens. WebSocket
   also supports origin allowlisting and JSON fallback payloads.
-- `relay-rs` removes empty rooms after the last participant leaves.
+- `relay-rs` rejects wrong room tokens with `403`, relays native
+  WebTransport pub/sub datagrams under test, and removes empty rooms after the
+  last participant leaves.
 - Offline MediaPipe vendoring, Docker Compose, HTTPS development, contribution,
   security, release, dependency, label, glossary, and roadmap docs exist.
 

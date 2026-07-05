@@ -6,6 +6,7 @@
 // Rooms: the URL path selects a room and a role.
 //   https://host:4433/room/<room>/pub   -> publisher (tracker)
 //   https://host:4433/room/<room>/sub   -> subscriber (viewer)
+//   https://host:4433/room/<room>/<token>/<pub|sub> when MINAMO_RELAY_TOKEN is set
 //
 // TLS: on startup the server generates a self-signed certificate valid for
 // browsers via `serverCertificateHashes` and prints its SHA-256 hash.
@@ -96,7 +97,7 @@ async fn handle_session(
         }
     };
     if !relay_token.is_empty() && !constant_time_equal(token, relay_token.as_str()) {
-        request.not_found().await;
+        request.forbidden().await;
         return Ok(());
     }
     if role != "pub" && role != "sub" {
@@ -140,7 +141,11 @@ async fn handle_session(
                         Err(broadcast::error::RecvError::Closed) => break,
                     },
                     // Detect the peer going away even while the room is idle.
-                    _ = connection.receive_datagram() => {}
+                    received = connection.receive_datagram() => {
+                        if received.is_err() {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -180,6 +185,111 @@ fn constant_time_equal(a: &str, b: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::{anyhow, Context};
+    use std::time::Duration;
+    use tokio::task::JoinHandle;
+    use tokio::time::{sleep, timeout};
+    use wtransport::endpoint::endpoint_side::Client;
+    use wtransport::tls::Sha256Digest;
+    use wtransport::ClientConfig;
+
+    struct TestRelay {
+        port: u16,
+        cert_digest: Sha256Digest,
+        rooms: Rooms,
+        task: JoinHandle<()>,
+    }
+
+    impl TestRelay {
+        fn start(token: &str) -> anyhow::Result<Self> {
+            let identity = Identity::self_signed(["localhost", "127.0.0.1", "::1"])?;
+            let cert_digest = identity.certificate_chain().as_slice()[0].hash();
+            let config = ServerConfig::builder()
+                .with_bind_default(0)
+                .with_identity(identity)
+                .keep_alive_interval(Some(Duration::from_millis(100)))
+                .build();
+            let endpoint = Endpoint::server(config)?;
+            let port = endpoint.local_addr()?.port();
+            let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
+            let relay_token = Arc::new(token.to_string());
+
+            let task = tokio::spawn({
+                let rooms = rooms.clone();
+                async move {
+                    loop {
+                        let incoming = endpoint.accept().await;
+                        let rooms = rooms.clone();
+                        let relay_token = relay_token.clone();
+                        tokio::spawn(async move {
+                            let _ = handle_session(incoming, rooms, relay_token).await;
+                        });
+                    }
+                }
+            });
+
+            Ok(Self {
+                port,
+                cert_digest,
+                rooms,
+                task,
+            })
+        }
+
+        fn url(&self, path: &str) -> String {
+            format!("https://127.0.0.1:{}{path}", self.port)
+        }
+    }
+
+    impl Drop for TestRelay {
+        fn drop(&mut self) {
+            self.task.abort();
+        }
+    }
+
+    fn client_endpoint(cert_digest: Sha256Digest) -> anyhow::Result<Endpoint<Client>> {
+        let config = ClientConfig::builder()
+            .with_bind_default()
+            .with_server_certificate_hashes([cert_digest])
+            .build();
+        Ok(Endpoint::client(config)?)
+    }
+
+    async fn wait_for_participants(
+        rooms: &Rooms,
+        room: &str,
+        expected: usize,
+    ) -> anyhow::Result<()> {
+        timeout(Duration::from_secs(2), async {
+            loop {
+                let actual = {
+                    let map = rooms.lock().await;
+                    map.get(room).map(|state| state.participants).unwrap_or(0)
+                };
+                if actual == expected {
+                    return;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .map_err(|_| anyhow!("room {room} did not reach {expected} participants"))?;
+        Ok(())
+    }
+
+    async fn wait_for_room_empty(rooms: &Rooms, room: &str) -> anyhow::Result<()> {
+        timeout(Duration::from_secs(2), async {
+            loop {
+                if !rooms.lock().await.contains_key(room) {
+                    return;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .map_err(|_| anyhow!("room {room} was not garbage-collected"))?;
+        Ok(())
+    }
 
     #[test]
     fn token_compare_handles_matches_mismatches_and_length_changes() {
@@ -215,5 +325,69 @@ mod tests {
         let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
         gc_room(&rooms, "missing").await;
         assert!(rooms.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn rejects_wrong_webtransport_room_token() -> anyhow::Result<()> {
+        let relay = TestRelay::start("secret")?;
+        let client = client_endpoint(relay.cert_digest.clone())?;
+
+        let result = timeout(
+            Duration::from_secs(2),
+            client.connect(relay.url("/room/demo/wrong/pub")),
+        )
+        .await
+        .context("wrong-token WebTransport connect timed out")?;
+
+        assert!(result.is_err(), "wrong room token must reject the session");
+        assert!(relay.rooms.lock().await.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn webtransport_pub_sub_echoes_datagram_through_room() -> anyhow::Result<()> {
+        let relay = TestRelay::start("secret")?;
+        let subscriber = client_endpoint(relay.cert_digest.clone())?;
+        let publisher = client_endpoint(relay.cert_digest.clone())?;
+
+        let sub_conn = timeout(
+            Duration::from_secs(2),
+            subscriber.connect(relay.url("/room/demo/secret/sub")),
+        )
+        .await
+        .context("subscriber WebTransport connect timed out")??;
+        wait_for_participants(&relay.rooms, "demo", 1).await?;
+
+        let pub_conn = timeout(
+            Duration::from_secs(2),
+            publisher.connect(relay.url("/room/demo/secret/pub")),
+        )
+        .await
+        .context("publisher WebTransport connect timed out")??;
+        wait_for_participants(&relay.rooms, "demo", 2).await?;
+
+        let payload = b"kgm1 datagram";
+        for _ in 0..3 {
+            pub_conn.send_datagram(payload)?;
+        }
+
+        let received = timeout(Duration::from_secs(2), async {
+            loop {
+                let frame = sub_conn.receive_datagram().await?;
+                if frame.as_ref() == payload {
+                    return Ok::<_, anyhow::Error>(frame);
+                }
+            }
+        })
+        .await
+        .context("subscriber did not receive relayed datagram")??;
+        assert_eq!(received.as_ref(), payload);
+
+        pub_conn.close(0u32.into(), b"test done");
+        sub_conn.close(0u32.into(), b"test done");
+        drop(pub_conn);
+        drop(sub_conn);
+        wait_for_room_empty(&relay.rooms, "demo").await?;
+        Ok(())
     }
 }

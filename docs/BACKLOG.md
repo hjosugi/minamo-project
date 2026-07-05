@@ -161,9 +161,9 @@ relay is started with a secret, publishers must present `?token=` (ws) or a
 path segment (wt). Subscribers optionally too. Constant-time comparison.
 
 Acceptance criteria:
-- [ ] relay-node and relay-rs both support tokens
-- [ ] Tracker and viewer UIs have a token field
-- [ ] Wrong token closes the connection with a clear code
+- [x] relay-node and relay-rs both support tokens
+- [x] Tracker and viewer UIs have a token field
+- [x] Wrong token closes the connection with a clear code
 
 ### [KGM-009] relay-rs build and integration test in CI
 - Labels: area/infra, type/chore
@@ -178,9 +178,9 @@ WebTransport client (wtransport client feature) doing pub -> sub echo of a
 KGM1 frame through a room.
 
 Acceptance criteria:
-- [ ] cargo build + clippy + fmt in CI
-- [ ] pub/sub integration test passes in CI
-- [ ] README badge reflects build status
+- [x] cargo build + clippy + fmt in CI
+- [x] pub/sub integration test passes in CI
+- [x] README badge reflects build status
 
 ### [KGM-010] relay-rs and relay-node: room garbage collection
 - Labels: area/transport, type/bug
