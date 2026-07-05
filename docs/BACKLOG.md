@@ -625,9 +625,9 @@ out-of-band (room URL fragment). Relays forward opaque ciphertext; seq and
 timestamp move inside the sealed payload, a minimal outer header remains.
 
 Acceptance criteria:
-- [ ] Relay cannot decode frames (test asserts ciphertext)
-- [ ] Overhead <= 24 bytes/frame
-- [ ] Wrong-key subscriber shows a clear error, not garbage motion
+- [x] Relay cannot decode frames (test asserts ciphertext)
+- [x] Overhead <= 24 bytes/frame
+- [x] Wrong-key subscriber shows a clear error, not garbage motion
 
 ## M5 Render backends
 

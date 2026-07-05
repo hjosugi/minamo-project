@@ -24,6 +24,7 @@ REQUIRED = [
     'docs/GLOSSARY.md',
     'docs/IMPLEMENTATION_PROGRESS.md',
     'docs/transport/kgm2-reference-codecs.md',
+    'docs/security/e2ee.md',
     'docs/adr/README.md',
     'docs/product/onboarding.md',
     'docs/product/desktop-app.md',
@@ -41,6 +42,7 @@ REQUIRED = [
     'shared/runtime.js',
     'shared/kgm1b.js',
     'shared/kgm2.js',
+    'shared/e2ee.js',
     'shared/recording.js',
     'tests/fixtures/kgm1-synthetic.jsonl',
     'tests/fixtures/hand-golden-clip.json',
@@ -886,6 +888,45 @@ def validate_protocol_v2_contracts() -> None:
             add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after protocol implementation')
 
 
+def validate_e2ee_contracts() -> None:
+    e2ee = read('shared/e2ee.js')
+    tests = read('tests/run-tests.mjs')
+    docs = read('docs/security/e2ee.md')
+    backlog = read('docs/BACKLOG.md')
+
+    for needle in [
+        'E2EE_OVERHEAD_BYTES',
+        'deriveRoomKey',
+        'encryptFrame',
+        'decryptFrame',
+        'ciphertextLooksOpaque',
+        'wrong room key or corrupted frame',
+        'TAG_BYTES = 16',
+        'NONCE_SUFFIX_BYTES = 8',
+    ]:
+        if needle not in e2ee:
+            add_error('shared/e2ee.js', f'missing E2EE contract: {needle}')
+    for needle in [
+        'E2EE_OVERHEAD_BYTES, 24',
+        'relay ciphertext test asserts',
+        'wrong-key subscriber gets a clear decrypt error',
+        'ciphertextLooksOpaque',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing E2EE regression coverage: {needle}')
+    for needle in [
+        'exactly 24 bytes',
+        'wrong room key or corrupted frame',
+        'WebCrypto AES-GCM',
+        'relay sees only opaque bytes',
+    ]:
+        if needle not in docs:
+            add_error('docs/security/e2ee.md', f'missing E2EE documentation: {needle}')
+    entry = backlog.split('### [KGM-037]', 1)[1].split('\n### ', 1)[0]
+    if '- [ ]' in entry:
+        add_error('docs/BACKLOG.md', 'KGM-037 acceptance criteria must remain checked after E2EE implementation')
+
+
 def validate_transport_contracts() -> None:
     transport = read('shared/transport.js')
     tests = read('tests/run-tests.mjs')
@@ -1130,6 +1171,7 @@ validate_tracking_loss_contracts()
 validate_face_selection_contracts()
 validate_body_hand_contracts()
 validate_protocol_v2_contracts()
+validate_e2ee_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

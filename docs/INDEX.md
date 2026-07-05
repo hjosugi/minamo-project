@@ -76,6 +76,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [dev/implementation-order.md](dev/implementation-order.md)
 - [ml/model-roadmap-yolo-edge.md](ml/model-roadmap-yolo-edge.md)
 - [security/privacy.md](security/privacy.md)
+- [security/e2ee.md](security/e2ee.md)
 - [references/reviewed-sources.md](references/reviewed-sources.md)
 
 ## Prompts (agent workflows)

@@ -5,6 +5,13 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { encodeFrame, decodeFrame, HAND_TARGET_BYTES } from '../shared/codec.js';
 import {
+  E2EE_OVERHEAD_BYTES,
+  ciphertextLooksOpaque,
+  decryptFrame as decryptE2eeFrame,
+  deriveRoomKey,
+  encryptFrame as encryptE2eeFrame,
+} from '../shared/e2ee.js';
+import {
   decodeKgm1bHeader,
   decodeKgm1bPacket,
   encodeKgm1bHeader,
@@ -441,6 +448,23 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.deepEqual(Array.from(mailbox.take()), [3]);
   assert.equal(mailbox.replaced, 2, 'packet drop simulation replaces stale frames');
   assert.equal(mailbox.lagFrames(), 0);
+}
+
+{
+  const frame = new Uint8Array(encodeFrame(syntheticBlendshapeFrame(71)));
+  const key = await deriveRoomKey('correct horse battery staple', 'e2ee-room');
+  const wrongKey = await deriveRoomKey('wrong key', 'e2ee-room');
+  const sealed = await encryptE2eeFrame(frame, key);
+  assert.equal(E2EE_OVERHEAD_BYTES, 24);
+  assert.equal(sealed.byteLength - frame.byteLength, E2EE_OVERHEAD_BYTES, 'E2EE overhead stays <=24 bytes/frame');
+  assert.equal(ciphertextLooksOpaque(sealed, frame), true, 'relay ciphertext test asserts the KGM1 frame is opaque');
+  const opened = await decryptE2eeFrame(sealed, key);
+  assert.deepEqual(Array.from(opened), Array.from(frame));
+  await assert.rejects(
+    decryptE2eeFrame(sealed, wrongKey),
+    /wrong room key or corrupted frame/,
+    'wrong-key subscriber gets a clear decrypt error'
+  );
 }
 
 {
