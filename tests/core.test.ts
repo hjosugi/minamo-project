@@ -2,11 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   ConfidenceDecay,
   FingerContactHysteresis,
+  AccelerationJerkClamp,
+  OcclusionStateMachine,
+  TemporalOutlierRejector,
+  VelocityClamp,
+  clampRigParameter,
+  confidenceWeightedBlend,
   computeFingerCurl,
   computePalmBasis,
   createSyntheticHandLandmarks,
   deriveFingerChain,
   detectHandSwap,
+  finiteNumber,
+  shortestPathQuat,
+  slerpQuat,
   solveHandState,
 } from '../src/core';
 
@@ -70,5 +79,48 @@ describe('hand solver', () => {
     const previous = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     const next = solveHandState({ handedness: 'Left', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     expect(detectHandSwap(previous, next)).toBe(true);
+  });
+});
+
+describe('stability layer', () => {
+  it('guards finite values and rig ranges', () => {
+    expect(finiteNumber(Number.NaN, 0.25).value).toBe(0.25);
+    expect(clampRigParameter(2, 0, 1).value).toBe(1);
+    expect(clampRigParameter(2, 0, 1).warnings).toContain('RIG_PARAMETER_CLAMPED');
+  });
+
+  it('rejects temporal outliers and clamps velocity', () => {
+    const rejector = new TemporalOutlierRejector(0.2);
+    expect(rejector.update({ x: 0, y: 0, z: 0 }).warnings).toEqual([]);
+    const rejected = rejector.update({ x: 5, y: 0, z: 0 });
+    expect(rejected.value.x).toBe(0);
+    expect(rejected.warnings).toContain('TEMPORAL_OUTLIER');
+
+    const clamp = new VelocityClamp(1);
+    clamp.update({ x: 0, y: 0, z: 0 }, 0);
+    const clamped = clamp.update({ x: 10, y: 0, z: 0 }, 0.1);
+    expect(clamped.value.x).toBeLessThanOrEqual(0.100001);
+    expect(clamped.warnings).toContain('VELOCITY_CLAMPED');
+  });
+
+  it('limits acceleration/jerk and handles occlusion phases', () => {
+    const clamp = new AccelerationJerkClamp(2, 10);
+    clamp.update({ x: 0, y: 0, z: 0 }, 0);
+    const out = clamp.update({ x: 10, y: 0, z: 0 }, 0.016);
+    expect(out.warnings.length).toBeGreaterThan(0);
+
+    const occ = new OcclusionStateMachine();
+    expect(occ.update(0.9, 100)).toBe('reacquiring');
+    expect(occ.update(0.9, 200)).toBe('tracked');
+    expect(occ.update(0.1, 100)).toBe('suspect');
+    expect(occ.update(0.1, 400)).toBe('lost');
+  });
+
+  it('uses confidence blending and quaternion shortest path', () => {
+    expect(confidenceWeightedBlend(0, 1, 0.25)).toBe(0.25);
+    const previous = { x: 0, y: 0, z: 0, w: 1 };
+    const flipped = shortestPathQuat(previous, { x: 0, y: 0, z: 0, w: -1 });
+    expect(flipped.w).toBe(1);
+    expect(slerpQuat(previous, { x: 0, y: 0, z: 0, w: -1 }, 0.5).w).toBeGreaterThan(0.99);
   });
 });
