@@ -34,6 +34,7 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   wtHash: '',
   mirror: true,
   pose: false,
+  hands: false,
   cameraId: '',
   resolution: '720p',
   fps: '60',

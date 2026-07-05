@@ -9,6 +9,7 @@ MODEL_DIR="$VENDOR/models"
 WASM_BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@$VERSION/wasm"
 FACE_MODEL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 POSE_MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+HAND_MODEL="https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
 
 mkdir -p "$WASM_DIR" "$MODEL_DIR"
 
@@ -36,6 +37,7 @@ done
 
 download "$FACE_MODEL" "$MODEL_DIR/face_landmarker.task"
 download "$POSE_MODEL" "$MODEL_DIR/pose_landmarker_lite.task"
+download "$HAND_MODEL" "$MODEL_DIR/hand_landmarker.task"
 
 (
   cd "$VENDOR"

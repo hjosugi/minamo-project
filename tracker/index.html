@@ -27,6 +27,7 @@
         <button id="btnStop" disabled>Stop</button>
         <label class="check"><input type="checkbox" id="chkMirror" checked />Mirror view</label>
         <label class="check"><input type="checkbox" id="chkPose" />Upper-body pose (experimental)</label>
+        <label class="check"><input type="checkbox" id="chkHands" />Hands (experimental)</label>
         <label class="check"><input type="checkbox" id="chkPrivacy" checked />Local-only privacy</label>
       </div>
       <div class="form-grid compact">
@@ -62,6 +63,7 @@
         <span>packet <b id="statPacket">--</b> B</span>
         <span>out <b id="statRate">--</b> KB/s</span>
         <span>camera <b id="statCamera">--</b></span>
+        <span>hands <b id="statHands">0</b></span>
         <span>dropped <b id="statDropped">0</b></span>
       </div>
       <ul class="warning-list" id="warningList"></ul>

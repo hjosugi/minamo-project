@@ -7,6 +7,7 @@
 import {
   FilesetResolver,
   FaceLandmarker,
+  HandLandmarker,
   PoseLandmarker,
 } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs';
 
@@ -35,9 +36,11 @@ const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_WASM_ROOT = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
 const CDN_FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 const CDN_POSE_MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+const CDN_HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const LOCAL_WASM_ROOT = `../vendor/mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
 const LOCAL_FACE_MODEL = '../vendor/mediapipe/models/face_landmarker.task';
 const LOCAL_POSE_MODEL = '../vendor/mediapipe/models/pose_landmarker_lite.task';
+const LOCAL_HAND_MODEL = '../vendor/mediapipe/models/hand_landmarker.task';
 
 const $ = (id) => document.getElementById(id);
 const video = $('video');
@@ -63,8 +66,10 @@ const state = {
   running: false,
   mirror: Boolean(settings.mirror),
   poseEnabled: Boolean(settings.pose),
+  handsEnabled: Boolean(settings.hands),
   faceLandmarker: null,
   poseLandmarker: null,
+  handLandmarker: null,
   transport: new KagamiTransport(),
   seq: 0,
   weights: new Float32Array(NUM_CHANNELS),
@@ -73,6 +78,8 @@ const state = {
   pos: [0, 0, 0.4],
   posePoints: new Float32Array(NUM_POSE_POINTS * 3),
   hasPose: false,
+  hasHands: false,
+  hands: [],
   nameToIndex: null, // built from the first MediaPipe result
   // filters
   weightFilter: new OneEuroArray(NUM_CHANNELS, filterOptions()),
@@ -152,6 +159,13 @@ async function loadModels() {
       numPoses: 1,
     });
   }
+  if (state.handsEnabled && !state.handLandmarker) {
+    state.handLandmarker = await HandLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: assets.handModel, delegate: 'GPU' },
+      runningMode: 'VIDEO',
+      numHands: 2,
+    });
+  }
   state._fileset = fileset;
 }
 
@@ -190,10 +204,10 @@ async function startCamera() {
 
 async function resolveModelAssets() {
   if (resolvedAssets) return resolvedAssets;
-  const hasLocalModels = await assetExists(LOCAL_FACE_MODEL) && await assetExists(LOCAL_POSE_MODEL);
+  const hasLocalModels = await assetExists(LOCAL_FACE_MODEL) && await assetExists(LOCAL_POSE_MODEL) && await assetExists(LOCAL_HAND_MODEL);
   resolvedAssets = hasLocalModels
-    ? { wasmRoot: LOCAL_WASM_ROOT, faceModel: LOCAL_FACE_MODEL, poseModel: LOCAL_POSE_MODEL, source: 'local vendor' }
-    : { wasmRoot: CDN_WASM_ROOT, faceModel: CDN_FACE_MODEL, poseModel: CDN_POSE_MODEL, source: 'cdn fallback' };
+    ? { wasmRoot: LOCAL_WASM_ROOT, faceModel: LOCAL_FACE_MODEL, poseModel: LOCAL_POSE_MODEL, handModel: LOCAL_HAND_MODEL, source: 'local vendor' }
+    : { wasmRoot: CDN_WASM_ROOT, faceModel: CDN_FACE_MODEL, poseModel: CDN_POSE_MODEL, handModel: CDN_HAND_MODEL, source: 'cdn fallback' };
   return resolvedAssets;
 }
 
@@ -274,8 +288,12 @@ function loop() {
 
     const faceRes = state.faceLandmarker.detectForVideo(video, nowMs);
     let poseRes = null;
+    let handRes = null;
     if (state.poseEnabled && state.poseLandmarker) {
       poseRes = state.poseLandmarker.detectForVideo(video, nowMs);
+    }
+    if (state.handsEnabled && state.handLandmarker) {
+      handRes = state.handLandmarker.detectForVideo(video, nowMs);
     }
     state.inferMs = performance.now() - t0;
 
@@ -343,6 +361,16 @@ function loop() {
       state.hasPose = true;
     }
 
+    state.hasHands = false;
+    state.hands = [];
+    if (handRes && handRes.landmarks && handRes.landmarks.length > 0) {
+      state.hasHands = true;
+      state.hands = handRes.landmarks;
+      if (handRes.landmarks.some((hand) => hand.some((lm) => lm.x < -0.05 || lm.x > 1.05 || lm.y < -0.05 || lm.y > 1.05))) {
+        state.warnings.push('hand outside frame');
+      }
+    }
+
     state.quality = computeQualityScore({
       meanLuma: sampleLuma(),
       confidence: hasFace ? 1 : 0,
@@ -366,7 +394,7 @@ function loop() {
       recordFrame(frame);
     }
 
-    drawOverlay(faceRes, poseRes);
+    drawOverlay(faceRes, poseRes, handRes);
     drawMeters();
     state.frames++;
   }
@@ -377,7 +405,7 @@ function loop() {
 
 // ---------------------------------------------------------------- drawing
 
-function drawOverlay(faceRes, poseRes) {
+function drawOverlay(faceRes, poseRes, handRes) {
   const w = overlay.width, h = overlay.height;
   overlayCtx.clearRect(0, 0, w, h);
   overlayCtx.save();
@@ -407,6 +435,30 @@ function drawOverlay(faceRes, poseRes) {
       overlayCtx.moveTo(lm[a].x * w, lm[a].y * h);
       overlayCtx.lineTo(lm[b].x * w, lm[b].y * h);
       overlayCtx.stroke();
+    }
+  }
+
+  if (handRes && handRes.landmarks && handRes.landmarks.length > 0) {
+    overlayCtx.strokeStyle = COLOR_FACE;
+    overlayCtx.fillStyle = COLOR_FACE;
+    overlayCtx.globalAlpha = 0.85;
+    overlayCtx.lineWidth = 2;
+    const seg = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [0, 9], [9, 10], [10, 11], [11, 12],
+      [0, 13], [13, 14], [14, 15], [15, 16],
+      [0, 17], [17, 18], [18, 19], [19, 20],
+      [5, 9], [9, 13], [13, 17],
+    ];
+    for (const hand of handRes.landmarks) {
+      for (const [a, b] of seg) {
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(hand[a].x * w, hand[a].y * h);
+        overlayCtx.lineTo(hand[b].x * w, hand[b].y * h);
+        overlayCtx.stroke();
+      }
+      for (const lm of hand) overlayCtx.fillRect(lm.x * w - 2, lm.y * h - 2, 4, 4);
     }
   }
   overlayCtx.restore();
@@ -495,6 +547,7 @@ function updateStats(nowMs) {
   $('statInfer').textContent = state.inferMs.toFixed(1);
   $('statPacket').textContent = state.lastPacketBytes || '--';
   $('statDropped').textContent = String(state.dropDetector.dropped);
+  $('statHands').textContent = state.hasHands ? String(state.hands.length) : '0';
   const rate = (state.transport.bytesOut - state.lastBytesOut) / dt / 1024;
   $('statRate').textContent = rate.toFixed(1);
   qualityChip.textContent = `${state.quality.state} ${Math.round((state.quality.score || 0) * 100)}%`;
@@ -527,6 +580,7 @@ function applySettingsToUi() {
   $('inpWtHash').value = settings.wtHash;
   $('chkMirror').checked = Boolean(settings.mirror);
   $('chkPose').checked = Boolean(settings.pose);
+  $('chkHands').checked = Boolean(settings.hands);
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
   $('selResolution').value = settings.resolution;
   $('selFps').value = settings.fps;
@@ -535,6 +589,7 @@ function applySettingsToUi() {
   $('rngBeta').value = settings.beta;
   state.mirror = Boolean(settings.mirror);
   state.poseEnabled = Boolean(settings.pose);
+  state.handsEnabled = Boolean(settings.hands);
   video.classList.toggle('mirrored', state.mirror);
   updateModeFields();
   updateViewerLink();
@@ -549,6 +604,7 @@ function readSettingsFromUi() {
   settings.wtHash = $('inpWtHash').value;
   settings.mirror = $('chkMirror').checked;
   settings.pose = $('chkPose').checked;
+  settings.hands = $('chkHands').checked;
   settings.privacyLocalOnly = $('chkPrivacy').checked;
   settings.cameraId = $('selCamera').value;
   settings.resolution = $('selResolution').value;
@@ -679,6 +735,19 @@ $('chkPose').addEventListener('change', async (e) => {
       baseOptions: { modelAssetPath: assets.poseModel, delegate: 'GPU' },
       runningMode: 'VIDEO',
       numPoses: 1,
+    });
+  }
+});
+
+$('chkHands').addEventListener('change', async (e) => {
+  state.handsEnabled = e.target.checked;
+  persistSettings();
+  if (state.handsEnabled && state.running && !state.handLandmarker && state._fileset) {
+    const assets = await resolveModelAssets();
+    state.handLandmarker = await HandLandmarker.createFromOptions(state._fileset, {
+      baseOptions: { modelAssetPath: assets.handModel, delegate: 'GPU' },
+      runningMode: 'VIDEO',
+      numHands: 2,
     });
   }
 });
