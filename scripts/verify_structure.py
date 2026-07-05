@@ -457,7 +457,7 @@ def validate_quality_contracts() -> None:
     for needle in [
         'qualityChip',
         'sampleLuma()',
-        'estimateLandmarkConfidence(faceRes.faceLandmarks?.[0])',
+        'estimateLandmarkConfidence(selectedLandmarks)',
         'configureCameraQualityControls',
         'nudgeBrightnessForLowLight',
         'exposureMode',
@@ -495,9 +495,9 @@ def validate_gaze_contracts() -> None:
         if needle not in runtime:
             add_error('shared/runtime.js', f'missing iris gaze runtime contract: {needle}')
     for needle in [
-        'resolveGaze(state.raw, faceRes.faceLandmarks?.[0]',
+        'resolveGaze(state.raw, selectedLandmarks',
         'applyGazeToWeights(state.raw, gaze)',
-        'sampleGazeCalibration(faceRes.faceLandmarks?.[0])',
+        'sampleGazeCalibration(selectedLandmarks)',
         'startGazeCalibration',
         'tickGazeCalibration();',
         'buildGazeCalibrationProfile',
@@ -645,6 +645,36 @@ def validate_tracking_loss_contracts() -> None:
     ]:
         if needle not in tests:
             add_error('tests/run-tests.mjs', f'missing tracking loss regression coverage: {needle}')
+
+
+def validate_face_selection_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in ['selectTrackedFace', 'defaultFaceLockRegion', 'intersectionOverUnion', 'boxCenterInside']:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing face selection runtime contract: {needle}')
+    for needle in [
+        'numFaces: 4',
+        'trackedFaceBox',
+        'selectTrackedFace(faceRes.faceLandmarks || []',
+        'faceRes.faceBlendshapes[faceIndex]',
+        'faceRes.facialTransformationMatrixes',
+        'drawOverlay(faceRes, poseRes, handRes, faceIndex)',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker face selection contract: {needle}')
+    if 'id="chkFaceLock"' not in tracker_html:
+        add_error('tracker/index.html', 'face lock checkbox must exist and persist through tracker settings')
+    for needle in [
+        'sticky overlap beats larger passer-by face',
+        'largest face is fallback',
+        'face lock region beats larger outside face',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing face selection regression coverage: {needle}')
 
 
 def validate_desktop_contracts() -> None:
@@ -801,6 +831,7 @@ validate_head_position_contracts()
 validate_blink_wink_contracts()
 validate_filter_tuning_contracts()
 validate_tracking_loss_contracts()
+validate_face_selection_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

@@ -38,6 +38,7 @@ import {
   createGazeCalibrationSession,
   createGuidedCalibrationSession,
   collectGuidedCalibrationSample,
+  defaultFaceLockRegion,
   estimateLandmarkConfidence,
   estimateOneEuroLagMs,
   isEditableTarget,
@@ -47,6 +48,7 @@ import {
   normalizeHeadLeanRangeCm,
   sanitizeWeights,
   saveJson,
+  selectTrackedFace,
   setMirrorPreviewClass,
   validateCalibrationProfile,
   resolveGaze,
@@ -110,6 +112,7 @@ const state = {
   hasHands: false,
   hands: [],
   handTargets: null,
+  trackedFaceBox: null,
   nameToIndex: null, // built from the first MediaPipe result
   // filters
   weightFilter: new OneEuroArray(NUM_CHANNELS, filterOptions('face')),
@@ -192,6 +195,7 @@ function normalizeTrackerSettings(raw) {
   }
   if (!SMOOTHING_GROUPS[base.smoothingGroup]) base.smoothingGroup = 'face';
   base.headLeanRangeCm = normalizeHeadLeanRangeCm(base.headLeanRangeCm);
+  base.faceLock = Boolean(base.faceLock);
   if (!raw?.smoothing?.face) {
     smoothing.face = {
       filterPreset: base.filterPreset || DEFAULT_SMOOTHING_SETTINGS.face.filterPreset,
@@ -211,7 +215,7 @@ async function loadModels() {
   state.faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: assets.faceModel, delegate: 'GPU' },
     runningMode: 'VIDEO',
-    numFaces: 1,
+    numFaces: 4,
     outputFaceBlendshapes: true,
     outputFacialTransformationMatrixes: true,
   });
@@ -277,6 +281,7 @@ async function startCamera() {
   state.dropDetector = new DroppedFrameDetector(fps);
   state.confidenceTracker = new LandmarkConfidenceTracker();
   state.headPositionStabilizer.reset();
+  state.trackedFaceBox = null;
   const videoConstraints = {
     width: { ideal: res.width },
     height: { ideal: res.height },
@@ -379,7 +384,10 @@ function resetFilters({ resetTrackingLoss = true } = {}) {
   state.posFilter = new OneEuroArray(3, filterOptions('headPosition'));
   state.headPositionStabilizer.reset();
   state.blinkWinkStabilizer.reset();
-  if (resetTrackingLoss) state.trackingLossSmoother.reset();
+  if (resetTrackingLoss) {
+    state.trackingLossSmoother.reset();
+    state.trackedFaceBox = null;
+  }
   state.poseFilter = new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose'));
   state.handCurlFilter = new OneEuroArray(10, filterOptions('hands'));
   state.handSpreadFilter = new OneEuroArray(10, filterOptions('hands'));
@@ -448,13 +456,20 @@ function loop() {
     state.inferMs = performance.now() - t0;
 
     const tSec = nowMs / 1000;
-    const hasFace = faceRes.faceBlendshapes && faceRes.faceBlendshapes.length > 0;
+    const faceSelection = selectTrackedFace(faceRes.faceLandmarks || [], {
+      previousBox: state.trackedFaceBox,
+      lock: defaultFaceLockRegion(settings.faceLock),
+    });
+    const faceIndex = faceSelection.index;
+    const selectedLandmarks = faceIndex >= 0 ? faceRes.faceLandmarks?.[faceIndex] : null;
+    const hasFace = faceIndex >= 0 && faceRes.faceBlendshapes && faceRes.faceBlendshapes[faceIndex];
     let shouldSendFace = false;
     const frameWarnings = [];
 
     if (hasFace) {
+      state.trackedFaceBox = faceSelection.box;
       // --- blendshapes, mapped by name into the canonical KGM1 order
-      const cats = faceRes.faceBlendshapes[0].categories;
+      const cats = faceRes.faceBlendshapes[faceIndex].categories;
       if (!state.nameToIndex) {
         state.nameToIndex = new Map();
         for (let i = 0; i < cats.length; i++) {
@@ -471,8 +486,8 @@ function loop() {
       let quat = [0, 0, 0, 1];
       let pos = [0, 0, 0.4];
       const mats = faceRes.facialTransformationMatrixes;
-      if (mats && mats.length > 0) {
-        const m = mats[0].data;
+      if (mats && mats[faceIndex]) {
+        const m = mats[faceIndex].data;
         quat = mat4ToQuat(m);
         pos = [m[12] / 100, m[13] / 100, m[14] / 100];
       }
@@ -485,10 +500,10 @@ function loop() {
         state.raw.set(mirrored.weights);
       }
 
-      const gaze = resolveGaze(state.raw, faceRes.faceLandmarks?.[0], { mirror: state.mirror, calibration: profile.gaze });
+      const gaze = resolveGaze(state.raw, selectedLandmarks, { mirror: state.mirror, calibration: profile.gaze });
       state.raw.set(applyGazeToWeights(state.raw, gaze));
       state.raw.set(state.blinkWinkStabilizer.filter(state.raw));
-      sampleGazeCalibration(faceRes.faceLandmarks?.[0]);
+      sampleGazeCalibration(selectedLandmarks);
 
       // --- safety, calibration, and One Euro filtering
       const sanitized = sanitizeWeights(state.raw);
@@ -538,7 +553,7 @@ function loop() {
       }
     }
 
-    const landmarkConfidence = state.confidenceTracker.sample(estimateLandmarkConfidence(faceRes.faceLandmarks?.[0]), nowMs);
+    const landmarkConfidence = state.confidenceTracker.sample(estimateLandmarkConfidence(selectedLandmarks), nowMs);
     state.quality = computeQualityScore({
       meanLuma: sampleLuma(),
       confidence: landmarkConfidence,
@@ -563,7 +578,7 @@ function loop() {
       recordFrame(frame);
     }
 
-    drawOverlay(faceRes, poseRes, handRes);
+    drawOverlay(faceRes, poseRes, handRes, faceIndex);
     drawMeters();
     state.frames++;
   }
@@ -576,7 +591,7 @@ function loop() {
 
 // ---------------------------------------------------------------- drawing
 
-function drawOverlay(faceRes, poseRes, handRes) {
+function drawOverlay(faceRes, poseRes, handRes, faceIndex = 0) {
   const w = overlay.width, h = overlay.height;
   overlayCtx.clearRect(0, 0, w, h);
   overlayCtx.save();
@@ -585,10 +600,10 @@ function drawOverlay(faceRes, poseRes, handRes) {
     overlayCtx.scale(-1, 1);
   }
 
-  if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
+  if (faceRes.faceLandmarks && faceRes.faceLandmarks[faceIndex]) {
     overlayCtx.fillStyle = COLOR_FACE;
     overlayCtx.globalAlpha = 0.7;
-    const lms = faceRes.faceLandmarks[0];
+    const lms = faceRes.faceLandmarks[faceIndex];
     for (let i = 0; i < lms.length; i += 3) {
       overlayCtx.fillRect(lms[i].x * w - 1, lms[i].y * h - 1, 2, 2);
     }
@@ -860,6 +875,7 @@ function applySettingsToUi() {
   $('chkMirror').checked = Boolean(settings.mirror);
   $('chkPose').checked = Boolean(settings.pose);
   $('chkHands').checked = Boolean(settings.hands);
+  $('chkFaceLock').checked = Boolean(settings.faceLock);
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
   $('selResolution').value = settings.resolution;
   $('selFps').value = settings.fps;
@@ -885,6 +901,7 @@ function readSettingsFromUi() {
   settings.mirror = $('chkMirror').checked;
   settings.pose = $('chkPose').checked;
   settings.hands = $('chkHands').checked;
+  settings.faceLock = $('chkFaceLock').checked;
   settings.privacyLocalOnly = $('chkPrivacy').checked;
   settings.cameraId = $('selCamera').value;
   settings.resolution = $('selResolution').value;
@@ -1291,6 +1308,10 @@ $('chkHands').addEventListener('change', async (e) => {
 });
 
 $('chkPrivacy').addEventListener('change', persistSettings);
+$('chkFaceLock').addEventListener('change', () => {
+  state.trackedFaceBox = null;
+  persistSettings();
+});
 $('selCamera').addEventListener('change', restartCameraIfRunning);
 $('selResolution').addEventListener('change', restartCameraIfRunning);
 $('selFps').addEventListener('change', restartCameraIfRunning);

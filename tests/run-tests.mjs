@@ -36,6 +36,7 @@ import {
   parseMotionJsonl,
   resolveGaze,
   sanitizeWeights,
+  selectTrackedFace,
   semanticFaceControls,
   syntheticBlendshapeFrame,
   syntheticFaceFixture,
@@ -128,6 +129,16 @@ function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, inne
   for (let i = 0; i < iris.length; i++) {
     landmarks[iris[i]] = { x: irisCenter.x + offsets[i][0], y: irisCenter.y + offsets[i][1], z: 0 };
   }
+}
+
+function faceBoxLandmarks(x, y, w, h) {
+  return [
+    { x, y },
+    { x: x + w, y },
+    { x, y: y + h },
+    { x: x + w, y: y + h },
+    { x: x + w * 0.5, y: y + h * 0.5 },
+  ];
 }
 
 {
@@ -243,6 +254,27 @@ function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, inne
   assert.equal(gate.reordered, 1);
   assert.equal(gate.accept({ seq: 3 }).ok, true);
   assert.equal(gate.lost, 2);
+}
+
+{
+  const previous = { x: 0.1, y: 0.1, w: 0.25, h: 0.25, area: 0.0625 };
+  const sticky = selectTrackedFace([
+    faceBoxLandmarks(0.58, 0.1, 0.34, 0.34),
+    faceBoxLandmarks(0.12, 0.11, 0.24, 0.24),
+  ], { previousBox: previous });
+  assert.equal(sticky.index, 1, 'sticky overlap beats larger passer-by face');
+
+  const largest = selectTrackedFace([
+    faceBoxLandmarks(0.1, 0.1, 0.12, 0.12),
+    faceBoxLandmarks(0.55, 0.1, 0.28, 0.28),
+  ]);
+  assert.equal(largest.index, 1, 'largest face is fallback without previous overlap');
+
+  const locked = selectTrackedFace([
+    faceBoxLandmarks(0.05, 0.1, 0.35, 0.35),
+    faceBoxLandmarks(0.42, 0.2, 0.18, 0.18),
+  ], { lock: { enabled: true, x: 0.35, y: 0.15, w: 0.3, h: 0.5 } });
+  assert.equal(locked.index, 1, 'face lock region beats larger outside face');
 }
 
 {

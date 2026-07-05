@@ -369,8 +369,8 @@ whose bounding area overlaps the previously tracked one (sticky), fall back
 to largest. Add an optional face-lock rectangle.
 
 Acceptance criteria:
-- [ ] A second person passing behind does not steal tracking
-- [ ] Lock region persists across sessions
+- [x] A second person passing behind does not steal tracking
+- [x] Lock region persists across sessions
 
 ## M2 Body and hands
 

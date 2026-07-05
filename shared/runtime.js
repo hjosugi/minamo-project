@@ -51,6 +51,7 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   mirror: true,
   pose: false,
   hands: false,
+  faceLock: false,
   cameraId: '',
   resolution: '720p',
   fps: '60',
@@ -379,6 +380,30 @@ export class TrackingLossSmoother {
 
 export function normalizeHeadLeanRangeCm(value) {
   return Math.round(clamp(Number(value ?? DEFAULT_TRACKER_SETTINGS.headLeanRangeCm), 0, 20) * 10) / 10;
+}
+
+export function selectTrackedFace(landmarkSets = [], { previousBox = null, lock = null } = {}) {
+  const candidates = landmarkSets
+    .map((landmarks, index) => ({ index, box: landmarkBounds(landmarks) }))
+    .filter((candidate) => candidate.box.area > 0);
+  if (!candidates.length) return { index: -1, box: null };
+  const activeLock = lock?.enabled ? lock : null;
+  let best = candidates[0];
+  let bestScore = -Infinity;
+  for (const candidate of candidates) {
+    const overlap = previousBox ? intersectionOverUnion(previousBox, candidate.box) : 0;
+    const lockScore = activeLock ? (boxCenterInside(candidate.box, activeLock) ? 2 : -2) : 0;
+    const score = overlap * 3 + lockScore + candidate.box.area;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+export function defaultFaceLockRegion(enabled = false) {
+  return { enabled: Boolean(enabled), x: 0.25, y: 0.12, w: 0.5, h: 0.76 };
 }
 
 export function estimateLandmarkConfidence(landmarks = []) {
@@ -1014,6 +1039,42 @@ function hysteresisClosed(value, previous, openThreshold, closeThreshold) {
   if (value >= closeThreshold) return true;
   if (value <= openThreshold) return false;
   return previous;
+}
+
+function landmarkBounds(landmarks = []) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const landmark of landmarks) {
+    const x = Number(landmark?.x);
+    const y = Number(landmark?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return { x: 0, y: 0, w: 0, h: 0, area: 0 };
+  const w = Math.max(0, maxX - minX);
+  const h = Math.max(0, maxY - minY);
+  return { x: minX, y: minY, w, h, area: w * h };
+}
+
+function intersectionOverUnion(a, b) {
+  const x1 = Math.max(a.x, b.x);
+  const y1 = Math.max(a.y, b.y);
+  const x2 = Math.min(a.x + a.w, b.x + b.w);
+  const y2 = Math.min(a.y + a.h, b.y + b.h);
+  const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const union = a.area + b.area - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+
+function boxCenterInside(box, lock) {
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  return cx >= lock.x && cx <= lock.x + lock.w && cy >= lock.y && cy <= lock.y + lock.h;
 }
 
 function clampProfileNumber(value, min, max, name, warnings) {
