@@ -3,6 +3,7 @@ import {
   ConfidenceDecay,
   FingerContactHysteresis,
   AccelerationJerkClamp,
+  AudioOnsetDetector,
   OcclusionStateMachine,
   TemporalOutlierRejector,
   VelocityClamp,
@@ -14,9 +15,12 @@ import {
   deriveFingerChain,
   detectHandSwap,
   finiteNumber,
+  fuseVisualHitWithAudio,
+  estimateHitVelocity,
   shortestPathQuat,
   slerpQuat,
   solveHandState,
+  voiceActivityMouthAccent,
 } from '../src/core';
 
 describe('hand solver', () => {
@@ -79,6 +83,40 @@ describe('hand solver', () => {
     const previous = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     const next = solveHandState({ handedness: 'Left', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     expect(detectHandSwap(previous, next)).toBe(true);
+  });
+});
+
+describe('audio and drum helpers', () => {
+  it('detects audio onsets with cooldown', () => {
+    const detector = new AudioOnsetDetector(2, 40);
+    expect(detector.process({ timeMs: 0, sampleRate: 48_000, samples: new Float32Array(128).fill(0.002) })).toBeNull();
+    const onset = detector.process({ timeMs: 50, sampleRate: 48_000, samples: new Float32Array(128).fill(0.5) });
+    expect(onset?.strength).toBeGreaterThan(0);
+    expect(detector.process({ timeMs: 60, sampleRate: 48_000, samples: new Float32Array(128).fill(0.8) })).toBeNull();
+  });
+
+  it('estimates hit velocity and fuses visual hits with audio onsets', () => {
+    const velocity = estimateHitVelocity({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, 0.5);
+    expect(velocity.y).toBe(2);
+    const hit = {
+      eventId: 'h1',
+      timeNs: 100_000_000,
+      zoneId: 'snare',
+      zoneType: 'snare' as const,
+      position: { x: 0, y: 0, z: 0 },
+      velocity,
+      speed: 2,
+      confidence: 0.5,
+      audioAligned: false,
+    };
+    const fused = fuseVisualHitWithAudio(hit, [{ timeMs: 112, strength: 0.8 }], 20);
+    expect(fused.audioAligned).toBe(true);
+    expect(fused.confidence).toBeGreaterThan(hit.confidence);
+  });
+
+  it('adds conservative audio-assisted mouth accent', () => {
+    expect(voiceActivityMouthAccent(0.1, 0.2)).toBeGreaterThan(0.1);
+    expect(voiceActivityMouthAccent(0.9, 0.02)).toBeGreaterThanOrEqual(0.9);
   });
 });
 

@@ -6,5 +6,6 @@ export * from './kgm1';
 export * from './face';
 export * from './hand';
 export * from './stability';
+export * from './audio';
 export * from './drum';
 export * from './mockFrame';
