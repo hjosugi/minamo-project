@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { mapKGM1HandsToLive2D, mapKGM1ToLive2D } from '../src/adapters/live2d_mapper';
 import { mapKGM1HandsToVrmFingers, mapKGM1ToVrmExpressions, mapKGM1ToVrmLookAt } from '../src/adapters/vrm_mapper';
 import { mapKGM1ToInochi2D } from '../src/adapters/inochi2d_mapper';
+import {
+  applyRigLimit,
+  createAvatarPresetProfile,
+  mapFrameWithAvatarPreset,
+  parseAvatarPreset,
+  serializeAvatarPreset,
+} from '../src/adapters/avatar_profile';
 import { createEmptyFrame, createSyntheticHandLandmarks, defaultEye, defaultMouth, solveHandState } from '../src/core';
 
 function frameWithFaceAndHand() {
@@ -101,5 +108,27 @@ describe('avatar mapper snapshots', () => {
       expect(output).toBeGreaterThanOrEqual(-1);
       expect(output).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('round-trips avatar preset profile JSON and enforces rig limits', () => {
+    const frame = frameWithFaceAndHand();
+    const profile = createAvatarPresetProfile('vrm', 'streaming rig');
+    profile.rigLimits['lookAt:yaw'] = { min: -0.1, max: 0.1 };
+    profile.rigLimits['ParamCustomSmile'] = { min: 0, max: 0.25 };
+    profile.mappings.push({
+      source: 'expression:happy',
+      target: 'ParamCustomSmile',
+      weight: 0.8,
+      curve: 'linear',
+    });
+
+    const parsed = parseAvatarPreset(serializeAvatarPreset(profile));
+    expect(parsed.schema).toBe('minamo.avatar-preset.v1');
+    expect(parsed.name).toBe('streaming rig');
+    expect(parsed.rigLimits['lookAt:pitch']).toEqual({ min: -1, max: 1 });
+    const targets = mapFrameWithAvatarPreset(frame, parsed);
+    expect(targets.find((target) => target.target === 'lookAt:yaw')?.value).toBe(0.1);
+    expect(targets.find((target) => target.target === 'ParamCustomSmile')?.value).toBe(0.25);
+    expect(applyRigLimit('ParamCustomSmile', Number.NaN, parsed.rigLimits.ParamCustomSmile)).toBe(0);
   });
 });

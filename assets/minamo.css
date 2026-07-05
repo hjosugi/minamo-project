@@ -116,6 +116,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .dot.face { background: var(--face); }
 .dot.pose { background: var(--pose); }
 
+pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .stage {
   position: relative;
   border-radius: var(--radius);
@@ -176,7 +186,7 @@ label.check {
   cursor: pointer;
 }
 
-input[type='text'], input[type='password'], select {
+input[type='text'], input[type='password'], input[type='number'], select {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink);

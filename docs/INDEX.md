@@ -55,6 +55,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [product/drummer-setup.md](product/drummer-setup.md)
 - [product/troubleshooting.md](product/troubleshooting.md)
 - [product/creator-presets.schema.json](product/creator-presets.schema.json)
+- [product/avatar-preset-profile.schema.json](product/avatar-preset-profile.schema.json)
 
 ## Integrations, transport, compression
 

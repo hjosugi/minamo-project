@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://minamo.local/schemas/avatar-preset-profile.schema.json",
+  "title": "Minamo Avatar Preset Profile",
+  "type": "object",
+  "required": ["schema", "name", "format", "rigLimits", "mappings"],
+  "properties": {
+    "schema": { "const": "minamo.avatar-preset.v1" },
+    "name": { "type": "string", "minLength": 1 },
+    "format": { "enum": ["vrm", "live2d", "inochi2d"] },
+    "rigLimits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["min", "max"],
+        "properties": {
+          "min": { "type": "number" },
+          "max": { "type": "number" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "target", "weight", "curve"],
+        "properties": {
+          "source": { "type": "string", "minLength": 1 },
+          "target": { "type": "string", "minLength": 1 },
+          "weight": { "type": "number", "minimum": -4, "maximum": 4 },
+          "curve": { "enum": ["linear", "ease"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

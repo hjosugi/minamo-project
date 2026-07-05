@@ -13,6 +13,14 @@ Mapping targets:
 - expression presets
 - hand bones and finger curls
 
+Preset profiles use the `minamo.avatar-preset.v1` schema documented in
+[../product/avatar-preset-profile.schema.json](../product/avatar-preset-profile.schema.json).
+Runtime target names are intentionally explicit:
+
+- `expression:aa`, `expression:blinkLeft`, `expression:happy`
+- `lookAt:yaw`, `lookAt:pitch`
+- `finger:Right:index:proximal`, `finger:Left:thumb:spread`
+
 ## 2. Live2D
 
 Use Live2D for 2D character streaming.
@@ -30,7 +38,32 @@ Mapping targets:
 
 Use Inochi2D-compatible parameters for open 2D avatar pipelines. Keep a separate mapper because parameter naming and rig semantics differ from Live2D.
 
-## 4. OBS
+## 4. Rig limits and custom mappings
+
+Every preset can clamp unsafe rig movement per target and can map one generated
+target into a custom target expected by a creator rig.
+
+```json
+{
+  "schema": "minamo.avatar-preset.v1",
+  "name": "streaming rig",
+  "format": "vrm",
+  "rigLimits": {
+    "lookAt:yaw": { "min": -0.25, "max": 0.25 },
+    "ParamCustomSmile": { "min": 0, "max": 0.5 }
+  },
+  "mappings": [
+    {
+      "source": "expression:happy",
+      "target": "ParamCustomSmile",
+      "weight": 0.8,
+      "curve": "linear"
+    }
+  ]
+}
+```
+
+## 5. OBS
 
 OBS path:
 
@@ -39,7 +72,7 @@ OBS path:
 - Spout/NDI future
 - hotkeys for calibration and reset
 
-## 5. AI character engines
+## 6. AI character engines
 
 AIRI/persona-engine-like projects can consume:
 

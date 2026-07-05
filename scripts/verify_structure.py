@@ -33,6 +33,7 @@ REQUIRED = [
     'docs/product/drummer-setup.md',
     'docs/product/troubleshooting.md',
     'docs/product/creator-presets.schema.json',
+    'docs/product/avatar-preset-profile.schema.json',
     'landing/index.html',
     'landing/app.js',
     'roadmap/index.html',
@@ -40,6 +41,7 @@ REQUIRED = [
     'src/core/types.ts',
     'src/core/oneEuroFilter.ts',
     'src/core/anatomy.ts',
+    'src/adapters/avatar_profile.ts',
     'shared/runtime.js',
     'shared/kgm1b.js',
     'shared/kgm2.js',
@@ -942,7 +944,10 @@ def validate_avatar_mapping_contracts() -> None:
     vrm = read('src/adapters/vrm_mapper.ts')
     live2d = read('src/adapters/live2d_mapper.ts')
     inochi = read('src/adapters/inochi2d_mapper.ts')
+    profile = read('src/adapters/avatar_profile.ts')
     tests = read('tests/adapters.test.ts')
+    schema = read('docs/product/avatar-preset-profile.schema.json')
+    integrations = read('docs/integrations/avatar-integrations.md')
     diagnostic_html = read('diagnostics/avatar-mapping.html')
     diagnostic_js = read('diagnostics/avatar-mapping.js')
     vite = read('vite.config.ts')
@@ -957,20 +962,39 @@ def validate_avatar_mapping_contracts() -> None:
         if needle not in inochi:
             add_error('src/adapters/inochi2d_mapper.ts', f'missing Inochi2D mapper contract: {needle}')
     for needle in [
+        'minamo.avatar-preset.v1',
+        'createAvatarPresetProfile',
+        'mapFrameWithAvatarPreset',
+        'serializeAvatarPreset',
+        'parseAvatarPreset',
+        'applyRigLimit',
+        'applyMappingCurve',
+    ]:
+        if needle not in profile:
+            add_error('src/adapters/avatar_profile.ts', f'missing avatar preset profile contract: {needle}')
+    for needle in [
         'maps VRM expressions, look-at, and fingers',
         'maps Live2D and Inochi2D parameters',
+        'round-trips avatar preset profile JSON and enforces rig limits',
+        'ParamCustomSmile',
         'toBeLessThanOrEqual(1)',
         'toBeGreaterThanOrEqual(-1)',
         'toMatchInlineSnapshot',
     ]:
         if needle not in tests:
             add_error('tests/adapters.test.ts', f'missing avatar mapper regression coverage: {needle}')
-    for needle in ['avatar mapping diagnostics', 'vrmExpressions', 'live2d', 'inochi2d']:
+    for needle in ['avatar mapping diagnostics', 'vrmExpressions', 'presetProfile', 'limitYawMin', 'live2d', 'inochi2d']:
         if needle not in diagnostic_html:
             add_error('diagnostics/avatar-mapping.html', f'missing avatar mapping debug UI: {needle}')
-    for needle in ['mapKGM1ToVrmExpressions', 'mapKGM1ToLive2D', 'mapKGM1ToInochi2D', 'solveHandState']:
+    for needle in ['mapKGM1ToVrmExpressions', 'mapKGM1ToLive2D', 'mapKGM1ToInochi2D', 'solveHandState', 'createAvatarPresetProfile', 'mapFrameWithAvatarPreset']:
         if needle not in diagnostic_js:
             add_error('diagnostics/avatar-mapping.js', f'missing avatar mapping debug script contract: {needle}')
+    for needle in ['minamo.avatar-preset.v1', 'rigLimits', 'mappings', 'linear', 'ease']:
+        if needle not in schema:
+            add_error('docs/product/avatar-preset-profile.schema.json', f'missing avatar preset schema contract: {needle}')
+    for needle in ['avatar-preset-profile.schema.json', 'lookAt:yaw', 'finger:Right:index:proximal', 'ParamCustomSmile']:
+        if needle not in integrations:
+            add_error('docs/integrations/avatar-integrations.md', f'missing avatar integration documentation: {needle}')
     if "avatarMapping: page('diagnostics/avatar-mapping.html')" not in vite:
         add_error('vite.config.ts', 'Vite build must include the avatar mapping diagnostic page')
 

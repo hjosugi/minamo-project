@@ -15,6 +15,11 @@ import {
   mapKGM1ToLive2D,
 } from '../src/adapters/live2d_mapper.ts';
 import { mapKGM1ToInochi2D } from '../src/adapters/inochi2d_mapper.ts';
+import {
+  createAvatarPresetProfile,
+  mapFrameWithAvatarPreset,
+  serializeAvatarPreset,
+} from '../src/adapters/avatar_profile.ts';
 
 const $ = (id) => document.getElementById(id);
 
@@ -44,11 +49,34 @@ function diagnosticFrame() {
 
 function render() {
   const frame = diagnosticFrame();
+  const profile = createAvatarPresetProfile('vrm', 'diagnostic vrm preset');
+  const min = Number($('limitYawMin').value);
+  const max = Number($('limitYawMax').value);
+  profile.rigLimits['lookAt:yaw'] = {
+    min: Number.isFinite(min) ? min : -0.1,
+    max: Number.isFinite(max) ? max : 0.1,
+  };
+  profile.rigLimits.ParamCustomSmile = { min: 0, max: 0.25 };
+  profile.mappings.push({
+    source: 'expression:happy',
+    target: 'ParamCustomSmile',
+    weight: 0.8,
+    curve: 'linear',
+  });
   $('vrmExpressions').textContent = JSON.stringify(mapKGM1ToVrmExpressions(frame), null, 2);
   $('vrmRig').textContent = JSON.stringify({
     lookAt: mapKGM1ToVrmLookAt(frame),
     fingers: mapKGM1HandsToVrmFingers(frame.tracking.hands),
   }, null, 2);
+  const limitedTargets = mapFrameWithAvatarPreset(frame, profile).filter((target) => (
+      target.target === 'lookAt:yaw' || target.target === 'ParamCustomSmile'
+  ));
+  $('presetProfile').textContent = [
+    serializeAvatarPreset(profile).trimEnd(),
+    '',
+    'limitedTargets',
+    JSON.stringify(limitedTargets, null, 2),
+  ].join('\n');
   $('live2d').textContent = JSON.stringify([
     ...mapKGM1ToLive2D(frame),
     ...mapKGM1HandsToLive2D(frame),
@@ -56,4 +84,6 @@ function render() {
   $('inochi2d').textContent = JSON.stringify(mapKGM1ToInochi2D(frame), null, 2);
 }
 
+$('limitYawMin').addEventListener('input', render);
+$('limitYawMax').addEventListener('input', render);
 render();
