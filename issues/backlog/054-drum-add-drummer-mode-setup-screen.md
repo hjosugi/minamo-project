@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Add drummer mode setup screen"
-labels: ["type:feature", "tracking:drum", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P1", "area/tracking"]
 milestone: "MVP-2"
 ---
 

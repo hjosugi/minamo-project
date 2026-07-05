@@ -1,6 +1,6 @@
 ---
 title: "[Ops] Add CI structure verification"
-labels: ["type:chore", "area:devex", "priority:P1"]
+labels: ["type/chore", "area/devex", "priority/P1"]
 milestone: "MVP-1"
 ---
 

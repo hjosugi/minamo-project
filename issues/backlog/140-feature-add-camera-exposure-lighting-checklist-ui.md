@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add camera exposure/lighting checklist UI"
-labels: ["type:feature", "area:ui", "area:capture", "priority:P1"]
+labels: ["type/feature", "area/ui", "area/capture", "priority/P1"]
 milestone: "Backlog"
 ---
 

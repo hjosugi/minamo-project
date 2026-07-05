@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Add hand assignment for drum hits"
-labels: ["type:feature", "tracking:drum", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P1", "area/tracking"]
 milestone: "MVP-2"
 ---
 

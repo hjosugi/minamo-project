@@ -1,6 +1,6 @@
 ---
 title: "[Product] Add streamer OBS setup guide"
-labels: ["type:docs", "area:product", "priority:P1"]
+labels: ["type/docs", "area/product", "priority/P1"]
 milestone: "MVP-1"
 ---
 

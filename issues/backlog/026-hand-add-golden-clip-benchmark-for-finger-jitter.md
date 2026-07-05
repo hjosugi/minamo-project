@@ -1,6 +1,6 @@
 ---
 title: "[Hand] Add golden clip benchmark for finger jitter"
-labels: ["type:feature", "tracking:hand", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/hand", "priority/P1", "area/tracking"]
 milestone: "MVP-1"
 ---
 

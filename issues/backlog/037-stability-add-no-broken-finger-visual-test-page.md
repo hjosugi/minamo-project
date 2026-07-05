@@ -1,6 +1,6 @@
 ---
 title: "[Stability] Add no-broken-finger visual test page"
-labels: ["type:feature", "tracking:stability", "priority:P1", "area:quality"]
+labels: ["type/feature", "tracking/stability", "priority/P1", "area/quality"]
 milestone: "MVP-1"
 ---
 

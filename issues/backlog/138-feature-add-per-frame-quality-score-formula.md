@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add per-frame quality score formula"
-labels: ["type:feature", "area:quality", "priority:P0"]
+labels: ["type/feature", "area/quality", "priority/P0"]
 milestone: "Backlog"
 ---
 

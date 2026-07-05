@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add per-signal smoothing sliders"
-labels: ["type:feature", "area:ui", "tracking:stability", "priority:P1"]
+labels: ["type/feature", "area/ui", "tracking/stability", "priority/P1"]
 milestone: "Backlog"
 ---
 

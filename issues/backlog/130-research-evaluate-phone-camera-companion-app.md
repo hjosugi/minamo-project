@@ -1,6 +1,6 @@
 ---
 title: "[Research] Evaluate phone camera companion app"
-labels: ["type:research", "area:capture", "priority:P3"]
+labels: ["type/research", "area/capture", "priority/P3"]
 milestone: "Backlog"
 ---
 

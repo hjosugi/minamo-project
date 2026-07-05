@@ -1,6 +1,6 @@
 ---
 title: "[Product] Add first-run onboarding flow"
-labels: ["type:docs", "area:product", "priority:P1"]
+labels: ["type/docs", "area/product", "priority/P1"]
 milestone: "MVP-1"
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "[Stability] Implement One Euro Filter presets by signal type"
-labels: ["type:feature", "tracking:stability", "priority:P0", "area:quality"]
+labels: ["type/feature", "tracking/stability", "priority/P0", "area/quality"]
 milestone: "MVP-0"
 ---
 

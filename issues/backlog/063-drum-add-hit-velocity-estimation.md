@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Add hit velocity estimation"
-labels: ["type:feature", "tracking:drum", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P1", "area/tracking"]
 milestone: "MVP-2"
 ---
 

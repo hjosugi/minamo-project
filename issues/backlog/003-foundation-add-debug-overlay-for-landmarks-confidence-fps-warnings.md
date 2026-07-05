@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Add debug overlay for landmarks, confidence, FPS, warnings"
-labels: ["type:feature", "priority:P0", "area:ui", "area:debug"]
+labels: ["type/feature", "priority/P0", "area/ui", "area/debug"]
 milestone: "MVP-0"
 ---
 

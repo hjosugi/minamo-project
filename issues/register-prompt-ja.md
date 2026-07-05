@@ -6,7 +6,7 @@
 
 ## 条件
 
-- まず `priority:P0` だけ登録する。
+- まず `priority/P0` だけ登録する。
 - 既存Issueと重複するタイトルは登録しない。
 - Markdown front matterの `title`, `labels`, `milestone` を使う。
 - 本文はfront matterを除いた内容を使う。
@@ -16,17 +16,17 @@
 ## 推奨コマンド
 
 ```bash
-python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run --label priority:P0
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0
+python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run --label priority/P0
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority/P0
 ```
 
 ## 次の登録順
 
-1. `priority:P0`
-2. `tracking:stability`
-3. `tracking:hand`
-4. `tracking:face`
-5. `area:avatar`
-6. `tracking:drum`
-7. `area:transport`
-8. `area:ml`
+1. `priority/P0`
+2. `tracking/stability`
+3. `tracking/hand`
+4. `tracking/face`
+5. `area/avatar`
+6. `tracking/drum`
+7. `area/transport`
+8. `area/ml`

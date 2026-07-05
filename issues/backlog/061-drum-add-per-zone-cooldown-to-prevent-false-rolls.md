@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Add per-zone cooldown to prevent false rolls"
-labels: ["type:feature", "tracking:drum", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P1", "area/tracking"]
 milestone: "MVP-2"
 ---
 

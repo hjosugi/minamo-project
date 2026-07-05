@@ -1,6 +1,6 @@
 ---
 title: "[Product] Add privacy explanation page"
-labels: ["type:docs", "area:product", "priority:P1"]
+labels: ["type/docs", "area/product", "priority/P1"]
 milestone: "MVP-1"
 ---
 

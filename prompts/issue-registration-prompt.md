@@ -15,7 +15,7 @@ Goals:
 Steps:
 
 1. Read `issues/index.csv`.
-2. Register `priority:P0` issues first.
+2. Register `priority/P0` issues first.
 3. If a title duplicates an existing issue, do not register it; propose commenting on the existing issue instead.
 4. After registration, return the list of created issue URLs as a Markdown table.
 5. List the next 10 P1 candidates that should be registered.

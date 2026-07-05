@@ -1,6 +1,6 @@
 ---
 title: "[Compression] Add 2D texture atlas compression guide"
-labels: ["type:docs", "area:compression", "priority:P2"]
+labels: ["type/docs", "area/compression", "priority/P2"]
 milestone: "MVP-3"
 ---
 

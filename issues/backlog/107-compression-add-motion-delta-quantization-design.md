@@ -1,6 +1,6 @@
 ---
 title: "[Compression] Add motion delta quantization design"
-labels: ["type:docs", "area:compression", "priority:P2"]
+labels: ["type/docs", "area/compression", "priority/P2"]
 milestone: "MVP-3"
 ---
 

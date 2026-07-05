@@ -1,6 +1,6 @@
 ---
 title: "[Research] Compare MediaPipe Tasks vs custom ONNX pipeline for hand tracking"
-labels: ["type:research", "area:ml", "tracking:hand", "priority:P2"]
+labels: ["type/research", "area/ml", "tracking/hand", "priority/P2"]
 milestone: "Backlog"
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "[Face] Integrate MediaPipe Face Landmarker adapter"
-labels: ["type:feature", "tracking:face", "priority:P0", "area:tracking"]
+labels: ["type/feature", "tracking/face", "priority/P0", "area/tracking"]
 milestone: "MVP-0"
 ---
 

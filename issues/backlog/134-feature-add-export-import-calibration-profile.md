@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add export/import calibration profile"
-labels: ["type:feature", "area:calibration", "priority:P1"]
+labels: ["type/feature", "area/calibration", "priority/P1"]
 milestone: "Backlog"
 ---
 

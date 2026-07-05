@@ -1,6 +1,6 @@
 ---
 title: "[Product] Add troubleshooting guide for bad tracking"
-labels: ["type:docs", "area:product", "priority:P1"]
+labels: ["type/docs", "area/product", "priority/P1"]
 milestone: "MVP-1"
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "[Stability] Implement temporal outlier rejection for landmarks"
-labels: ["type:feature", "tracking:stability", "priority:P0", "area:quality"]
+labels: ["type/feature", "tracking/stability", "priority/P0", "area/quality"]
 milestone: "MVP-0"
 ---
 

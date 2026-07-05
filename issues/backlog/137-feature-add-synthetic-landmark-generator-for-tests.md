@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add synthetic landmark generator for tests"
-labels: ["type:feature", "area:test", "priority:P1"]
+labels: ["type/feature", "area/test", "priority/P1"]
 milestone: "Backlog"
 ---
 

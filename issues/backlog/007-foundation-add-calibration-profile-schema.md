@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Add calibration profile schema"
-labels: ["type:feature", "priority:P1", "area:calibration"]
+labels: ["type/feature", "priority/P1", "area/calibration"]
 milestone: "MVP-1"
 ---
 

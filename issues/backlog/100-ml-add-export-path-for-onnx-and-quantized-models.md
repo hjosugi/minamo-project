@@ -1,6 +1,6 @@
 ---
 title: "[ML] Add export path for ONNX and quantized models"
-labels: ["type:feature", "area:ml", "priority:P2"]
+labels: ["type/feature", "area/ml", "priority/P2"]
 milestone: "MVP-4"
 ---
 

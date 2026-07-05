@@ -1,6 +1,6 @@
 ---
 title: "[Docs] Add glossary for KGM1 terms"
-labels: ["type:docs", "priority:P2"]
+labels: ["type/docs", "priority/P2"]
 milestone: "Backlog"
 ---
 

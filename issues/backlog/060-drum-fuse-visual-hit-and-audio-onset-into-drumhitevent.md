@@ -1,6 +1,6 @@
 ---
 title: "[Drum] Fuse visual hit and audio onset into DrumHitEvent"
-labels: ["type:feature", "tracking:drum", "priority:P1", "area:tracking"]
+labels: ["type/feature", "tracking/drum", "priority/P1", "area/tracking"]
 milestone: "MVP-2"
 ---
 

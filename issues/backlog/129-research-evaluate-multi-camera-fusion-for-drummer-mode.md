@@ -1,6 +1,6 @@
 ---
 title: "[Research] Evaluate multi-camera fusion for drummer mode"
-labels: ["type:research", "tracking:drum", "priority:P3"]
+labels: ["type/research", "tracking/drum", "priority/P3"]
 milestone: "Backlog"
 ---
 

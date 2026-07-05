@@ -15,7 +15,7 @@
 手順:
 
 1. `issues/index.csv` を読む。
-2. `priority:P0` のIssueから登録する。
+2. `priority/P0` のIssueから登録する。
 3. 既存Issueとタイトルが重複する場合は登録せず、既存Issueにコメントする案を出す。
 4. 登録後、作成したIssue URL一覧をMarkdown表で返す。
 5. 次に登録すべきP1候補を10件出す。

@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Add local-only privacy mode and camera permission copy"
-labels: ["type:feature", "priority:P0", "area:privacy", "area:ui"]
+labels: ["type/feature", "priority/P0", "area/privacy", "area/ui"]
 milestone: "MVP-0"
 ---
 

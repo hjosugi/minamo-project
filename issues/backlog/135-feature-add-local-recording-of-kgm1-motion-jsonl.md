@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add local recording of KGM1 motion JSONL"
-labels: ["type:feature", "protocol:kgm1", "area:benchmark", "priority:P1"]
+labels: ["type/feature", "protocol/kgm1", "area/benchmark", "priority/P1"]
 milestone: "Backlog"
 ---
 

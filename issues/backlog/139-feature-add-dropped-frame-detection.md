@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add dropped-frame detection"
-labels: ["type:feature", "area:quality", "priority:P0"]
+labels: ["type/feature", "area/quality", "priority/P0"]
 milestone: "Backlog"
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "[ML] Evaluate YOLO stick detector baseline"
-labels: ["type:research", "area:ml", "priority:P2"]
+labels: ["type/research", "area/ml", "priority/P2"]
 milestone: "MVP-4"
 ---
 

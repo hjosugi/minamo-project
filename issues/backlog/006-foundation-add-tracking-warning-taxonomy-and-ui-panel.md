@@ -1,6 +1,6 @@
 ---
 title: "[Foundation] Add tracking warning taxonomy and UI panel"
-labels: ["type:feature", "priority:P0", "area:quality", "area:ui"]
+labels: ["type/feature", "priority/P0", "area/quality", "area/ui"]
 milestone: "MVP-0"
 ---
 

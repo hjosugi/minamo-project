@@ -53,8 +53,8 @@ cd relay-rs && cargo run --release          # WebTransportデータグラム中�
 ```bash
 python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run
 python3 scripts/create_github_issues.py --repo OWNER/REPO --apply
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0   # P0のみ
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label tracking:hand # 手のみ
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority/P0   # P0のみ
+python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label tracking/hand # 手のみ
 ```
 
 先に `gh auth login` が必要です。

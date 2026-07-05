@@ -1,6 +1,6 @@
 ---
 title: "[Feature] Add keyboard shortcut to reset tracking"
-labels: ["type:feature", "area:ui", "priority:P2"]
+labels: ["type/feature", "area/ui", "priority/P2"]
 milestone: "Backlog"
 ---
 
