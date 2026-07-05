@@ -70,6 +70,7 @@ REQUIRED = [
     'src-tauri/src/lib.rs',
     'src-tauri/src/main.rs',
     'relay-rs/grafana-dashboard.json',
+    'services/erlang-router/load-test.mjs',
     'Cargo.toml',
     'Cargo.lock',
     'crates/kgm1-codec/Cargo.toml',
@@ -946,6 +947,9 @@ def validate_transport_contracts() -> None:
     moq_doc = read('docs/transport/moq-evaluation.md')
     relay_rs = read('relay-rs/src/main.rs')
     dashboard = read('relay-rs/grafana-dashboard.json')
+    cluster_harness = read('services/erlang-router/load-test.mjs')
+    cluster_readme = read('services/erlang-router/README.md')
+    cluster_design = read('docs/design/DD-005-elixir-relay-cluster.md')
 
     for needle in [
         'TRANSPORT_FALLBACKS',
@@ -1021,6 +1025,21 @@ def validate_transport_contracts() -> None:
         entry = backlog.split(f'### [{kgm}]', 1)[1].split('\n### ', 1)[0]
         if '- [ ]' in entry:
             add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after relay implementation')
+    for needle in [
+        'SUBSCRIBERS = 5000',
+        'NODES = 3',
+        'P99_TARGET_MS = 30',
+        'localOnlyDrop',
+        'runClusterLoadTest',
+    ]:
+        if needle not in cluster_harness:
+            add_error('services/erlang-router/load-test.mjs', f'missing cluster harness contract: {needle}')
+    for needle in ['5,000 subscribers', 'p99', 'localOnlyDrop', 'node-loss isolation']:
+        if needle not in cluster_readme and needle not in cluster_design:
+            add_error('services/erlang-router/README.md', f'missing cluster harness documentation: {needle}')
+    kgm032 = backlog.split('### [KGM-032]', 1)[1].split('\n### ', 1)[0]
+    if '- [ ]' in kgm032:
+        add_error('docs/BACKLOG.md', 'KGM-032 acceptance criteria must remain checked after cluster harness implementation')
     for needle in [
         'Mapping Design',
         'Latency Findings',

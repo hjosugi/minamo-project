@@ -550,9 +550,9 @@ natively. KGM frames stay opaque binaries. See design doc for topology,
 backpressure, and the Rust-sidecar-vs-NIF decision.
 
 Acceptance criteria:
-- [ ] 1 publisher -> 5,000 subscribers across 3 nodes, p99 relay latency < 30 ms (lab)
-- [ ] Node loss drops only that node's subscribers
-- [ ] Load test harness committed
+- [x] 1 publisher -> 5,000 subscribers across 3 nodes, p99 relay latency < 30 ms (lab)
+- [x] Node loss drops only that node's subscribers
+- [x] Load test harness committed
 
 ### [KGM-033] relay-rs observability: metrics and structured logs
 - Labels: area/transport, type/chore

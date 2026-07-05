@@ -472,6 +472,16 @@ function kgm2FaceFrame(seq, overrides = {}) {
 }
 
 {
+  const out = execFileSync('node', ['services/erlang-router/load-test.mjs'], { cwd: root, encoding: 'utf8' });
+  const result = JSON.parse(out);
+  assert.equal(result.subscribers, 5000);
+  assert.equal(result.nodes, 3);
+  assert.ok(result.p99Ms < 30, `BEAM cluster load harness p99 ${result.p99Ms} ms`);
+  assert.equal(result.localOnlyDrop, true, 'node loss drops only local subscribers');
+  assert.equal(result.pass, true);
+}
+
+{
   const frame = new Uint8Array(encodeFrame(syntheticBlendshapeFrame(71)));
   const key = await deriveRoomKey('correct horse battery staple', 'e2ee-room');
   const wrongKey = await deriveRoomKey('wrong key', 'e2ee-room');
