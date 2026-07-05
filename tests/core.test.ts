@@ -17,6 +17,10 @@ import {
   finiteNumber,
   fuseVisualHitWithAudio,
   estimateHitVelocity,
+  classifyLowLight,
+  classifyMotionBlur,
+  privacyPreservingDatasetRecord,
+  verifyModelHash,
   shortestPathQuat,
   slerpQuat,
   solveHandState,
@@ -83,6 +87,23 @@ describe('hand solver', () => {
     const previous = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     const next = solveHandState({ handedness: 'Left', landmarks: createSyntheticHandLandmarks(0, 'Right') });
     expect(detectHandSwap(previous, next)).toBe(true);
+  });
+});
+
+describe('ML support helpers', () => {
+  it('classifies low light and motion blur', () => {
+    expect(classifyLowLight(12).state).toBe('poor');
+    expect(classifyLowLight(120).state).toBe('good');
+    expect(classifyMotionBlur(10).state).toBe('poor');
+    expect(classifyMotionBlur(180).state).toBe('good');
+  });
+
+  it('verifies model hashes and serializes privacy-preserving landmark records', async () => {
+    const data = new TextEncoder().encode('kagami');
+    expect(await verifyModelHash(data, '1aae6cdb4b76336d57a2ec8a4854415116fb374a3821df1d8f6fb1dfa6314023')).toBe(true);
+    const record = JSON.parse(privacyPreservingDatasetRecord([{ x: 0.123456, y: 0.2, z: -0.3, visibility: 0.98765 }], 'open-hand'));
+    expect(record.landmarks[0].x).toBe(0.1235);
+    expect(record.label).toBe('open-hand');
   });
 });
 
