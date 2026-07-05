@@ -31,10 +31,12 @@ REQUIRED = [
     'docs/product/desktop-app.md',
     'docs/product/obs-setup.md',
     'docs/product/drummer-setup.md',
+    'docs/product/layered-avatar.md',
     'docs/product/troubleshooting.md',
     'docs/product/creator-presets.schema.json',
     'docs/product/avatar-preset-profile.schema.json',
     'docs/product/expression-mapping.schema.json',
+    'docs/product/layered-avatar.schema.json',
     'landing/index.html',
     'landing/app.js',
     'roadmap/index.html',
@@ -48,6 +50,7 @@ REQUIRED = [
     'shared/kgm2.js',
     'shared/e2ee.js',
     'shared/expression-mapping.js',
+    'shared/layered-avatar.js',
     'shared/recording.js',
     'tests/fixtures/kgm1-synthetic.jsonl',
     'tests/fixtures/hand-golden-clip.json',
@@ -1131,6 +1134,57 @@ def validate_perfect_sync_mapping_contracts() -> None:
             add_error('docs/integrations/avatar-integrations.md', f'missing integration Perfect Sync documentation: {needle}')
 
 
+def validate_layered_avatar_contracts() -> None:
+    package = json.loads(read('package.json'))
+    layered = read('shared/layered-avatar.js')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    schema = read('docs/product/layered-avatar.schema.json')
+    docs = read('docs/product/layered-avatar.md')
+    tests = read('tests/run-tests.mjs')
+    integrations = read('docs/integrations/avatar-integrations.md')
+
+    if 'ag-psd' not in package.get('dependencies', {}):
+        add_error('package.json', 'layered PSD import must depend on ag-psd')
+    for needle in [
+        'LAYERED_AVATAR_SCHEMA',
+        'classifyLayerName',
+        'createLayeredAvatarManifest',
+        'layeredAvatarStateFromWeights',
+        'layerTransformForDepth',
+        'normalizeLayerDepth',
+    ]:
+        if needle not in layered:
+            add_error('shared/layered-avatar.js', f'missing layered avatar helper contract: {needle}')
+    for needle in [
+        "await import('ag-psd')",
+        'loadLayeredPsdFile',
+        'loadLayeredPngFiles',
+        'collectPsdLayers',
+        'applyLayeredAvatar',
+        'layerVisible',
+        'rngLayerParallax',
+        'fileLayeredAvatar',
+    ]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing layered avatar viewer contract: {needle}')
+    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .psd, .png set, or .jsonl']:
+        if needle not in viewer_html:
+            add_error('viewer/index.html', f'missing layered avatar UI contract: {needle}')
+    for needle in ['minamo.layered-avatar.v1', 'parallaxPx', 'eyesClosed', 'mouthOpen', 'depth']:
+        if needle not in schema:
+            add_error('docs/product/layered-avatar.schema.json', f'missing layered avatar schema contract: {needle}')
+    for needle in ['PSD', 'PNG', 'eyes closed', 'mouth open', 'parallax control', 'layered-avatar.schema.json']:
+        if needle not in docs:
+            add_error('docs/product/layered-avatar.md', f'missing layered avatar documentation: {needle}')
+    for needle in ['classifyLayerName', 'createLayeredAvatarManifest', 'layeredAvatarStateFromWeights', 'layerTransformForDepth']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing layered avatar regression coverage: {needle}')
+    for needle in ['Layered PNG / PSD', 'layered-avatar.md', 'eyesOpen', 'mouthClosed']:
+        if needle not in integrations:
+            add_error('docs/integrations/avatar-integrations.md', f'missing layered avatar integration docs: {needle}')
+
+
 def validate_transport_contracts() -> None:
     transport = read('shared/transport.js')
     tests = read('tests/run-tests.mjs')
@@ -1412,6 +1466,7 @@ validate_avatar_mapping_contracts()
 validate_obs_viewer_contracts()
 validate_scene_preset_contracts()
 validate_perfect_sync_mapping_contracts()
+validate_layered_avatar_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

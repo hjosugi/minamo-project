@@ -38,7 +38,14 @@ Mapping targets:
 
 Use Inochi2D-compatible parameters for open 2D avatar pipelines. Keep a separate mapper because parameter naming and rig semantics differ from Live2D.
 
-## 4. Rig limits and custom mappings
+## 4. Layered PNG / PSD
+
+Layered PNG/PSD mode is the zero-rig fallback. Drop a PSD or a PNG set into the
+viewer using the naming conventions in [../product/layered-avatar.md](../product/layered-avatar.md).
+Blink weights switch `eyesOpen`/`eyesClosed`, jaw and rounded-mouth weights
+switch `mouthClosed`/`mouthOpen`, and head pose drives per-layer parallax depth.
+
+## 5. Rig limits and custom mappings
 
 Every preset can clamp unsafe rig movement per target and can map one generated
 target into a custom target expected by a creator rig.
@@ -69,7 +76,7 @@ Perfect Sync VRMs are auto-detected when at least 45 ARKit expression names are
 present; the viewer then drives the matching expressions 1:1. Other rigs use
 weighted source-channel mappings that can be edited live and exported as JSON.
 
-## 5. OBS
+## 6. OBS
 
 OBS path:
 
@@ -78,7 +85,7 @@ OBS path:
 - Spout/NDI future
 - hotkeys for calibration and reset
 
-## 6. AI character engines
+## 7. AI character engines
 
 AIRI/persona-engine-like projects can consume:
 

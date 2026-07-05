@@ -27,6 +27,15 @@ import {
   serializeExpressionMap,
 } from '../shared/expression-mapping.js';
 import {
+  LAYERED_AVATAR_SCHEMA,
+  classifyLayerName,
+  createLayeredAvatarManifest,
+  layeredAvatarStateFromWeights,
+  layerTransformForDepth,
+  parseLayeredAvatarManifest,
+  serializeLayeredAvatarManifest,
+} from '../shared/layered-avatar.js';
+import {
   ClockOffsetEstimator,
   KGM2_FACE_CHANNELS,
   KGM2_FACE_MASK_BYTES,
@@ -1019,6 +1028,25 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.deepEqual(roundTripped.targets.map((target) => target.out).sort(), ['aa', 'blink', 'happy']);
   const fallbackOutputs = evaluateExpressionMap(roundTripped, weights);
   assert.ok(Math.abs(fallbackOutputs.find((target) => target.out === 'aa').value - 0.84) < 1e-6);
+}
+
+{
+  assert.equal(classifyLayerName('eyes closed.png'), 'eyesClosed');
+  assert.equal(classifyLayerName('jaw open.png'), 'mouthOpen');
+  assert.equal(classifyLayerName('hair back.png'), 'back');
+  const manifest = createLayeredAvatarManifest(['body.png', 'eyes open.png', 'eyes closed.png', 'mouth open.png']);
+  const roundTripped = parseLayeredAvatarManifest(serializeLayeredAvatarManifest(manifest));
+  assert.equal(roundTripped.schema, LAYERED_AVATAR_SCHEMA);
+  assert.equal(roundTripped.layers.find((layer) => layer.slot === 'mouthOpen').depth, 0.24);
+  const weights = new Float32Array(NUM_CHANNELS);
+  weights[CHANNEL_INDEX.eyeBlinkLeft] = 0.8;
+  weights[CHANNEL_INDEX.jawOpen] = 0.4;
+  const state = layeredAvatarStateFromWeights(weights);
+  assert.equal(state.eyesClosed, true);
+  assert.equal(state.mouthOpen, true);
+  const transform = layerTransformForDepth({ yaw: 0.5, pitch: -0.25, depth: 0.5, parallaxPx: 20 });
+  assert.equal(transform.x, -5);
+  assert.equal(transform.y, -2.5);
 }
 
 console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, and shortcut tests passed.`);

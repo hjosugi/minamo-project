@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://minamo.local/schemas/layered-avatar.schema.json",
+  "title": "Minamo Layered Avatar Manifest",
+  "type": "object",
+  "required": ["schema", "parallaxPx", "layers"],
+  "properties": {
+    "schema": { "const": "minamo.layered-avatar.v1" },
+    "parallaxPx": { "type": "number", "minimum": 0, "maximum": 80 },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "slot", "depth"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "slot": {
+            "enum": ["back", "body", "eyesOpen", "eyesClosed", "mouthClosed", "mouthOpen", "brows", "front"]
+          },
+          "depth": { "type": "number", "minimum": -1, "maximum": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

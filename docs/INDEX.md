@@ -53,10 +53,12 @@ Primary language is English; documents that originated in Japanese keep a
 - [product/desktop-app.md](product/desktop-app.md)
 - [product/obs-setup.md](product/obs-setup.md)
 - [product/drummer-setup.md](product/drummer-setup.md)
+- [product/layered-avatar.md](product/layered-avatar.md)
 - [product/troubleshooting.md](product/troubleshooting.md)
 - [product/creator-presets.schema.json](product/creator-presets.schema.json)
 - [product/avatar-preset-profile.schema.json](product/avatar-preset-profile.schema.json)
 - [product/expression-mapping.schema.json](product/expression-mapping.schema.json)
+- [product/layered-avatar.schema.json](product/layered-avatar.schema.json)
 
 ## Integrations, transport, compression
 

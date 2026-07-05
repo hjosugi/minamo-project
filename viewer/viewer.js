@@ -20,6 +20,13 @@ import {
   parseExpressionMap,
   serializeExpressionMap,
 } from '../shared/expression-mapping.js';
+import {
+  createLayeredAvatarManifest,
+  classifyLayerName,
+  layeredAvatarStateFromWeights,
+  layerTransformForDepth,
+  normalizeLayerDepth,
+} from '../shared/layered-avatar.js';
 import { MinamoTransport } from '../shared/transport.js';
 import {
   DEFAULT_VIEWER_SETTINGS,
@@ -150,6 +157,7 @@ const tmpPos = new THREE.Vector3();
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Vector3();
+const tmpEuler = new THREE.Euler();
 const BONE_DOWN = new THREE.Vector3(0, -1, 0);
 
 let vrm = null;
@@ -159,6 +167,13 @@ let expressionMap = createDefaultVrmExpressionMap();
 let availableExpressionNames = [];
 let perfectSyncState = detectPerfectSyncExpressions([]);
 let mappingEditTimer = null;
+const layeredAvatar = {
+  active: false,
+  layers: [],
+  manifest: createLayeredAvatarManifest([]),
+  parallaxPx: 18,
+};
+const layeredAvatarRoot = $('layeredAvatar');
 
 // ---------------------------------------------------------------- built-in bot
 
@@ -257,6 +272,106 @@ function applyBot(dt) {
   }
 }
 
+function disableLayeredAvatar() {
+  layeredAvatar.active = false;
+  layeredAvatarRoot.hidden = true;
+  for (const layer of layeredAvatar.layers) {
+    if (layer.url?.startsWith('blob:')) URL.revokeObjectURL(layer.url);
+  }
+  layeredAvatar.layers = [];
+  layeredAvatarRoot.replaceChildren();
+  if (vrm?.scene) vrm.scene.visible = true;
+}
+
+function setLayeredAvatarLayers(entries, label) {
+  disableLayeredAvatar();
+  layeredAvatar.manifest = createLayeredAvatarManifest(entries.map((entry) => entry.name));
+  layeredAvatar.layers = entries.map((entry) => {
+    const slot = entry.slot || classifyLayerName(entry.name);
+    const depth = normalizeLayerDepth(entry.depth, layeredAvatar.manifest.layers.find((layer) => layer.name === entry.name)?.depth ?? 0);
+    const image = document.createElement('img');
+    image.src = entry.url;
+    image.alt = entry.name;
+    image.dataset.slot = slot;
+    image.draggable = false;
+    layeredAvatarRoot.appendChild(image);
+    return { ...entry, slot, depth, image };
+  });
+  layeredAvatar.active = layeredAvatar.layers.length > 0;
+  layeredAvatarRoot.hidden = !layeredAvatar.active;
+  layeredAvatar.parallaxPx = Number($('rngLayerParallax').value) || layeredAvatar.manifest.parallaxPx;
+  if (vrm?.scene) vrm.scene.visible = false;
+  bot.group.visible = !layeredAvatar.active && !vrm;
+  $('statAvatar').textContent = layeredAvatar.active ? `layered ${label}` : 'built-in bot';
+}
+
+async function loadLayeredPngFiles(files) {
+  const pngs = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.png'));
+  if (pngs.length === 0) return false;
+  const entries = pngs.map((file) => ({
+    name: file.name,
+    slot: classifyLayerName(file.name),
+    url: URL.createObjectURL(file),
+  }));
+  setLayeredAvatarLayers(entries, `${pngs.length} PNG layers`);
+  return true;
+}
+
+async function loadLayeredPsdFile(file) {
+  const { getLayerCanvas, readPsd } = await import('ag-psd');
+  const psd = readPsd(new Uint8Array(await file.arrayBuffer()), { skipCompositeImageData: true });
+  const entries = [];
+  collectPsdLayers(psd.children || [], entries, getLayerCanvas);
+  if (entries.length === 0) throw new Error('PSD has no visible raster layers');
+  setLayeredAvatarLayers(entries, file.name);
+}
+
+function collectPsdLayers(nodes, entries, getLayerCanvas) {
+  for (const node of nodes) {
+    if (node.hidden) continue;
+    if (node.children?.length) collectPsdLayers(node.children, entries, getLayerCanvas);
+    const canvas = getLayerCanvas(node);
+    if (!canvas) continue;
+    entries.push({
+      name: node.name || `layer-${entries.length + 1}`,
+      slot: classifyLayerName(node.name),
+      url: canvas.toDataURL('image/png'),
+    });
+  }
+}
+
+function applyLayeredAvatar() {
+  const state = layeredAvatarStateFromWeights(current.weights);
+  tmpEuler.setFromQuaternion(current.quat, 'XYZ');
+  layeredAvatarRoot.style.setProperty('--mouth-scale-x', state.squashX.toFixed(3));
+  layeredAvatarRoot.style.setProperty('--mouth-scale-y', state.squashY.toFixed(3));
+  for (const layer of layeredAvatar.layers) {
+    const visible = layerVisible(layer.slot, state);
+    const transform = layerTransformForDepth({
+      yaw: tmpEuler.y,
+      pitch: tmpEuler.x,
+      depth: layer.depth,
+      parallaxPx: layeredAvatar.parallaxPx,
+    });
+    const scaleX = layer.slot === 'mouthOpen' ? transform.scale * state.squashX : transform.scale;
+    const scaleY = layer.slot === 'mouthOpen' ? transform.scale * state.squashY : transform.scale;
+    layer.image.style.opacity = visible ? '1' : '0';
+    layer.image.style.transform = [
+      'translate(-50%, -50%)',
+      `translate(${transform.x.toFixed(2)}px, ${transform.y.toFixed(2)}px)`,
+      `scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
+    ].join(' ');
+  }
+}
+
+function layerVisible(slot, state) {
+  if (slot === 'eyesOpen') return !state.eyesClosed;
+  if (slot === 'eyesClosed') return state.eyesClosed;
+  if (slot === 'mouthClosed') return !state.mouthOpen;
+  if (slot === 'mouthOpen') return state.mouthOpen;
+  return true;
+}
+
 // ---------------------------------------------------------------- vrm
 
 async function loadVrmFromUrl(url, label) {
@@ -274,6 +389,7 @@ async function loadVrmFromUrl(url, label) {
     scene.remove(vrm.scene);
     try { VRMUtils.deepDispose(vrm.scene); } catch {}
   }
+  disableLayeredAvatar();
   vrm = next;
   vrm.scene.position.set(0, 0, 0);
   scene.add(vrm.scene);
@@ -543,7 +659,8 @@ function render() {
     current.weights[i] += (target.weights[i] - current.weights[i]) * k;
   }
 
-  if (vrm) applyVrm(dt);
+  if (layeredAvatar.active) applyLayeredAvatar();
+  else if (vrm) applyVrm(dt);
   else applyBot(dt);
 
   if (settings.bloom && !settings.transparent) composer.render();
@@ -781,6 +898,14 @@ $('fileVrm').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (file) await loadVrmFile(file);
 });
+$('btnLoadLayered').addEventListener('click', () => $('fileLayeredAvatar').click());
+$('fileLayeredAvatar').addEventListener('change', async (e) => {
+  await loadLayeredFiles(e.target.files);
+  e.target.value = '';
+});
+$('rngLayerParallax').addEventListener('input', () => {
+  layeredAvatar.parallaxPx = Number($('rngLayerParallax').value) || 0;
+});
 
 async function loadVrmFile(file) {
   const url = URL.createObjectURL(file);
@@ -797,6 +922,22 @@ async function loadVrmFile(file) {
 function isMotionJsonlFile(file) {
   const name = file.name.toLowerCase();
   return name.endsWith('.jsonl') || name.endsWith('.ndjson');
+}
+
+async function loadLayeredFiles(files) {
+  const list = Array.from(files || []);
+  const psd = list.find((file) => file.name.toLowerCase().endsWith('.psd'));
+  try {
+    if (psd) {
+      await loadLayeredPsdFile(psd);
+      return true;
+    }
+    return await loadLayeredPngFiles(list);
+  } catch (err) {
+    chip.textContent = `layered avatar error: ${err.message}`;
+    chip.dataset.state = 'error';
+    return false;
+  }
 }
 
 async function loadReplayFile(file) {
@@ -859,7 +1000,9 @@ document.addEventListener('drop', async (e) => {
   document.body.classList.remove('dragging');
   const file = e.dataTransfer.files[0];
   if (!file) return;
+  const files = Array.from(e.dataTransfer.files);
   if (file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
+  else if (files.some((entry) => entry.name.toLowerCase().endsWith('.psd')) || files.some((entry) => entry.name.toLowerCase().endsWith('.png'))) await loadLayeredFiles(files);
   else if (isMotionJsonlFile(file)) await loadReplayFile(file);
 });
 
