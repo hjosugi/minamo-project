@@ -71,6 +71,7 @@ scene.add(camera);
 
 const target = {
   quat: new THREE.Quaternion(),
+  pos: new THREE.Vector3(0, 0, 0.4),
   weights: new Float32Array(NUM_CHANNELS),
   posePoints: null,
   hands: null,
@@ -78,6 +79,7 @@ const target = {
 };
 const current = {
   quat: new THREE.Quaternion(),
+  pos: new THREE.Vector3(0, 0, 0.4),
   weights: new Float32Array(NUM_CHANNELS),
 };
 const refQuatInv = new THREE.Quaternion(); // calibration: "Center" pose
@@ -85,6 +87,7 @@ let hasRef = false;
 
 const IDENT = new THREE.Quaternion();
 const tmpQ = new THREE.Quaternion();
+const tmpPos = new THREE.Vector3();
 
 let vrm = null;
 let bot = buildBot();
@@ -151,6 +154,8 @@ function buildBot() {
 
 function applyBot(dt) {
   const w = current.weights;
+  const lean = avatarLeanOffset();
+  bot.group.position.set(lean.x, 1.15 + lean.y, lean.z);
   bot.head.quaternion.copy(current.quat);
 
   const blinkL = w[C.eyeBlinkLeft];
@@ -219,6 +224,8 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 function applyVrm(dt) {
   const w = current.weights;
   const h = vrm.humanoid;
+  const lean = avatarLeanOffset();
+  vrm.scene.position.set(lean.x, lean.y, lean.z);
 
   // Distribute head rotation across head and neck for a natural look.
   const head = h.getNormalizedBoneNode('head');
@@ -271,6 +278,14 @@ function applyVrm(dt) {
   if (target.hands) applyVrmHands(h, target.hands);
 
   vrm.update(dt);
+}
+
+function avatarLeanOffset() {
+  return tmpPos.set(
+    current.pos.x * 0.5,
+    current.pos.y * 0.35,
+    (0.4 - current.pos.z) * 0.9
+  );
 }
 
 const FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky'];
@@ -342,6 +357,7 @@ function applyIncomingFrame(frame) {
     hasRef = true;
   }
   target.quat.copy(refQuatInv).multiply(tmpQ); // rotation relative to Center
+  target.pos.set(frame.face.pos[0], frame.face.pos[1], frame.face.pos[2]);
   target.weights.set(frame.face.weights);
   target.posePoints = frame.pose ? frame.pose.points : null;
   target.hands = frame.hands;
@@ -368,6 +384,7 @@ function render() {
   const k = 1 - Math.exp(-dt * orderGate.easingPerSecond()); // adapts to inbound source fps
 
   current.quat.slerp(target.quat, k);
+  current.pos.lerp(target.pos, k);
   for (let i = 0; i < NUM_CHANNELS; i++) {
     current.weights[i] += (target.weights[i] - current.weights[i]) * k;
   }

@@ -517,6 +517,48 @@ def validate_gaze_contracts() -> None:
             add_error('tests/run-tests.mjs', f'missing iris gaze regression coverage: {needle}')
 
 
+def validate_head_position_contracts() -> None:
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    viewer = read('viewer/viewer.js')
+    tests = read('tests/run-tests.mjs')
+
+    for needle in [
+        'headLeanRangeCm: 8',
+        'export class HeadPositionStabilizer',
+        'normalizeHeadLeanRangeCm',
+        'recenterHalfLifeMs = 20_000',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing head position runtime contract: {needle}')
+    for needle in [
+        'rngHeadLean',
+        'state.headPositionStabilizer.stabilize(pos',
+        'settings.headLeanRangeCm',
+        'state.headPositionStabilizer.reset()',
+    ]:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing tracker head position contract: {needle}')
+    if 'id="rngHeadLean" min="0" max="20"' not in tracker_html:
+        add_error('tracker/index.html', 'head lean range control must expose 0-20 cm range')
+    for needle in [
+        'target.pos',
+        'current.pos.lerp(target.pos',
+        'avatarLeanOffset',
+        'vrm.scene.position.set(lean.x, lean.y, lean.z)',
+    ]:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing viewer head lean contract: {needle}')
+    for needle in [
+        'new HeadPositionStabilizer',
+        'one-hour slow drift',
+        'normalizeHeadLeanRangeCm(25), 20',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing head position regression coverage: {needle}')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -667,6 +709,7 @@ validate_calibration_contracts()
 validate_mixer_contracts()
 validate_quality_contracts()
 validate_gaze_contracts()
+validate_head_position_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

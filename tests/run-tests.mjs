@@ -8,6 +8,7 @@ import {
   CALIBRATION_GUIDE_TOTAL_MS,
   FrameOrderGate,
   DroppedFrameDetector,
+  HeadPositionStabilizer,
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
@@ -28,6 +29,7 @@ import {
   isEditableTarget,
   mirrorFacePayload,
   mirrorWeights,
+  normalizeHeadLeanRangeCm,
   parseMotionJsonl,
   resolveGaze,
   sanitizeWeights,
@@ -248,6 +250,24 @@ function writeEye(landmarks, { outer, inner, top, bottom, iris, outerPoint, inne
   assert.ok(detector.rollingDropped(2500, 120) >= 5);
   for (let i = 1; i < 180; i++) detector.sample(120 + i * (1000 / 60));
   assert.equal(detector.rollingDropped(2500, 3200), 0, 'rolling dropped-frame window recovers after stable frames');
+}
+
+{
+  assert.equal(normalizeHeadLeanRangeCm(-4), 0);
+  assert.equal(normalizeHeadLeanRangeCm(25), 20);
+  const stabilizer = new HeadPositionStabilizer({ recenterHalfLifeMs: 20_000 });
+  stabilizer.stabilize([0, 0, 0.4], 0, { leanRangeCm: 8 });
+  const quickLean = stabilizer.stabilize([0, 0, 0.6], 100, { leanRangeCm: 8 });
+  assert.ok(Math.abs(quickLean[2] - 0.48) < 0.01, 'quick z movement is clamped to configured lean range');
+
+  const drift = new HeadPositionStabilizer({ recenterHalfLifeMs: 20_000 });
+  let maxPlanar = 0;
+  for (let second = 0; second <= 3600; second++) {
+    const rawX = (second / 3600) * 0.5;
+    const stabilized = drift.stabilize([rawX, rawX * 0.5, 0.4 + rawX * 0.1], second * 1000, { leanRangeCm: 8 });
+    maxPlanar = Math.max(maxPlanar, Math.abs(stabilized[0]), Math.abs(stabilized[1]));
+  }
+  assert.ok(maxPlanar < 0.02, `one-hour slow drift should recenter below visible range, got ${maxPlanar}`);
 }
 
 {

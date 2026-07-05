@@ -21,6 +21,7 @@ import {
   TRACKER_STORAGE_KEY,
   WARNING_TAXONOMY,
   DroppedFrameDetector,
+  HeadPositionStabilizer,
   LandmarkConfidenceTracker,
   MOTION_JSONL_SCHEMA,
   applyCalibrationProfile,
@@ -40,6 +41,7 @@ import {
   loadJson,
   mirrorFacePayload,
   normalizeProfile,
+  normalizeHeadLeanRangeCm,
   sanitizeWeights,
   saveJson,
   setMirrorPreviewClass,
@@ -110,6 +112,7 @@ const state = {
   weightFilter: new OneEuroArray(NUM_CHANNELS, filterOptions('face')),
   quatFilter: new OneEuroQuat(filterOptions('headRotation')),
   posFilter: new OneEuroArray(3, filterOptions('headPosition')),
+  headPositionStabilizer: new HeadPositionStabilizer(),
   poseFilter: new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose')),
   handCurlFilter: new OneEuroArray(10, filterOptions('hands')),
   handSpreadFilter: new OneEuroArray(10, filterOptions('hands')),
@@ -183,6 +186,7 @@ function normalizeTrackerSettings(raw) {
     };
   }
   if (!SMOOTHING_GROUPS[base.smoothingGroup]) base.smoothingGroup = 'face';
+  base.headLeanRangeCm = normalizeHeadLeanRangeCm(base.headLeanRangeCm);
   if (!raw?.smoothing?.face) {
     smoothing.face = {
       filterPreset: base.filterPreset || DEFAULT_SMOOTHING_SETTINGS.face.filterPreset,
@@ -267,6 +271,7 @@ async function startCamera() {
   const fps = Number($('selFps').value) || 60;
   state.dropDetector = new DroppedFrameDetector(fps);
   state.confidenceTracker = new LandmarkConfidenceTracker();
+  state.headPositionStabilizer.reset();
   const videoConstraints = {
     width: { ideal: res.width },
     height: { ideal: res.height },
@@ -367,6 +372,7 @@ function resetFilters() {
   state.weightFilter = new OneEuroArray(NUM_CHANNELS, filterOptions('face'));
   state.quatFilter = new OneEuroQuat(filterOptions('headRotation'));
   state.posFilter = new OneEuroArray(3, filterOptions('headPosition'));
+  state.headPositionStabilizer.reset();
   state.poseFilter = new OneEuroArray(NUM_POSE_POINTS * 3, filterOptions('pose'));
   state.handCurlFilter = new OneEuroArray(10, filterOptions('hands'));
   state.handSpreadFilter = new OneEuroArray(10, filterOptions('hands'));
@@ -482,7 +488,8 @@ function loop() {
       state.weights.set(applyCalibrationProfile(sanitized.weights, profile));
       state.weightFilter.filter(state.weights, tSec);
       state.quat = state.quatFilter.filter(quat, tSec);
-      const p = new Float32Array(pos);
+      const stabilizedPos = state.headPositionStabilizer.stabilize(pos, nowMs, { leanRangeCm: settings.headLeanRangeCm });
+      const p = new Float32Array(stabilizedPos);
       state.posFilter.filter(p, tSec);
       state.pos = [p[0], p[1], p[2]];
     }
@@ -837,6 +844,8 @@ function applySettingsToUi() {
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
   $('selResolution').value = settings.resolution;
   $('selFps').value = settings.fps;
+  $('rngHeadLean').value = settings.headLeanRangeCm;
+  $('outHeadLean').textContent = `${settings.headLeanRangeCm} cm`;
   $('selSmoothingGroup').value = settings.smoothingGroup;
   updateSmoothingControls();
   state.mirror = Boolean(settings.mirror);
@@ -861,6 +870,8 @@ function readSettingsFromUi() {
   settings.cameraId = $('selCamera').value;
   settings.resolution = $('selResolution').value;
   settings.fps = $('selFps').value;
+  settings.headLeanRangeCm = normalizeHeadLeanRangeCm($('rngHeadLean').value);
+  $('outHeadLean').textContent = `${settings.headLeanRangeCm} cm`;
   readSmoothingFromUi();
   return settings;
 }
@@ -1264,6 +1275,7 @@ $('chkPrivacy').addEventListener('change', persistSettings);
 $('selCamera').addEventListener('change', restartCameraIfRunning);
 $('selResolution').addEventListener('change', restartCameraIfRunning);
 $('selFps').addEventListener('change', restartCameraIfRunning);
+$('rngHeadLean').addEventListener('input', persistSettings);
 
 $('selMode').addEventListener('change', () => {
   updateModeFields();

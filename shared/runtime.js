@@ -54,6 +54,7 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   cameraId: '',
   resolution: '720p',
   fps: '60',
+  headLeanRangeCm: 8,
   filterPreset: 'balanced',
   minCutoff: FILTER_PRESETS.balanced.minCutoff,
   beta: FILTER_PRESETS.balanced.beta,
@@ -216,6 +217,47 @@ export class LandmarkConfidenceTracker {
     const stability = 1 - clamp(Math.sqrt(variance) / 0.75);
     return clamp(mean * (0.65 + stability * 0.35));
   }
+}
+
+export class HeadPositionStabilizer {
+  constructor({ recenterHalfLifeMs = 20_000, maxPlanarDriftM = 0.12 } = {}) {
+    this.recenterHalfLifeMs = recenterHalfLifeMs;
+    this.maxPlanarDriftM = maxPlanarDriftM;
+    this.center = null;
+    this.lastTimeMs = null;
+  }
+
+  reset() {
+    this.center = null;
+    this.lastTimeMs = null;
+  }
+
+  stabilize(pos = [0, 0, 0.4], nowMs = performanceNow(), { leanRangeCm = DEFAULT_TRACKER_SETTINGS.headLeanRangeCm } = {}) {
+    const raw = [
+      Number(pos[0] || 0),
+      Number(pos[1] || 0),
+      Number(pos[2] ?? 0.4),
+    ];
+    if (!this.center) {
+      this.center = raw.slice();
+      this.lastTimeMs = nowMs;
+    }
+    const dt = Math.max(0, nowMs - (this.lastTimeMs ?? nowMs));
+    this.lastTimeMs = nowMs;
+    const alpha = 1 - Math.exp(-dt / (this.recenterHalfLifeMs / Math.LN2));
+    for (let i = 0; i < 3; i++) this.center[i] += (raw[i] - this.center[i]) * alpha;
+
+    const leanRangeM = normalizeHeadLeanRangeCm(leanRangeCm) / 100;
+    return [
+      clamp(raw[0] - this.center[0], -this.maxPlanarDriftM, this.maxPlanarDriftM),
+      clamp(raw[1] - this.center[1], -this.maxPlanarDriftM, this.maxPlanarDriftM),
+      0.4 + clamp(raw[2] - this.center[2], -leanRangeM, leanRangeM),
+    ];
+  }
+}
+
+export function normalizeHeadLeanRangeCm(value) {
+  return Math.round(clamp(Number(value ?? DEFAULT_TRACKER_SETTINGS.headLeanRangeCm), 0, 20) * 10) / 10;
 }
 
 export function estimateLandmarkConfidence(landmarks = []) {

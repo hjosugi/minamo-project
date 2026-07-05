@@ -307,8 +307,8 @@ range, and clamp position drift with a slow re-centering term so the avatar
 stays framed during long streams.
 
 Acceptance criteria:
-- [ ] Lean range configurable 0-20 cm, default subtle
-- [ ] One-hour session shows no visible drift
+- [x] Lean range configurable 0-20 cm, default subtle
+- [x] One-hour session shows no visible drift
 
 ### [KGM-018] Blink hysteresis and wink disambiguation
 - Labels: area/tracking, type/feature
