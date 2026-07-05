@@ -23,6 +23,7 @@ REQUIRED = [
     'docs/ISSUE_LABELS.md',
     'docs/GLOSSARY.md',
     'docs/IMPLEMENTATION_PROGRESS.md',
+    'docs/transport/kgm2-reference-codecs.md',
     'docs/adr/README.md',
     'docs/product/onboarding.md',
     'docs/product/desktop-app.md',
@@ -38,11 +39,14 @@ REQUIRED = [
     'src/core/oneEuroFilter.ts',
     'src/core/anatomy.ts',
     'shared/runtime.js',
+    'shared/kgm1b.js',
+    'shared/kgm2.js',
     'shared/recording.js',
     'tests/fixtures/kgm1-synthetic.jsonl',
     'tests/fixtures/hand-golden-clip.json',
     'tsconfig.browser-js.json',
     'scripts/fetch-models.sh',
+    'scripts/kgm1b_codec.py',
     'scripts/release-smoke.mjs',
     '.github/workflows/ci.yml',
     '.nojekyll',
@@ -62,6 +66,13 @@ REQUIRED = [
     'src-tauri/icons/icon.svg',
     'src-tauri/src/lib.rs',
     'src-tauri/src/main.rs',
+    'Cargo.toml',
+    'Cargo.lock',
+    'crates/kgm1-codec/Cargo.toml',
+    'crates/kgm1-codec/src/lib.rs',
+    'packages/kgm1-codec-py/pyproject.toml',
+    'packages/kgm1-codec-py/kgm1_codec/__init__.py',
+    'packages/kgm1-codec-py/kgm1_codec/__main__.py',
 ]
 
 errors: list[str] = []
@@ -783,6 +794,97 @@ def validate_body_hand_contracts() -> None:
             add_error('docs/benchmarks/hand-stability-report.md', f'missing hand benchmark report evidence: {needle}')
 
 
+def validate_protocol_v2_contracts() -> None:
+    kgm1b = read('shared/kgm1b.js')
+    kgm2 = read('shared/kgm2.js')
+    tests = read('tests/run-tests.mjs')
+    rust = read('crates/kgm1-codec/src/lib.rs')
+    py = read('packages/kgm1-codec-py/kgm1_codec/__init__.py')
+    py_cli = read('packages/kgm1-codec-py/kgm1_codec/__main__.py')
+    script = read('scripts/kgm1b_codec.py')
+    protocol = read('docs/PROTOCOL_V2_DRAFT.md')
+    design = read('docs/design/DD-006-kgm2.md')
+    reference_doc = read('docs/transport/kgm2-reference-codecs.md')
+    backlog = read('docs/BACKLOG.md')
+    cargo = read('Cargo.toml')
+
+    for needle in [
+        'export const KGM1B_HEADER_BYTES = 40',
+        'encodeKgm1bPacket',
+        'decodeKgm1bPacket',
+        'payloadLen: dv.getUint32(36, true)',
+    ]:
+        if needle not in kgm1b:
+            add_error('shared/kgm1b.js', f'missing KGM1B contract: {needle}')
+    for needle in [
+        'export function packSmallestThreeQuat',
+        'export function unpackSmallestThreeQuat',
+        'export class Kgm2FaceEncoder',
+        'export class Kgm2FaceDecoder',
+        'KGM2_FACE_MASK_BYTES = 7',
+        'return null;',
+        'ClockOffsetEstimator',
+    ]:
+        if needle not in kgm2:
+            add_error('shared/kgm2.js', f'missing KGM2 contract: {needle}')
+    for needle in [
+        '1_000_000',
+        'smallest-three quaternion max angular error',
+        'usPerQuat < 1',
+        'KGM2 delta/keyframe average reduction',
+        'delta with missing base keyframe is rejected',
+        'idle-face delta frame',
+        '10% random loss plus a keyframe loss recovers at the next keyframe',
+        'python3\', [\'-m\', \'kgm1_codec\'',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing protocol v2 regression coverage: {needle}')
+    for needle in [
+        'pub struct Kgm1Packet',
+        'payload truncated',
+        'decodes_js_golden_header_vector',
+        'round_trips_packet_payload',
+    ]:
+        if needle not in rust:
+            add_error('crates/kgm1-codec/src/lib.rs', f'missing Rust reference codec contract: {needle}')
+    for needle in [
+        "HEADER_STRUCT = struct.Struct('<4sHHQQQHBBI')",
+        'def decode_packet',
+        'def encode_packet',
+        'def header_json',
+    ]:
+        if needle not in py:
+            add_error('packages/kgm1-codec-py/kgm1_codec/__init__.py', f'missing Python reference codec contract: {needle}')
+    if 'decode-header' not in py_cli or 'decode-packet' not in py_cli:
+        add_error('packages/kgm1-codec-py/kgm1_codec/__main__.py', 'Python codec CLI must decode headers and packets')
+    if 'kgm1_codec.__main__ import main' not in script:
+        add_error('scripts/kgm1b_codec.py', 'script wrapper must use the Python package implementation')
+    if 'members = ["crates/kgm1-codec"]' not in cargo or 'exclude = ["relay-rs", "src-tauri"]' not in cargo:
+        add_error('Cargo.toml', 'root Cargo workspace must register only the KGM1 reference crate and exclude app crates')
+    for needle in [
+        'KGM2 compact face profile',
+        'smallest-three quaternion',
+        'channel mask',
+        'rejects a delta if the referenced base keyframe has not been seen',
+    ]:
+        if needle not in protocol:
+            add_error('docs/PROTOCOL_V2_DRAFT.md', f'missing KGM2 protocol documentation: {needle}')
+    if 'Status: reference implementation' not in design or 'tests/run-tests.mjs' not in design:
+        add_error('docs/design/DD-006-kgm2.md', 'KGM2 design doc must point to the reference implementation and tests')
+    for needle in [
+        'crates/kgm1-codec',
+        'packages/kgm1-codec-py',
+        '4b474d3101000700080706050403020115cd071de3aade17ea16b04c020000002100030204000000',
+        'idle-face delta frames are 26 bytes',
+    ]:
+        if needle not in reference_doc:
+            add_error('docs/transport/kgm2-reference-codecs.md', f'missing reference codec evidence: {needle}')
+    for kgm in ['KGM-027', 'KGM-028', 'KGM-029', 'KGM-031']:
+        entry = backlog.split(f'### [{kgm}]', 1)[1].split('\n### ', 1)[0]
+        if '- [ ]' in entry:
+            add_error('docs/BACKLOG.md', f'{kgm} acceptance criteria must remain checked after protocol implementation')
+
+
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
@@ -939,6 +1041,7 @@ validate_filter_tuning_contracts()
 validate_tracking_loss_contracts()
 validate_face_selection_contracts()
 validate_body_hand_contracts()
+validate_protocol_v2_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()

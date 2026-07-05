@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { encodeFrame, decodeFrame, HAND_TARGET_BYTES } from '../shared/codec.js';
+import {
+  decodeKgm1bHeader,
+  decodeKgm1bPacket,
+  encodeKgm1bHeader,
+  encodeKgm1bPacket,
+} from '../shared/kgm1b.js';
+import {
+  ClockOffsetEstimator,
+  KGM2_FACE_CHANNELS,
+  KGM2_FACE_MASK_BYTES,
+  KGM2_HEADER_BYTES,
+  KGM2_TYPE_DELTA,
+  KGM2_TYPE_KEYFRAME,
+  Kgm2FaceDecoder,
+  Kgm2FaceEncoder,
+  packSmallestThreeQuat,
+  unpackSmallestThreeQuat,
+} from '../shared/kgm2.js';
 import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
 import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
 import {
@@ -152,6 +172,57 @@ function faceBoxLandmarks(x, y, w, h) {
   ];
 }
 
+function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+function deterministicRandom(seed = 0x12345678) {
+  let state = seed >>> 0;
+  return () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomQuat(rand) {
+  const u1 = rand();
+  const u2 = rand();
+  const u3 = rand();
+  const a = Math.sqrt(1 - u1);
+  const b = Math.sqrt(u1);
+  const t1 = 2 * Math.PI * u2;
+  const t2 = 2 * Math.PI * u3;
+  return [a * Math.sin(t1), a * Math.cos(t1), b * Math.sin(t2), b * Math.cos(t2)];
+}
+
+function quatAngularErrorDegrees(a, b) {
+  const dot = Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]);
+  return 2 * Math.acos(Math.min(1, Math.max(-1, dot))) * 180 / Math.PI;
+}
+
+function kgm2FaceFrame(seq, overrides = {}) {
+  const weights = new Float32Array(KGM2_FACE_CHANNELS);
+  for (let i = 0; i < KGM2_FACE_CHANNELS; i++) weights[i] = 0.08;
+  for (const [index, value] of Object.entries(overrides.weights || {})) {
+    weights[Number(index)] = value;
+  }
+  return {
+    t: 10_000 + seq * 16,
+    seq,
+    face: {
+      quat: overrides.quat || [0.01 * Math.sin(seq / 20), -0.02 * Math.sin(seq / 25), 0.015 * Math.cos(seq / 30), 0.999],
+      pos: overrides.pos || [0.02 * Math.sin(seq / 40), -0.01 * Math.cos(seq / 50), 0.42],
+      weights,
+    },
+  };
+}
+
 {
   const weights = new Float32Array(NUM_CHANNELS);
   weights[CHANNEL_INDEX.jawOpen] = 1;
@@ -202,6 +273,143 @@ function faceBoxLandmarks(x, y, w, h) {
   assert.equal(emptyBlocks.face, null);
   assert.equal(emptyBlocks.pose, null);
   assert.equal(emptyBlocks.hands, null);
+}
+
+{
+  const headerInput = {
+    versionMajor: 1,
+    versionMinor: 7,
+    frameId: 0x0102030405060708n,
+    sourceTimeNs: 1_720_000_000_123_456_789n,
+    monotonicTimeNs: 9_876_543_210n,
+    flags: 0x21,
+    encoding: 3,
+    payloadType: 2,
+    payloadLen: 4,
+  };
+  const headerBytes = new Uint8Array(encodeKgm1bHeader(headerInput));
+  const headerHex = bytesToHex(headerBytes);
+  assert.equal(headerBytes.byteLength, 40);
+  assert.equal(headerHex, '4b474d3101000700080706050403020115cd071de3aade17ea16b04c020000002100030204000000');
+  const decodedHeader = decodeKgm1bHeader(headerBytes);
+  assert.equal(decodedHeader.frameId, headerInput.frameId);
+  assert.equal(decodedHeader.sourceTimeNs, headerInput.sourceTimeNs);
+  assert.equal(decodedHeader.monotonicTimeNs, headerInput.monotonicTimeNs);
+  assert.equal(decodedHeader.flags, headerInput.flags);
+
+  const payload = new Uint8Array([0xca, 0xfe, 0xba, 0xbe]);
+  const packetBytes = new Uint8Array(encodeKgm1bPacket(headerInput, payload));
+  const packet = decodeKgm1bPacket(packetBytes);
+  assert.equal(packet.header.payloadLen, payload.byteLength);
+  assert.deepEqual(Array.from(packet.payload), Array.from(payload));
+
+  const pyOut = execFileSync('python3', ['scripts/kgm1b_codec.py', 'decode-packet', bytesToHex(packetBytes)], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  const pyDecoded = JSON.parse(pyOut);
+  assert.equal(pyDecoded.header.frame_id, headerInput.frameId.toString());
+  assert.equal(pyDecoded.header.source_time_ns, headerInput.sourceTimeNs.toString());
+  assert.equal(pyDecoded.header.monotonic_time_ns, headerInput.monotonicTimeNs.toString());
+  assert.equal(pyDecoded.header.payload_len, payload.byteLength);
+  assert.equal(pyDecoded.payload_hex, bytesToHex(payload));
+  assert.deepEqual(Array.from(hexToBytes(pyDecoded.payload_hex)), Array.from(payload));
+
+  const pyModuleOut = execFileSync('python3', ['-m', 'kgm1_codec', 'decode-header', headerHex], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, PYTHONPATH: path.join(root, 'packages/kgm1-codec-py') },
+  });
+  assert.equal(JSON.parse(pyModuleOut).header.frame_id, headerInput.frameId.toString());
+}
+
+{
+  const randomForAccuracy = deterministicRandom(0xdecafbad);
+  let maxError = 0;
+  let packedSink = 0;
+  for (let i = 0; i < 1_000_000; i++) {
+    const quat = randomQuat(randomForAccuracy);
+    const packed = packSmallestThreeQuat(quat);
+    packedSink ^= packed;
+    const decoded = unpackSmallestThreeQuat(packed);
+    maxError = Math.max(maxError, quatAngularErrorDegrees(quat, decoded));
+  }
+  assert.ok(maxError < 0.5, `smallest-three quaternion max angular error ${maxError.toFixed(4)} deg`);
+
+  const perfQuats = [];
+  const randomForPerf = deterministicRandom(0xfeed5eed);
+  for (let i = 0; i < 200_000; i++) perfQuats.push(randomQuat(randomForPerf));
+  const t0 = performance.now();
+  for (const quat of perfQuats) {
+    const packed = packSmallestThreeQuat(quat);
+    packedSink ^= packed;
+    if (unpackSmallestThreeQuat(packed)[3] > 2) packedSink ^= 1;
+  }
+  const usPerQuat = (performance.now() - t0) * 1000 / perfQuats.length;
+  assert.ok(usPerQuat < 1, `smallest-three JS encode+decode ${usPerQuat.toFixed(3)} us/quat; sink=${packedSink}`);
+
+  const encoder = new Kgm2FaceEncoder({ keyframeInterval: 30 });
+  const decoder = new Kgm2FaceDecoder();
+  const frames = [];
+  for (let seq = 0; seq < 180; seq++) {
+    frames.push(kgm2FaceFrame(seq, {
+      weights: {
+        0: 0.25 + 0.08 * Math.sin(seq / 8),
+        1: 0.12 + 0.05 * Math.cos(seq / 9),
+        8: 0.34 + 0.04 * Math.sin(seq / 7),
+        24: 0.42 + 0.03 * Math.cos(seq / 11),
+        51: 0.18 + 0.02 * Math.sin(seq / 5),
+      },
+    }));
+  }
+  const packets = frames.map((frame) => new Uint8Array(encoder.encode(frame)));
+  const keyframes = packets.filter((packet) => new DataView(packet.buffer, packet.byteOffset, packet.byteLength).getUint8(3) === KGM2_TYPE_KEYFRAME);
+  const deltas = packets.filter((packet) => new DataView(packet.buffer, packet.byteOffset, packet.byteLength).getUint8(3) === KGM2_TYPE_DELTA);
+  assert.equal(keyframes.length, 6);
+  assert.equal(deltas.length, 174);
+  assert.equal(KGM2_FACE_MASK_BYTES, 7);
+  const averageKgm1FaceSize = frames.reduce((sum, frame) => sum + encodeFrame(frame).byteLength, 0) / frames.length;
+  const averageKgm2Size = packets.reduce((sum, packet) => sum + packet.byteLength, 0) / packets.length;
+  const reduction = 1 - averageKgm2Size / averageKgm1FaceSize;
+  assert.ok(reduction >= 0.35, `KGM2 delta/keyframe average reduction ${(reduction * 100).toFixed(1)}%`);
+
+  const firstDecoded = decoder.decode(packets[0]);
+  assert.ok(firstDecoded);
+  const deltaDecoded = decoder.decode(packets[1]);
+  assert.ok(deltaDecoded);
+  assert.equal(Math.round(deltaDecoded.face.weights[10] * 255), Math.round(firstDecoded.face.weights[10] * 255), 'masked channels hold previous keyframe values');
+
+  const idleEncoder = new Kgm2FaceEncoder({ keyframeInterval: 30 });
+  idleEncoder.encode(kgm2FaceFrame(0));
+  const idleDelta = new Uint8Array(idleEncoder.encode(kgm2FaceFrame(1)));
+  assert.equal(new DataView(idleDelta.buffer).getUint8(3), KGM2_TYPE_DELTA);
+  assert.equal(idleDelta.byteLength, KGM2_HEADER_BYTES + 4 + 3 + KGM2_FACE_MASK_BYTES);
+  assert.ok(idleDelta.byteLength < 30, `idle-face delta frame ${idleDelta.byteLength} bytes`);
+
+  assert.equal(new Kgm2FaceDecoder().decode(packets[1]), null, 'delta with missing base keyframe is rejected');
+  const lossyDecoder = new Kgm2FaceDecoder();
+  let decodedAfterDroppedKeyframe = null;
+  for (const [index, packet] of packets.entries()) {
+    const seq = frames[index].seq;
+    const dropped = seq === 60 || (seq % 10 === 7);
+    if (dropped) continue;
+    const decoded = lossyDecoder.decode(packet);
+    if (seq >= 60 && decoded) {
+      decodedAfterDroppedKeyframe = decoded.seq;
+      break;
+    }
+  }
+  assert.equal(decodedAfterDroppedKeyframe, 90, '10% random loss plus a keyframe loss recovers at the next keyframe');
+
+  const estimatorA = new ClockOffsetEstimator();
+  const estimatorB = new ClockOffsetEstimator();
+  for (let i = 0; i < 8; i++) {
+    estimatorA.sample({ clientSendMs: 1000 + i * 100, relayReceiveMs: 1047 + i * 100, relaySendMs: 1051 + i * 100, clientReceiveMs: 1026 + i * 100 });
+    estimatorB.sample({ clientSendMs: 2000 + i * 100, relayReceiveMs: 1998 + i * 100, relaySendMs: 2002 + i * 100, clientReceiveMs: 2024 + i * 100 });
+  }
+  assert.ok(Math.abs(estimatorA.offsetMs() - 36) < 1);
+  assert.ok(Math.abs(estimatorB.offsetMs() + 12) < 1);
+  assert.ok(Math.abs((1000 + estimatorA.offsetMs()) - (1048 - 12)) < 1, 'sender clock sync supports multi-source phase alignment');
 }
 
 {
@@ -692,4 +900,4 @@ function faceBoxLandmarks(x, y, w, h) {
 }
 
 assert.equal(ARKIT_52.length, NUM_CHANNELS);
-console.log(`OK: ${issues.length} issue files found; codec, filters, sequencing, calibration, mirror, quality, recording, and shortcut tests passed.`);
+console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, and shortcut tests passed.`);

@@ -1,7 +1,8 @@
 # DD-006: KGM2 Protocol
 
-Status: design. Backlog: KGM-027, KGM-028, KGM-029. Supersedes nothing;
-KGM1 remains valid and relays never need to understand either.
+Status: reference implementation. Backlog: KGM-027, KGM-028, KGM-029.
+Supersedes nothing; KGM1 remains valid and relays never need to understand
+either.
 
 ## Motivation
 
@@ -52,6 +53,12 @@ FACE-K:  quat s3 u32 | pos i16x3 | weights u8x52
 FACE-D:  quat s3 u32 | pos delta i8x3 | mask 7B | deltas i8xN | esc u8 + pairs
 ```
 
+The current JS reference narrows `blocks` to a `frame_type` byte:
+`1 = keyframe`, `2 = delta`. Delta frames use the fixed 7-byte channel mask
+and omit the escape list; a channel delta outside i8 range forces a keyframe.
+This keeps the first shipped profile simple and deterministic while preserving
+the same wire-level recovery rule.
+
 ## Compatibility
 
 Version byte gates everything. Encoders can emit KGM1 or KGM2 per session;
@@ -60,6 +67,19 @@ freeze the format before the version ships.
 
 ## Validation targets
 
+- Max smallest-three quaternion angular error < 0.5 deg over 1M random
+  rotations.
+- JS smallest-three encode+decode < 1 us per quaternion.
 - >= 35% mean size reduction on recorded corpora (KGM-047 fixtures).
-- Decode cost within 1.5x of KGM1 in JS.
-- 10% uniform loss: no visible artifact beyond 500 ms staleness bound.
+- 10% uniform loss recovers within one keyframe interval.
+
+## Implementation evidence
+
+- Codec: `shared/kgm2.js`
+- Tests: `tests/run-tests.mjs`
+- Reference-codec notes: `docs/transport/kgm2-reference-codecs.md`
+
+The regression suite verifies the 1M quaternion accuracy gate, a timed JS
+encode/decode loop, sparse-channel hold semantics, idle deltas below 30 bytes,
+rejection of deltas without a base keyframe, and recovery after a dropped
+keyframe at the next keyframe interval.

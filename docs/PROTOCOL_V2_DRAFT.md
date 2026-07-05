@@ -80,7 +80,50 @@ Header layout:
 | 36 | u32 | payload_len | byte length |
 | 40 | bytes | payload | encoded frame |
 
-Binary body is intentionally left as a future schema task. The MVP uses JSON and a Rust header codec.
+The packet framing is implemented in `shared/kgm1b.js`, the Rust workspace
+crate `crates/kgm1-codec`, and the Python workspace-local package
+`packages/kgm1-codec-py`. JS-generated golden vectors are decoded by Rust and
+Python in `npm test`.
+
+### 2.3 KGM2 compact face profile
+
+KGM2 is the compact binary profile used to validate DD-006 before it becomes
+the default realtime packet. The implemented profile lives in `shared/kgm2.js`
+and is guarded by `tests/run-tests.mjs`.
+
+Header layout:
+
+| Offset | Type | Name | Description |
+|---:|---|---|---|
+| 0 | u16 | magic | `0x324b` |
+| 2 | u8 | version | `2` |
+| 3 | u8 | frame_type | `1` keyframe, `2` delta |
+| 4 | u32 | t | source timestamp in milliseconds |
+| 8 | u16 | seq | sequence number |
+| 10 | u16 | key_id | referenced keyframe id |
+
+Face keyframe body:
+
+| Field | Type | Notes |
+|---|---|---|
+| head rotation | u32 | smallest-three quaternion, 2-bit index + 3 x 10-bit components |
+| head position | i16 x3 | meters to millimeters |
+| weights | u8 x52 | canonical ARKit channel order |
+
+Face delta body:
+
+| Field | Type | Notes |
+|---|---|---|
+| head rotation | u32 | absolute smallest-three quaternion |
+| head position delta | i8 x3 | delta from keyframe, millimeters |
+| channel mask | 7 bytes | 52-bit sparse channel mask |
+| weight deltas | i8 x N | signed deltas for masked channels only |
+
+Delta frames are based on the last keyframe, not the previous delta. A decoder
+rejects a delta if the referenced base keyframe has not been seen, which keeps
+loss recovery bounded by the keyframe interval. In the current regression
+corpus, an idle face delta is 26 bytes and the average KGM2 frame size is at
+least 35% smaller than KGM1 face frames.
 
 ## 3. Coordinate systems
 

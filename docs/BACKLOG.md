@@ -470,8 +470,8 @@ instead of 8, halving rotation cost ahead of hand/body blocks that carry
 many quaternions.
 
 Acceptance criteria:
-- [ ] Max angular error < 0.5 deg over 1M random rotations
-- [ ] JS encode+decode < 1 us per quat
+- [x] Max angular error < 0.5 deg over 1M random rotations
+- [x] JS encode+decode < 1 us per quat
 
 ### [KGM-028] KGM2: delta frames with periodic keyframes
 - Labels: area/protocol, type/feature
@@ -486,9 +486,9 @@ size reduction on typical face streams. Must stay stateless enough that
 loss only degrades until the next keyframe.
 
 Acceptance criteria:
-- [ ] Average frame size reduced >= 35% on a recorded session corpus
-- [ ] 10% random loss recovers within one keyframe interval
-- [ ] Decoder rejects deltas whose base keyframe was never seen
+- [x] Average frame size reduced >= 35% on a recorded session corpus
+- [x] 10% random loss recovers within one keyframe interval
+- [x] Decoder rejects deltas whose base keyframe was never seen
 
 ### [KGM-029] KGM2: sparse channel mask
 - Labels: area/protocol, type/feature
@@ -501,8 +501,8 @@ A 52-bit (7-byte) presence mask so encoders can send only channels above a
 change threshold. Combines with deltas; useful for low-power mode.
 
 Acceptance criteria:
-- [ ] Masked frames decode with unchanged channels held
-- [ ] Idle-face frames drop below 30 bytes
+- [x] Masked frames decode with unchanged channels held
+- [x] Idle-face frames drop below 30 bytes
 
 ### [KGM-030] Sender clock sync for multi-source scenes
 - Labels: area/protocol, type/feature
@@ -531,8 +531,8 @@ Ship `kgm-codec` crates/packages so relays can inspect frames and tools
 golden-vector tests generated from the JS implementation.
 
 Acceptance criteria:
-- [ ] Rust and Python decode the JS golden vectors bit-exactly
-- [ ] Published as workspace members, not to registries yet
+- [x] Rust and Python decode the JS golden vectors bit-exactly
+- [x] Published as workspace members, not to registries yet
 
 ## M4 Scale-out
 

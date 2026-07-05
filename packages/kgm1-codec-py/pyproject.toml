@@ -1,0 +1,9 @@
+[project]
+name = "kgm1-codec"
+version = "0.1.0"
+description = "Minamo KGM1B reference codec"
+requires-python = ">=3.10"
+license = "MIT"
+
+[project.scripts]
+kgm1-codec = "kgm1_codec.__main__:main"

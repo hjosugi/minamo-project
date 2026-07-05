@@ -11,12 +11,14 @@ evidence that can be used while completing the remaining work.
 
 ## Implementation Evidence
 
-- Runtime/app: `shared/runtime.js`, `shared/codec.js`, `shared/transport.js`,
-  `tracker/`, `viewer/`
+- Runtime/app: `shared/runtime.js`, `shared/codec.js`, `shared/kgm1b.js`,
+  `shared/kgm2.js`, `shared/transport.js`, `tracker/`, `viewer/`
 - Relays: `relay-node/server.mjs`, `relay-rs/src/main.rs`
 - Tests and gates: `tests/run-tests.mjs`, `scripts/lint.mjs`,
   `scripts/verify_structure.py`, `.github/workflows/ci.yml`
-- Offline models: `scripts/fetch-models.sh`
+- Offline models and reference codecs: `scripts/fetch-models.sh`,
+  `scripts/kgm1b_codec.py`, `crates/kgm1-codec`,
+  `packages/kgm1-codec-py`
 - Self-hosting: `Dockerfile.relay-node`, `relay-rs/Dockerfile`,
   `docker-compose.yml`
 - Product/docs/ops: `docs/DEV_HTTPS.md`, `docs/CONTRIBUTING.md`,
@@ -37,6 +39,7 @@ cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
 cargo clippy --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
 cargo build --manifest-path relay-rs/Cargo.toml
 cargo test --manifest-path crates/kgm1-codec/Cargo.toml
+python3 scripts/kgm1b_codec.py decode-packet <kgm1b-golden-hex>
 node --check relay-node/server.mjs
 ```
 
@@ -69,6 +72,11 @@ node --check relay-node/server.mjs
 - `relay-rs` rejects wrong room tokens with `403`, relays native
   WebTransport pub/sub datagrams under test, and removes empty rooms after the
   last participant leaves.
+- KGM2 compact face frames now have a JS reference encoder/decoder with
+  smallest-three quaternion packing, keyframe/delta recovery, sparse channel
+  masks, and clock-offset estimation helpers. KGM1B packet framing has JS,
+  Rust, and Python reference implementations with JS-generated golden-vector
+  tests.
 - Hand stability has a synthetic golden clip fixture, a shipped
   no-broken-finger diagnostic page, a benchmark report, and verifier checks
   covering jump clamps, short recovery holds, and long occlusion omission.
