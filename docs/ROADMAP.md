@@ -19,3 +19,85 @@ Sequencing notes:
 - KGM-047 (recording) unblocks the KGM2 corpus and CI fixtures; schedule it
   before M3 work starts even though it sits in M6.
 - KGM-009 (relay-rs CI) should land before any relay feature work.
+
+## Appendix: implementation phase view
+
+A finer-grained phase ordering for the tracking work (complements the milestone table above; from the KGM1 target design).
+
+## Phase 0: Project skeleton
+
+- Landing page hub
+- Quickstart
+- KGM1 protocol draft
+- Issue backlog
+- Core TypeScript types
+- Filter and anatomy utilities
+
+## Phase 1: Webcam face and hand MVP
+
+- Webcam capture
+- MediaPipe Face Landmarker adapter
+- MediaPipe Hand Landmarker adapter
+- KGM1 frame output
+- Debug overlay
+- Stabilizer v0
+
+## Phase 2: Finger-perfect tracking
+
+- Per-finger curl/spread/bend/tip velocity
+- Pinch and contact estimation
+- Anatomy clamp v1
+- Occlusion recovery v1
+- Confidence-aware smoothing
+- Finger benchmark clips
+
+## Phase 3: Accurate eyes and mouth
+
+- Blink hysteresis
+- Gaze smoothing
+- Iris center estimation
+- Mouth shape decomposition
+- Audio-assisted lip sync option
+- Face expression calibration
+
+## Phase 4: Avatar rendering
+
+- VRM retargeting
+- Live2D parameters
+- Inochi2D/Inox2D mapping design
+- OBS integration
+- Preset profiles
+
+## Phase 5: Drum performance tracking
+
+- Drum kit calibration
+- Stick detector
+- Hit zone intersection
+- Audio onset sync
+- Foot pedal inference
+- Drum-specific benchmark
+
+## Phase 6: WebTransport and compression
+
+- KGM1B binary codec
+- WebTransport sender/receiver
+- WebSocket fallback
+- bandwidth adaptation
+- frame delta compression
+
+## Phase 7: Custom edge ML
+
+- YOLO stick/drum detector
+- ONNX Runtime Web WebGPU path
+- dataset tool
+- model evaluation harness
+- low-light and motion-blur robustness
+
+## Phase 8: Production hardening
+
+- privacy review
+- security review
+- crash reporting without raw video
+- installable desktop shell
+- creator-facing calibration UI
+- plugin ecosystem

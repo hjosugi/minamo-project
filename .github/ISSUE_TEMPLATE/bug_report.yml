@@ -1,0 +1,27 @@
+name: Bug report
+description: Report tracking or rendering failure
+labels: ["type:bug"]
+body:
+  - type: input
+    id: mode
+    attributes:
+      label: Mode
+      placeholder: face / hand / finger / drum / avatar / transport
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true

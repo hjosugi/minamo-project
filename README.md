@@ -1,77 +1,117 @@
 # KAGAMI
 
-普通のwebcamひとつで、誰でも無料・低遅延でアバターを動かすためのトラッキングシステム。
+> 日本語版: [README.ja.md](README.ja.md)
 
-- 推論はすべてブラウザ内(MediaPipe Face Landmarker, GPU/WASM)。カメラ映像は端末から出ない
-- ネットワークに流れるのは動きのパラメータだけ: 1フレーム約76バイト(映像比 約1/400)
-- 表情52ch + 頭部姿勢 + 上半身(実験的)。One Euroフィルタで平滑化
-- 配送は3段構え: BroadcastChannel(サーバ不要) / WebSocket(互換) / WebTransportデータグラム(最低遅延, Rust)
-- ビューアはVRM(three-vrm)対応。VRMが無くても内蔵ボットで即動作。2D(Inochi2D)は設計済み
+High-precision avatar tracking that anyone can use with a single ordinary
+webcam — free, low-latency, and local-first.
 
-詳細: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) / プロトコル仕様: [docs/PROTOCOL.md](docs/PROTOCOL.md)
+## Goals
 
-## クイックスタート
+- Anyone can stream with a 2D/3D avatar cheaply, starting with nothing but a webcam.
+- Track face, eyes, mouth, hands, individual fingers, upper body — and even
+  drum performance — with high precision.
+- Motion must never look jittery, broken, bent the wrong way, or unnatural:
+  stability is the top priority.
+- Local inference is the default: camera video never leaves the device. Only
+  motion parameters go over the network (~76 bytes/frame, roughly 1/400 of video).
+- Integrate WebTransport, WebGPU/WASM, Rust, and BEAM-style routing with
+  glTF/VRM/Live2D/Inochi2D rendering backends.
+- Anything not yet implemented lives as design docs and issue-ready backlog
+  entries, so the whole plan is visible on GitHub.
 
-### 1. サーバ不要(local モード)
+## What works today
+
+- In-browser inference (MediaPipe Face Landmarker, GPU/WASM); 52 expression
+  channels + head pose + experimental upper body, smoothed with One Euro filters
+- Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
+  WebTransport datagrams (lowest latency, Rust relay)
+- VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
+- A landing hub with a mock tracking visualization demo under [landing/](landing/)
+
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (implemented) and
+[docs/ARCHITECTURE_TARGET.md](docs/ARCHITECTURE_TARGET.md) (target state).
+Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
+[docs/PROTOCOL_V2_DRAFT.md](docs/PROTOCOL_V2_DRAFT.md) (rich tracking schema draft).
+
+## Quick start
+
+### 1. No server (local mode)
 
 ```sh
-./scripts/dev.sh            # ただの静的配信 (python3 -m http.server 8000)
+./scripts/dev.sh            # plain static serving (python3 -m http.server 8000)
 ```
 
-1. http://localhost:8000/tracker/ を開き **Start tracking**
-2. mode: local のまま **Connect**
-3. 「ビューアを別タブで開く」→ 同一ブラウザ内でBroadcastChannel経由で動く
-4. ビューアに `.vrm` をドロップすると自分のアバターに差し替わる
+1. Open http://localhost:8000/tracker/ and press **Start tracking**
+2. Keep mode: local and press **Connect**
+3. "Open viewer in another tab" — it works via BroadcastChannel in the same browser
+4. Drop a `.vrm` file onto the viewer to swap in your own avatar
 
-### 2. WebSocketリレー(別マシンのビューアへ)
+The landing hub and mock demo are at http://localhost:8000/landing/.
+
+### 2. WebSocket relay (viewer on another machine)
 
 ```sh
-cd relay-node && npm install && npm start   # http://localhost:8787 で配信+中継
+cd relay-node && npm install && npm start   # serves the site + relays on :8787
 ```
 
-tracker / viewer 双方で mode: ws、同じ room 名で Connect。
+Set mode: ws on both tracker and viewer, use the same room name, Connect.
 
-### 3. WebTransportリレー(最低遅延)
+### 3. WebTransport relay (lowest latency)
 
 ```sh
 cd relay-rs && cargo run --release
 ```
 
-起動ログの `cert sha-256` を tracker / viewer の cert 欄に貼り、mode: wt で
-Connect。証明書は自己署名(14日制限)なので再起動で再生成する。
-※ relay-rs はAPIドキュメント(wtransport 0.7)に沿って書かれているが、この
-zipの作成環境にはRustツールチェーンが無くコンパイル未検証。CI整備はKGM-009。
+Paste the `cert sha-256` from the startup log into the cert field of tracker
+and viewer, set mode: wt, Connect. The certificate is self-signed (14-day
+limit) and regenerates on restart. relay-rs follows the wtransport 0.7 API
+docs but CI compilation is tracked in KGM-009.
 
-## リポジトリ構成
+More setup detail: [docs/QUICKSTART.md](docs/QUICKSTART.md).
+
+## Repository layout
 
 ```
-tracker/     webcam → 52ch表情+頭部姿勢 → KGM1送出(パブリッシャ)
-viewer/      KGM1受信 → VRM / 内蔵ボット描画(OBSブラウザソース向け)
-shared/      正準ブレンドシェイプ定義・One Euro・KGM1コーデック・トランスポート
-relay-node/  静的配信 + WebSocket中継(Node, 依存はwsのみ)
-relay-rs/    WebTransportデータグラム中継(Rust / wtransport)
-docs/        ARCHITECTURE, PROTOCOL, ROADMAP, BACKLOG(53件), design/(設計書8本)
+tracker/     webcam -> 52ch expressions + head pose -> KGM1 publisher
+viewer/      KGM1 receiver -> VRM / built-in bot rendering (OBS browser source)
+shared/      canonical blendshapes, One Euro, KGM1 codec, transports (JS)
+src/         TypeScript core for the next-gen pipeline (types, filters,
+             anatomy constraints, adapters for MediaPipe/VRM/Live2D/Inochi2D)
+crates/      Rust KGM1 binary header codec
+relay-node/  static serving + WebSocket relay (Node, ws only)
+relay-rs/    WebTransport datagram relay (Rust / wtransport)
+services/    Erlang/OTP router design skeleton
+landing/     landing page hub + webcam/mock tracking demo
+docs/        specs, architecture, roadmap, design docs, curated backlog
+issues/      142 granular issue-ready Markdown files + registration script
+prompts/     agent prompts (implementation, research, review, registration)
+scripts/     dev server, issue registration, structure verification
+tests/       structure smoke tests
 ```
 
-## 開発ロードマップ
+Full documentation index: [docs/INDEX.md](docs/INDEX.md).
 
-53件のissue化可能なバックログを [docs/BACKLOG.md](docs/BACKLOG.md) に、
-未実装の大物は設計書として [docs/design/](docs/design/) に置いてある:
+## Roadmap and issues
 
-- DD-001 手トラッキング / DD-002 全身(YOLO系, ONNX Runtime Web + WebGPU)
-- DD-003 音声リップシンク融合 / DD-004 Inochi2D(inox2d WASM)2Dバックエンド
-- DD-005 Elixirクラスタリレー(大規模fan-out) / DD-006 KGM2(delta+keyframe圧縮)
-- DD-007 録画・リプレイ(.kgm) / DD-008 キャリブレーションとリターゲティング
+The plan lives in two complementary backlogs, both registered as GitHub issues:
 
-GitHub Issuesへの一括登録は [docs/ISSUE_REGISTRATION_PROMPT.md](docs/ISSUE_REGISTRATION_PROMPT.md)
-のプロンプトをClaude Code等に貼るだけ。
+- [docs/BACKLOG.md](docs/BACKLOG.md) — 53 curated issues `[KGM-001..053]`
+  across milestones M0–M6 (see [docs/ROADMAP.md](docs/ROADMAP.md)); large items
+  have design docs under [docs/design/](docs/design/)
+- [issues/backlog/](issues/backlog/) — 142 granular implementation tasks
+  (hands, fingers, stability, face, drums, transport, rendering), registered
+  with [scripts/create_github_issues.py](scripts/create_github_issues.py)
 
-## 関連プロジェクト
+Bulk registration prompts:
+[docs/ISSUE_REGISTRATION_PROMPT.md](docs/ISSUE_REGISTRATION_PROMPT.md) and
+[issues/register-prompt.md](issues/register-prompt.md).
 
-Kalidokit(ソルバの先行例)、OpenSeeFace/VSeeFace(パラメータ伝送の先行例)、
-Inochi2D/inox2d(オープン2Dフォーマット)、moeru-ai/airi、
-handcrafted-persona-engine(KGM1の想定コンシューマ)。位置づけの詳細は
-ARCHITECTURE.md の比較表を参照。
+## Related projects
+
+Kalidokit (solver prior art), OpenSeeFace/VSeeFace (parameter-transport prior
+art), Inochi2D/inox2d (open 2D format), moeru-ai/airi, and
+handcrafted-persona-engine (an intended KGM1 consumer). See the comparison
+table in ARCHITECTURE.md for positioning.
 
 ## License
 
