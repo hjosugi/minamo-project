@@ -18,7 +18,7 @@ REQUIRED = [
     'docs/DEPENDENCY_POLICY.md',
     'docs/ISSUE_LABELS.md',
     'docs/GLOSSARY.md',
-    'docs/ISSUE_CLOSURE.md',
+    'docs/IMPLEMENTATION_PROGRESS.md',
     'landing/index.html',
     'landing/app.js',
     'roadmap/index.html',

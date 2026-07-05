@@ -18,7 +18,7 @@ Primary language is English; documents that originated in Japanese keep a
 ## Backlogs and registration
 
 - [BACKLOG.md](BACKLOG.md) — 53 curated issues `[KGM-001..053]`
-- [ISSUE_CLOSURE.md](ISSUE_CLOSURE.md)
+- [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md)
 - [ISSUE_REGISTRATION_PROMPT.md](ISSUE_REGISTRATION_PROMPT.md) ([日本語](ISSUE_REGISTRATION_PROMPT.ja.md))
 - [../issues/README.md](../issues/README.md) — 142 granular issue files ([日本語](../issues/README.ja.md))
 - [../issues/register-prompt.md](../issues/register-prompt.md) ([日本語](../issues/register-prompt-ja.md))
