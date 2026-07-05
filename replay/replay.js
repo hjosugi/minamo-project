@@ -1,6 +1,7 @@
 import { encodeFrame } from '../shared/codec.js';
 import { parseKgmRecording } from '../shared/kgm-recording.js';
 import { parseRecordingJsonl } from '../shared/recording.js';
+import { VRMA_MIME, exportVrmaFromFrames } from '../shared/vrma-export.js';
 
 /** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
@@ -27,10 +28,14 @@ $('fileReplay').addEventListener('change', async (event) => {
   baseT = frames[0]?.t ?? 0;
   $('statFrames').textContent = String(frames.length);
   $('statCursor').textContent = '0';
-  $('statDuration').textContent = frames.length ? (((frames.at(-1)?.t ?? baseT) - baseT) / 1000).toFixed(1) : '0.0';
+  const durationSec = frames.length ? (((frames.at(-1)?.t ?? baseT) - baseT) / 1000) : 0;
+  $('statDuration').textContent = durationSec.toFixed(1);
+  $('inpTrimStart').value = '0';
+  $('inpTrimEnd').value = Math.max(durationSec, 1 / 30).toFixed(2);
   $('btnPlay').disabled = !canReplay();
   $('btnPause').disabled = true;
   $('btnReset').disabled = !canReplay();
+  $('btnExportVrma').disabled = !canReplay();
   renderReplayValidation(validationErrors, frames.length);
   chip.textContent = validationErrors.length ? `blocked: ${validationErrors.length} error(s)` : (frames.length ? 'loaded' : 'empty');
   chip.dataset.state = validationErrors.length || !frames.length ? 'error' : 'open';
@@ -52,6 +57,25 @@ $('btnReset').addEventListener('click', () => {
   pause('reset');
   cursor = 0;
   $('statCursor').textContent = '0';
+});
+$('btnExportVrma').addEventListener('click', () => {
+  if (!canReplay()) return;
+  try {
+    const startMs = Math.max(0, Number($('inpTrimStart').value) || 0) * 1000;
+    const endMs = Math.max(0, Number($('inpTrimEnd').value) || 0) * 1000;
+    const bytes = exportVrmaFromFrames(frames, {
+      trimStartMs: startMs,
+      trimEndMs: endMs,
+      loop: $('chkVrmaLoop').checked,
+    });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    downloadBytes(`minamo-motion-${stamp}.vrma`, bytes, VRMA_MIME);
+    chip.textContent = 'vrma exported';
+    chip.dataset.state = 'open';
+  } catch (error) {
+    chip.textContent = `vrma export error: ${error.message}`;
+    chip.dataset.state = 'error';
+  }
 });
 
 $('inpRoom').addEventListener('input', updateViewerLink);
@@ -85,6 +109,15 @@ function pause(label) {
 
 function canReplay() {
   return frames.length > 0 && validationErrors.length === 0;
+}
+
+function downloadBytes(filename, bytes, type = 'application/octet-stream') {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
 async function parseReplayFile(file) {

@@ -51,6 +51,12 @@ rotations and expression values at fixed dt, then serialize to VRM
 Animation glTF. Runs in the viewer so the export reflects the active
 mapping (KGM-044). Trim in/out points before export.
 
+Implemented exporter writes a binary `.vrma` GLB with the
+`VRMC_vrm_animation` extension. The replay page exposes trim start/end
+fields and a loop marker. The exported clip includes the required humanoid
+bone map, head humanoid bone rotation keyframes, and preset expression
+nodes whose translation X stores scalar weights. The expression weights are exported for aa/ih/ou/ee/oh, blink, smile/happy, angry, surprised, and neutral presets.
+
 ## Testing use
 
 `fixtures/` gets one committed 30-second session. CI replays it through

@@ -49,6 +49,7 @@ REQUIRED = [
     'shared/kgm1b.js',
     'shared/kgm2.js',
     'shared/kgm-recording.js',
+    'shared/vrma-export.js',
     'shared/e2ee.js',
     'shared/hud-metrics.js',
     'shared/voice-activity.js',
@@ -1462,6 +1463,33 @@ def validate_kgm_recording_contracts() -> None:
             add_error('docs/design/DD-007-recording.md', f'missing .kgm implementation documentation: {needle}')
 
 
+def validate_vrma_export_contracts() -> None:
+    vrma = read('shared/vrma-export.js')
+    replay = read('replay/replay.js')
+    replay_html = read('replay/index.html')
+    tests = read('tests/run-tests.mjs')
+    dd = read('docs/design/DD-007-recording.md')
+
+    for needle in ['VRMC_vrm_animation', 'exportVrmaFromFrames', 'parseVrmaGlb', 'humanoid: { humanBones', 'expressions: { preset', "target: { node, path }"]:
+        if needle not in vrma:
+            add_error('shared/vrma-export.js', f'missing VRMA exporter contract: {needle}')
+    for needle in ['headRotations.push', "expressionWeights(frame.frame.face?.weights)[expression]", 'extras: { loop', "path === 'translation'"]:
+        if needle not in tests + vrma:
+            add_error('shared/vrma-export.js', f'missing VRMA head/expression/loop evidence: {needle}')
+    for needle in ['btnExportVrma', 'inpTrimStart', 'inpTrimEnd', 'chkVrmaLoop']:
+        if needle not in replay_html:
+            add_error('replay/index.html', f'missing VRMA replay export UI: {needle}')
+    for needle in ['exportVrmaFromFrames(frames', "downloadBytes(`minamo-motion-${stamp}.vrma`", 'trimStartMs', 'trimEndMs']:
+        if needle not in replay:
+            add_error('replay/replay.js', f'missing replay VRMA export behavior: {needle}')
+    for needle in ['exportVrmaFromFrames(vrmaFrames', 'VRMA exports the head bone mapping', 'VRMA exports preset expression mappings', 'VRMA loop marker is preserved']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing VRMA export regression coverage: {needle}')
+    for needle in ['Implemented exporter writes a binary `.vrma` GLB', 'head humanoid bone rotation', 'expression weights are exported']:
+        if needle not in dd:
+            add_error('docs/design/DD-007-recording.md', f'missing VRMA export implementation documentation: {needle}')
+
+
 def validate_latency_quality_hud_contracts() -> None:
     hud = read('shared/hud-metrics.js')
     tracker = read('tracker/tracker.js')
@@ -1598,6 +1626,7 @@ validate_desktop_contracts()
 validate_static_demo_entrypoints()
 validate_replay_validation_ui()
 validate_kgm_recording_contracts()
+validate_vrma_export_contracts()
 validate_latency_quality_hud_contracts()
 validate_voice_activity_accent_contracts()
 validate_audio_lipsync_contracts()

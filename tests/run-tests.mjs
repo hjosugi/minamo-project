@@ -24,6 +24,11 @@ import {
   tenMinuteKgmEstimateBytes,
 } from '../shared/kgm-recording.js';
 import {
+  VRMA_EXTENSION,
+  exportVrmaFromFrames,
+  parseVrmaGlb,
+} from '../shared/vrma-export.js';
+import {
   EXPRESSION_MAPPING_SCHEMA,
   createDefaultVrmExpressionMap,
   createPerfectSyncExpressionMap,
@@ -153,6 +158,7 @@ const required = [
   'replay/replay.js',
   'shared/voice-activity.js',
   'shared/audio-lipsync.js',
+  'shared/vrma-export.js',
   'src/core/types.ts',
   'tests/fixtures/hand-golden-clip.json',
   'issues/index.csv',
@@ -1084,6 +1090,24 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const fixtureKgm = parseKgmRecording(fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.kgm')));
   assert.equal(fixtureKgm.frames.length, 1);
   assert.ok(tenMinuteKgmEstimateBytes(60, 76) < 5_000_000, '10-minute .kgm session remains under 5 MB');
+  const vrmaFrames = [0, 33, 66].map((t, i) => {
+    const clipFrame = syntheticBlendshapeFrame(300 + i);
+    clipFrame.t = t;
+    clipFrame.seq = i;
+    clipFrame.face.quat = [0, Math.sin(i * 0.05), 0, Math.cos(i * 0.05)];
+    clipFrame.face.weights[CHANNEL_INDEX.jawOpen] = i / 2;
+    clipFrame.face.weights[CHANNEL_INDEX.eyeBlinkLeft] = i === 1 ? 1 : 0;
+    return clipFrame;
+  });
+  const vrmaBytes = exportVrmaFromFrames(vrmaFrames, { trimStartMs: 0, trimEndMs: 66, loop: true });
+  const vrma = parseVrmaGlb(vrmaBytes).json;
+  assert.equal(vrma.extensionsUsed.includes(VRMA_EXTENSION), true);
+  assert.equal(vrma.extensions[VRMA_EXTENSION].specVersion, '1.0');
+  assert.ok(vrma.extensions[VRMA_EXTENSION].humanoid.humanBones.head.node >= 0, 'VRMA exports the head bone mapping');
+  assert.ok(vrma.extensions[VRMA_EXTENSION].expressions.preset.aa.node >= 0, 'VRMA exports preset expression mappings');
+  assert.ok(vrma.animations[0].channels.some((channel) => channel.target.path === 'rotation'), 'VRMA exports head rotation animation');
+  assert.ok(vrma.animations[0].channels.some((channel) => channel.target.path === 'translation'), 'VRMA exports expression weight animation');
+  assert.equal(vrma.animations[0].extras.loop, true, 'VRMA loop marker is preserved in animation extras');
   for (const code of ['LOW_LIGHT', 'MOTION_BLUR', 'DROPPED_FRAMES', 'OCCLUSION', 'NON_FINITE_SIGNAL', 'SIGNAL_CLAMPED']) {
     assert.ok(Object.values(WARNING_TAXONOMY).includes(code), `warning taxonomy exposes ${code}`);
   }
