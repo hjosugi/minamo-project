@@ -20,10 +20,14 @@ import {
   createDrumDatasetAnnotation,
   createEmptyFrame,
   createModelExportManifest,
+  createPrivacyPreservingDatasetRecord,
+  createQuantizedModelExportPlan,
   createSyntheticHandLandmarks,
+  createYoloStickDetectorBaselinePlan,
   deriveFingerChain,
   detectHandSwap,
   detectVisualDrumHitCandidates,
+  fetchAndVerifyModel,
   finiteNumber,
   finiteVec3Guard,
   fuseVisualHitWithAudio,
@@ -38,7 +42,10 @@ import {
   latestFrameByParticipant,
   mouthFlickerScore,
   privacyPreservingDatasetRecord,
+  chooseExecutionProviderFromCapabilities,
   scoreDrumBenchmark,
+  runModelBenchmark,
+  verifyModelSpecBytes,
   verifyModelHash,
   solveFaceStateFromBlendshapes,
   summarizeModelBenchmark,
@@ -172,9 +179,36 @@ describe('ML support helpers', () => {
     const record = JSON.parse(privacyPreservingDatasetRecord([{ x: 0.123456, y: 0.2, z: -0.3, visibility: 0.98765 }], 'open-hand'));
     expect(record.landmarks[0].x).toBe(0.1235);
     expect(record.label).toBe('open-hand');
+    expect(record.consent.rawMedia).toBe(false);
+
+    const spec = {
+      name: 'stick-yolo-n',
+      url: 'models/stick.onnx',
+      inputShape: [1, 3, 320, 320],
+      outputNames: ['boxes', 'scores'],
+      sha256: '87:e6:74:8e:5d:bb:11:48:db:bd:72:9f:61:f7:cc:b0:bb:1b:d3:5c:e4:6d:7f:33:4c:67:f7:50:b5:f1:e7:1a',
+    };
+    expect((await verifyModelSpecBytes(spec, data)).ok).toBe(true);
+    const fetched = await fetchAndVerifyModel(spec, async () => ({
+      ok: true,
+      arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+    }));
+    expect(fetched.verification.required).toBe(true);
+    expect(fetched.bytes.byteLength).toBe(data.byteLength);
   });
 
-  it('summarizes model benchmarks and export manifests', () => {
+  it('selects fallback providers, benchmarks models, and builds export plans', async () => {
+    expect(chooseExecutionProviderFromCapabilities(['webgpu', 'wasm'], {
+      webgpu: false,
+      webgl: false,
+      wasm: true,
+      wasmThreads: false,
+      wasmSimd: true,
+      cpu: true,
+      crossOriginIsolated: false,
+      notes: [],
+    })).toBe('wasm');
+
     const benchmark = summarizeModelBenchmark('stick-yolo-n', 'webgpu', [
       { latencyMs: 10, memoryMb: 96 },
       { latencyMs: 20, memoryMb: 104 },
@@ -184,18 +218,46 @@ describe('ML support helpers', () => {
     expect(benchmark.p95LatencyMs).toBe(30);
     expect(benchmark.memoryMb).toBe(104);
     expect(classifyHandObjectContact(0.01, 0.9).state).toBe('good');
-    expect(createModelExportManifest({
+    const spec = {
       name: 'stick-yolo-n',
       url: 'models/stick.onnx',
       inputShape: [1, 3, 320, 320],
       outputNames: ['boxes', 'scores'],
       sha256: 'abc',
-    }, 'int8')).toMatchObject({
+      license: '0BSD',
+    };
+    expect(createModelExportManifest(spec, 'int8')).toMatchObject({
       schema: 'minamo.model-export.v1',
       modelName: 'stick-yolo-n',
       quantization: 'int8',
       sha256: 'abc',
+      license: '0BSD',
     });
+    const harness = await runModelBenchmark('stick-yolo-n', 'wasm', [1, 2, 3], () => null, {
+      warmupRuns: 0,
+      now: (() => {
+        let t = 0;
+        return () => {
+          const current = t;
+          t += 5;
+          return current;
+        };
+      })(),
+      memoryMb: () => 64,
+    });
+    expect(harness.averageLatencyMs).toBe(5);
+    expect(harness.fps).toBe(200);
+    const plan = createQuantizedModelExportPlan(spec, ['fp16', 'int8']);
+    expect(plan.browserFallback).toBe('wasm');
+    expect(plan.variants.map((variant) => variant.quantization)).toEqual(['fp16', 'int8']);
+    expect(createYoloStickDetectorBaselinePlan().privacy.rawMediaDefault).toBe(false);
+    const datasetRecord = createPrivacyPreservingDatasetRecord({
+      label: 'stick-tip',
+      landmarks: [{ x: 0.111111, y: 0.222222, z: 0.333333 }],
+      quality: classifyLowLight(100),
+    });
+    expect(datasetRecord.landmarks[0].x).toBe(0.1111);
+    expect(datasetRecord.quality?.state).toBe('good');
   });
 });
 

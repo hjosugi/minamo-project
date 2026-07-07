@@ -153,6 +153,12 @@ import {
   parseRecordingJsonl,
   validateRecordingRecord,
 } from '../shared/recording.js';
+import {
+  DATASET_RECORD_SCHEMA,
+  createDatasetRecord,
+  serializeDatasetRecords,
+  validateDatasetRecord,
+} from '../shared/dataset.js';
 
 const root = process.cwd();
 const required = [
@@ -1128,6 +1134,26 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const parsedKgm = parseKgmRecording(kgmBytes);
   assert.equal(parsedKgm.frames.length, 1);
   assert.equal(parsedKgm.frames[0].seq, 0);
+  const dataset = createDatasetRecord({
+    seq: 1,
+    label: 'stick-tip',
+    license: '0BSD',
+    frame,
+    quality: { state: 'good', score: 0.98765, reasons: [] },
+    warnings: ['HAND_DRUM_GRIP'],
+    settings: { mirror: true, hands: true, pose: false, resolution: '720p', fps: '60', drummerMode: true },
+    handTargets: [{ handedness: 'Right', wrist: [0.123456, -0.2, 0], curls: [0.2, 0.3], gesture: { label: 'drum grip' } }],
+    drumKit: { zones: [{ id: 'snare', type: 'snare', x: 0.5, y: 0.6, radius: 0.08, calibrated: true }] },
+    drumOverlay: { activeZoneIds: ['snare'], summary: { ready: true, calibrated: 1, total: 1, missing: [] } },
+  });
+  assert.equal(dataset.schema, DATASET_RECORD_SCHEMA);
+  assert.equal(dataset.consent.rawMedia, false);
+  assert.equal(dataset.hands[0].wrist[0], 0.1235);
+  assert.equal(validateDatasetRecord(dataset).ok, true);
+  assert.equal(serializeDatasetRecords([dataset]).trim().split('\n').length, 1);
+  const rawDataset = validateDatasetRecord({ ...dataset, imageData: 'raw pixels' });
+  assert.equal(rawDataset.ok, false);
+  assert.ok(rawDataset.errors.some((error) => error.includes('raw media data')));
   const fixtureKgm = parseKgmRecording(fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.kgm')));
   assert.equal(fixtureKgm.frames.length, 1);
   assert.ok(tenMinuteKgmEstimateBytes(60, 76) < 5_000_000, '10-minute .kgm session remains under 5 MB');

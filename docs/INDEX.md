@@ -84,6 +84,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [benchmarks/drum-benchmark-metrics.md](benchmarks/drum-benchmark-metrics.md)
 - [dev/implementation-order.md](dev/implementation-order.md)
 - [ml/model-roadmap-yolo-edge.md](ml/model-roadmap-yolo-edge.md)
+- [ml/dataset-labeling-guide.md](ml/dataset-labeling-guide.md)
 - [security/privacy.md](security/privacy.md)
 - [security/e2ee.md](security/e2ee.md)
 - [references/reviewed-sources.md](references/reviewed-sources.md)

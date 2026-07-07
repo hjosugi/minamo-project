@@ -72,6 +72,7 @@ import {
   resolveGaze,
 } from '../shared/runtime.js';
 import { createMotionRecord, createRecordingMetadata } from '../shared/recording.js';
+import { createDatasetRecord, serializeDatasetRecords } from '../shared/dataset.js';
 import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } from '../shared/kgm-recording.js';
 import { percentileSample } from '../shared/hud-metrics.js';
 import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
@@ -186,6 +187,7 @@ const state = {
     lipsyncReceivedAtMs: 0,
   },
   recording: { enabled: false, lines: [], frames: [], metadata: null },
+  datasetCapture: { enabled: false, records: [], seq: 0, lastAutoCaptureMs: -Infinity },
   calibrationSession: null,
   gazeCalibrationSession: null,
   handCalibrationSession: null,
@@ -882,6 +884,7 @@ function loop() {
       state.lastPacketBytes = buf.byteLength;
       state.transport.send(buf);
       recordFrame(frame, buf);
+      captureDatasetSample('auto', frame, nowMs);
     }
 
     drawOverlay(faceRes, poseRes, handRes, faceIndex);
@@ -1241,6 +1244,58 @@ function recordFrame(frame, encodedBytes) {
   if (state.recording.frames.length > 36_000) state.recording.frames.shift();
   $('btnDownloadRecording').disabled = state.recording.lines.length === 0;
   $('btnDownloadJsonl').disabled = state.recording.lines.length === 0;
+}
+
+function currentDatasetFrame(nowMs = performance.now()) {
+  return {
+    t: Math.round(nowMs),
+    seq: state.seq,
+    face: { quat: state.quat, pos: state.pos, weights: state.weights },
+    pose: state.hasPose ? { points: state.posePoints } : null,
+    hands: state.handTargets,
+  };
+}
+
+function captureDatasetSample(capturedBy = 'manual', frame = null, nowMs = performance.now()) {
+  if (capturedBy === 'auto') {
+    if (!state.datasetCapture.enabled) return;
+    if (nowMs - state.datasetCapture.lastAutoCaptureMs < 500) return;
+    state.datasetCapture.lastAutoCaptureMs = nowMs;
+  }
+  const sampleFrame = frame || currentDatasetFrame(nowMs);
+  try {
+    const record = createDatasetRecord({
+      seq: state.datasetCapture.seq++,
+      label: $('selDatasetLabel').value,
+      license: $('inpDatasetLicense').value.trim() || '0BSD',
+      frame: sampleFrame,
+      quality: state.quality,
+      warnings: state.warnings,
+      settings,
+      handTargets: state.handTargets || [],
+      drumKit,
+      drumOverlay: state.drumOverlayState,
+      source: resolvedAssets?.source || 'tracker',
+      capturedBy,
+    });
+    state.datasetCapture.records.push(record);
+    if (state.datasetCapture.records.length > 12_000) state.datasetCapture.records.shift();
+    updateDatasetCaptureUi();
+    if (capturedBy !== 'auto') {
+      chip.textContent = `dataset sample ${state.datasetCapture.records.length}`;
+      chip.dataset.state = 'open';
+    }
+  } catch (error) {
+    chip.textContent = `dataset error: ${error.message}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+function updateDatasetCaptureUi() {
+  const count = state.datasetCapture.records.length;
+  $('datasetCaptureStatus').textContent = `${count} ${count === 1 ? 'record' : 'records'}`;
+  $('btnDownloadDataset').disabled = count === 0;
+  $('btnClearDataset').disabled = count === 0;
 }
 
 function updateStats(nowMs) {
@@ -2166,6 +2221,34 @@ $('btnDisconnect').addEventListener('click', async () => {
   $('btnDisconnect').disabled = true;
 });
 
+$('chkDatasetCapture').addEventListener('change', (e) => {
+  state.datasetCapture.enabled = e.target.checked;
+  state.datasetCapture.lastAutoCaptureMs = -Infinity;
+  updateDatasetCaptureUi();
+});
+
+$('btnCaptureDatasetSample').addEventListener('click', () => {
+  captureDatasetSample('manual');
+});
+
+$('btnDownloadDataset').addEventListener('click', () => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  downloadText(
+    `minamo-dataset-${stamp}.ndjson`,
+    serializeDatasetRecords(state.datasetCapture.records),
+    'application/x-ndjson',
+  );
+});
+
+$('btnClearDataset').addEventListener('click', () => {
+  state.datasetCapture.records = [];
+  state.datasetCapture.seq = 0;
+  state.datasetCapture.lastAutoCaptureMs = -Infinity;
+  updateDatasetCaptureUi();
+  chip.textContent = 'dataset cleared';
+  chip.dataset.state = 'idle';
+});
+
 $('chkRecord').addEventListener('change', (e) => {
   state.recording.enabled = e.target.checked;
   if (state.recording.enabled) {
@@ -2211,6 +2294,7 @@ function resetTrackingRuntime() {
 }
 
 applySettingsToUi();
+updateDatasetCaptureUi();
 checkCapabilities();
 refreshCameras().catch(() => {});
 navigator.mediaDevices?.addEventListener?.('devicechange', refreshCameras);

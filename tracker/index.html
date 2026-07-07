@@ -135,6 +135,37 @@
         </div>
         <ul class="drum-zone-list" id="drumZoneList"></ul>
       </div>
+      <div class="dataset-capture">
+        <div class="calibration-guide-head">
+          <strong>Dataset capture</strong>
+          <output id="datasetCaptureStatus">0 records</output>
+        </div>
+        <div class="controls">
+          <label class="check"><input type="checkbox" id="chkDatasetCapture" />Capture at 2 fps</label>
+          <button id="btnCaptureDatasetSample">Capture sample</button>
+          <button id="btnDownloadDataset" disabled>Download NDJSON</button>
+          <button id="btnClearDataset" disabled>Clear dataset</button>
+        </div>
+        <div class="form-grid compact">
+          <div class="field">
+            <span>label</span>
+            <select id="selDatasetLabel">
+              <option value="stick-tip">stick tip</option>
+              <option value="stick-box">stick box</option>
+              <option value="drum-hit">drum hit</option>
+              <option value="hand-contact">hand contact</option>
+              <option value="low-light">low light</option>
+              <option value="motion-blur">motion blur</option>
+              <option value="open-hand">open hand</option>
+              <option value="unlabeled">unlabeled</option>
+            </select>
+          </div>
+          <div class="field">
+            <span>license</span>
+            <input type="text" id="inpDatasetLicense" value="0BSD" />
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="panel">

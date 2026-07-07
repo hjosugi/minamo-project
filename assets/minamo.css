@@ -444,6 +444,7 @@ output {
 }
 .signal-checklist li[data-state='check'] b { color: var(--warn); }
 
+.dataset-capture,
 .drummer-setup {
   display: grid;
   gap: 8px;
@@ -453,6 +454,7 @@ output {
   border-radius: 8px;
   background: rgba(15, 18, 32, 0.42);
 }
+.dataset-capture .controls,
 .drummer-setup .controls { margin-top: 0; }
 .drum-zone-list {
   margin: 2px 0 0;

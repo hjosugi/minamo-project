@@ -30,7 +30,7 @@ MediaPipe gives strong generic face/hand/pose tracking. The product needs custom
 | full-body pose | good baseline | optional higher-accuracy backend for KGM-023 |
 | deployment | simple CDN/local `.task` files | needs model hash, provider selection, and quantized variants |
 
-Decision: keep MediaPipe as the default privacy-preserving tracker and add ONNX backends only behind explicit model specs.
+Decision: keep MediaPipe as the default privacy-preserving tracker and evaluate a YOLO-style stick detector behind explicit ONNX model specs. Do not adopt it by default until it beats the existing MediaPipe-plus-heuristic drum path on stick-tip p95 error, hit recall, false-hit rate, and p95 latency. The code-level decision record is `createYoloStickDetectorBaselinePlan()`.
 
 ## 3. Deployment targets
 
@@ -43,8 +43,10 @@ Decision: keep MediaPipe as the default privacy-preserving tracker and add ONNX 
 Runtime contract:
 
 - `OnnxModelSpec` records URL, input shape, outputs, optional SHA-256, quantization, and preferred providers.
-- `chooseExecutionProvider()` tries WebGPU first and falls back to WASM.
-- Model load must call `verifyModelHash()` when an expected hash is present.
+- `detectMlRuntimeCapabilities()` records WebGPU, WebGL, WASM, WASM threads, SIMD, CPU, and cross-origin isolation support.
+- `chooseExecutionProvider()` tries WebGPU first and falls back to WASM, then CPU when needed.
+- Model load must call `fetchAndVerifyModel()` or `verifyModelSpecBytes()` when an expected hash is present.
+- The ONNX Runtime Web adapter boundary is `OnnxRuntimeAdapter`: initialize, optional warmup, detect, and dispose without leaking runtime dependencies into solver code.
 
 ## 4. Dataset plan
 
@@ -66,6 +68,8 @@ Privacy-preserving capture:
 - raw frames are opt-in and local until a contributor explicitly uploads
 - every record carries a label and dataset license
 - face blurring is required for drum-only video exports
+- tracker UI exports `minamo.dataset.tracker-sample.v1` NDJSON with `consent.rawMedia: false`
+- labeling details live in `docs/ml/dataset-labeling-guide.md`
 
 ## 5. Training strategy
 
@@ -89,7 +93,14 @@ Export manifest:
 }
 ```
 
-Benchmark harness output is `ModelBenchmarkResult`: fps, average latency, p95 latency, backend, and optional memory high-water mark.
+Benchmark harness output is `ModelBenchmarkResult`: fps, average latency, p95 latency, backend, and optional memory high-water mark. Use `runModelBenchmark()` for adapter-level browser tests and keep WebGPU and WASM rows in the same report.
+
+Export planning is represented by `createQuantizedModelExportPlan()`. The minimum shipped set for a custom model is:
+
+- original ONNX manifest with SHA-256
+- fp16 or int8 browser variant
+- WASM fallback path
+- license string in the manifest
 
 ## 6. Safety and privacy
 

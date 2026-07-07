@@ -1,20 +1,31 @@
 import { clamp } from './math';
 import type { Landmark } from './types';
 
+type NavigatorWithGpu = Navigator & {
+  gpu?: {
+    requestAdapter?: () => Promise<unknown>;
+  };
+};
+
 export interface PoseBackend<Keypoint = Landmark> {
   name: string;
   detect(input: HTMLVideoElement | ImageBitmap, timeMs: number): Promise<Keypoint[]>;
 }
 
 export type MlExecutionProvider = 'webgpu' | 'wasm' | 'webgl' | 'cpu';
+export type MlTaskKind = 'pose' | 'hand' | 'stick' | 'drum' | 'quality' | 'contact';
 
 export interface OnnxModelSpec {
   name: string;
   url: string;
   inputShape: readonly number[];
+  inputNames?: readonly string[];
   outputNames: readonly string[];
   sha256?: string;
   quantized?: boolean;
+  task?: MlTaskKind;
+  version?: string;
+  license?: string;
   preferredProviders?: readonly MlExecutionProvider[];
 }
 
@@ -22,7 +33,19 @@ export interface OnnxRuntimeAdapter<Keypoint = Landmark> extends PoseBackend<Key
   model: OnnxModelSpec;
   provider: MlExecutionProvider;
   init(): Promise<void>;
+  warmup?(input?: unknown): Promise<void>;
   dispose(): void;
+}
+
+export interface MlRuntimeCapabilities {
+  webgpu: boolean;
+  webgl: boolean;
+  wasm: boolean;
+  wasmThreads: boolean;
+  wasmSimd: boolean;
+  cpu: boolean;
+  crossOriginIsolated: boolean;
+  notes: string[];
 }
 
 export interface ModelBenchmarkResult {
@@ -56,18 +79,125 @@ export interface ModelExportManifest {
   license?: string;
 }
 
+export interface ModelVerificationResult {
+  ok: boolean;
+  required: boolean;
+  actualSha256: string;
+  expectedSha256?: string;
+  error?: string;
+}
+
+export interface ModelFetchResult {
+  bytes: Uint8Array;
+  verification: ModelVerificationResult;
+}
+
+export interface ModelBenchmarkHarnessOptions {
+  warmupRuns?: number;
+  now?: () => number;
+  memoryMb?: () => number | undefined;
+}
+
+export interface QuantizedModelExportPlan {
+  schema: 'minamo.model-export-plan.v1';
+  source: ModelExportManifest;
+  variants: readonly ModelExportManifest[];
+  browserFallback: MlExecutionProvider;
+  commands: readonly string[];
+}
+
+export interface YoloStickDetectorBaselinePlan {
+  schema: 'minamo.yolo-stick-baseline.v1';
+  decision: 'evaluate';
+  candidateModel: string;
+  adapter: 'onnx-runtime-web';
+  browserFallback: MlExecutionProvider;
+  requiredMetrics: readonly string[];
+  privacy: {
+    rawMediaDefault: false;
+    defaultDataset: 'landmarks-and-labels';
+  };
+}
+
+export interface PrivacyPreservingDatasetRecord {
+  schema: 'minamo.dataset.landmarks.v1';
+  label: string;
+  license: string;
+  createdAt: string;
+  consent: {
+    localOnly: boolean;
+    rawMedia: false;
+  };
+  landmarks: Array<{
+    x: number;
+    y: number;
+    z: number;
+    visibility?: number;
+  }>;
+  source?: string;
+  quality?: {
+    score: number;
+    state: QualityClassification['state'];
+    reasons: string[];
+  };
+}
+
+export interface PrivacyPreservingDatasetRecordInput {
+  label: string;
+  landmarks?: readonly Landmark[];
+  license?: string;
+  createdAt?: string;
+  source?: string;
+  quality?: QualityClassification;
+}
+
+type FetchLike = (url: string) => Promise<{
+  ok?: boolean;
+  status?: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}>;
+
 export async function detectWebGpuSupport(): Promise<boolean> {
-  return typeof navigator !== 'undefined' && 'gpu' in navigator && Boolean(await navigator.gpu?.requestAdapter?.());
+  const nav = typeof navigator === 'undefined' ? undefined : navigator as NavigatorWithGpu;
+  return Boolean(nav?.gpu?.requestAdapter && await nav.gpu.requestAdapter());
+}
+
+export async function detectMlRuntimeCapabilities(): Promise<MlRuntimeCapabilities> {
+  const wasm = typeof WebAssembly !== 'undefined';
+  const crossOriginIsolated = typeof globalThis.crossOriginIsolated === 'boolean'
+    ? globalThis.crossOriginIsolated
+    : false;
+  const capabilities: MlRuntimeCapabilities = {
+    webgpu: await detectWebGpuSupport(),
+    webgl: detectWebGlSupport(),
+    wasm,
+    wasmThreads: wasm && crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined',
+    wasmSimd: wasm && detectWasmSimdSupport(),
+    cpu: true,
+    crossOriginIsolated,
+    notes: [],
+  };
+  if (!capabilities.webgpu) capabilities.notes.push('WebGPU unavailable; use WASM or CPU fallback.');
+  if (capabilities.wasm && !capabilities.wasmThreads) capabilities.notes.push('WASM threads require cross-origin isolation.');
+  return capabilities;
+}
+
+export function chooseExecutionProviderFromCapabilities(
+  preferred: readonly MlExecutionProvider[] = ['webgpu', 'wasm'],
+  capabilities: MlRuntimeCapabilities,
+): MlExecutionProvider {
+  for (const provider of preferred) {
+    if (providerAvailable(provider, capabilities)) return provider;
+  }
+  if (capabilities.wasm) return 'wasm';
+  return 'cpu';
 }
 
 export async function chooseExecutionProvider(
   preferred: readonly MlExecutionProvider[] = ['webgpu', 'wasm'],
+  capabilities?: MlRuntimeCapabilities,
 ): Promise<MlExecutionProvider> {
-  for (const provider of preferred) {
-    if (provider === 'webgpu' && await detectWebGpuSupport()) return 'webgpu';
-    if (provider !== 'webgpu') return provider;
-  }
-  return 'wasm';
+  return chooseExecutionProviderFromCapabilities(preferred, capabilities ?? await detectMlRuntimeCapabilities());
 }
 
 export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string> {
@@ -80,7 +210,40 @@ export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string>
 }
 
 export async function verifyModelHash(data: ArrayBuffer | Uint8Array, expectedSha256: string): Promise<boolean> {
-  return (await sha256Hex(data)).toLowerCase() === expectedSha256.toLowerCase();
+  return (await sha256Hex(data)).toLowerCase() === normalizeSha256(expectedSha256);
+}
+
+export async function verifyModelSpecBytes(spec: OnnxModelSpec, data: ArrayBuffer | Uint8Array): Promise<ModelVerificationResult> {
+  const actualSha256 = await sha256Hex(data);
+  if (!spec.sha256) return { ok: true, required: false, actualSha256 };
+  const expectedSha256 = normalizeSha256(spec.sha256);
+  if (!/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    return {
+      ok: false,
+      required: true,
+      actualSha256,
+      expectedSha256,
+      error: 'expected SHA-256 must be 64 hex characters',
+    };
+  }
+  const ok = actualSha256 === expectedSha256;
+  const result: ModelVerificationResult = {
+    ok,
+    required: true,
+    actualSha256,
+    expectedSha256,
+  };
+  if (!ok) result.error = 'model SHA-256 mismatch';
+  return result;
+}
+
+export async function fetchAndVerifyModel(spec: OnnxModelSpec, fetcher: FetchLike = defaultFetch): Promise<ModelFetchResult> {
+  const response = await fetcher(spec.url);
+  if (response.ok === false) throw new Error(`Model fetch failed for ${spec.name}: HTTP ${response.status ?? 'error'}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const verification = await verifyModelSpecBytes(spec, bytes);
+  if (!verification.ok) throw new Error(verification.error ?? `Model verification failed for ${spec.name}`);
+  return { bytes, verification };
 }
 
 export function classifyLowLight(meanLuma: number): QualityClassification {
@@ -109,6 +272,31 @@ export function classifyHandObjectContact(distanceMeters: number, modelScore = 0
     state: score >= 0.7 ? 'good' : score >= 0.4 ? 'degraded' : 'poor',
     reasons: score >= 0.7 ? [] : ['uncertain hand-object contact'],
   };
+}
+
+export async function runModelBenchmark<Input>(
+  modelName: string,
+  backend: ModelBenchmarkResult['backend'],
+  inputs: readonly Input[],
+  invoke: (input: Input, index: number) => Promise<unknown> | unknown,
+  options: ModelBenchmarkHarnessOptions = {},
+): Promise<ModelBenchmarkResult> {
+  const now = options.now ?? (() => performance.now());
+  const warmupRuns = Math.max(0, Math.floor(options.warmupRuns ?? 1));
+  for (let i = 0; i < warmupRuns && inputs.length > 0; i++) {
+    await invoke(inputs[i % inputs.length] as Input, -1 - i);
+  }
+  const samples: ModelBenchmarkSample[] = [];
+  for (let i = 0; i < inputs.length; i++) {
+    const start = now();
+    await invoke(inputs[i] as Input, i);
+    const latencyMs = Math.max(0, now() - start);
+    const sample: ModelBenchmarkSample = { latencyMs };
+    const memoryMb = options.memoryMb?.();
+    if (typeof memoryMb === 'number' && Number.isFinite(memoryMb)) sample.memoryMb = memoryMb;
+    samples.push(sample);
+  }
+  return summarizeModelBenchmark(modelName, backend, samples);
 }
 
 export function summarizeModelBenchmark(
@@ -143,20 +331,112 @@ export function createModelExportManifest(spec: OnnxModelSpec, quantization: Mod
     outputs: spec.outputNames,
   };
   if (spec.sha256) manifest.sha256 = spec.sha256;
+  if (spec.license) manifest.license = spec.license;
   return manifest;
 }
 
-export function privacyPreservingDatasetRecord(landmarks: Landmark[], label: string): string {
-  return JSON.stringify({
+export function createQuantizedModelExportPlan(
+  spec: OnnxModelSpec,
+  quantizations: readonly ModelExportManifest['quantization'][] = ['fp16', 'int8'],
+): QuantizedModelExportPlan {
+  return {
+    schema: 'minamo.model-export-plan.v1',
+    source: createModelExportManifest(spec, 'none'),
+    variants: quantizations.map((quantization) => createModelExportManifest({ ...spec, quantized: quantization !== 'none' }, quantization)),
+    browserFallback: 'wasm',
+    commands: quantizations.map((quantization) => (
+      quantization === 'int8'
+        ? `python -m onnxruntime.quantization.quantize_dynamic ${spec.name}.onnx ${spec.name}.int8.onnx`
+        : `python -m onnxconverter_common.float16 ${spec.name}.onnx ${spec.name}.${quantization}.onnx`
+    )),
+  };
+}
+
+export function createYoloStickDetectorBaselinePlan(candidateModel = 'yolo-stick-nano'): YoloStickDetectorBaselinePlan {
+  return {
+    schema: 'minamo.yolo-stick-baseline.v1',
+    decision: 'evaluate',
+    candidateModel,
+    adapter: 'onnx-runtime-web',
+    browserFallback: 'wasm',
+    requiredMetrics: ['stick-tip-p95-error', 'hit-recall', 'false-hit-rate', 'p95-latency-ms'],
+    privacy: {
+      rawMediaDefault: false,
+      defaultDataset: 'landmarks-and-labels',
+    },
+  };
+}
+
+export function createPrivacyPreservingDatasetRecord(input: PrivacyPreservingDatasetRecordInput): PrivacyPreservingDatasetRecord {
+  const record: PrivacyPreservingDatasetRecord = {
     schema: 'minamo.dataset.landmarks.v1',
-    label,
-    landmarks: landmarks.map((lm) => ({
+    label: input.label,
+    license: input.license?.trim() || '0BSD',
+    createdAt: input.createdAt ?? new Date().toISOString(),
+    consent: {
+      localOnly: true,
+      rawMedia: false,
+    },
+    landmarks: [...(input.landmarks ?? [])].map((lm) => ({
       x: round4(lm.x),
       y: round4(lm.y),
       z: round4(lm.z),
-      visibility: lm.visibility === undefined ? undefined : round4(lm.visibility),
+      ...(lm.visibility === undefined ? {} : { visibility: round4(lm.visibility) }),
     })),
-  });
+  };
+  if (input.source) record.source = input.source;
+  if (input.quality) {
+    record.quality = {
+      score: round4(input.quality.score),
+      state: input.quality.state,
+      reasons: [...input.quality.reasons],
+    };
+  }
+  return record;
+}
+
+export function privacyPreservingDatasetRecord(landmarks: Landmark[], label: string): string {
+  return JSON.stringify(createPrivacyPreservingDatasetRecord({ label, landmarks }));
+}
+
+function providerAvailable(provider: MlExecutionProvider, capabilities: MlRuntimeCapabilities): boolean {
+  if (provider === 'webgpu') return capabilities.webgpu;
+  if (provider === 'webgl') return capabilities.webgl;
+  if (provider === 'wasm') return capabilities.wasm;
+  return capabilities.cpu;
+}
+
+function detectWebGlSupport(): boolean {
+  if (typeof document === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
+function detectWasmSimdSupport(): boolean {
+  if (typeof WebAssembly === 'undefined' || typeof WebAssembly.validate !== 'function') return false;
+  return WebAssembly.validate(new Uint8Array([
+    0x00, 0x61, 0x73, 0x6d,
+    0x01, 0x00, 0x00, 0x00,
+    0x01, 0x05, 0x01, 0x60,
+    0x00, 0x01, 0x7b,
+    0x03, 0x02, 0x01, 0x00,
+    0x0a, 0x0a, 0x01, 0x08,
+    0x00, 0xfd, 0x0c, 0x00,
+    0x00, 0x00, 0x00, 0x0b,
+  ]));
+}
+
+async function defaultFetch(url: string): Promise<Awaited<ReturnType<FetchLike>>> {
+  if (typeof fetch === 'undefined') throw new Error('fetch is required to load ONNX models');
+  return fetch(url);
+}
+
+function normalizeSha256(value: string): string {
+  return value.trim().replace(/[:\s]/g, '').toLowerCase();
 }
 
 function round4(value: number): number {
