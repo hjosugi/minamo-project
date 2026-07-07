@@ -1,6 +1,6 @@
 name: Bug report
 description: Report tracking or rendering failure
-labels: ["type:bug"]
+labels: ["type/bug"]
 body:
   - type: input
     id: mode

@@ -1,0 +1,13 @@
+FROM node:22-alpine AS deps
+WORKDIR /app/relay-node
+COPY relay-node/package.json ./
+RUN npm install --omit=dev
+
+FROM gcr.io/distroless/nodejs22-debian12 AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/relay-node/node_modules ./relay-node/node_modules
+COPY . .
+EXPOSE 8787
+STOPSIGNAL SIGINT
+CMD ["relay-node/server.mjs"]

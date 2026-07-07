@@ -1,4 +1,6 @@
-# KAGAMI
+# Minamo
+
+[![ci](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml)
 
 > 日本語版: [README.ja.md](README.ja.md)
 
@@ -23,8 +25,13 @@ webcam — free, low-latency, and local-first.
 
 - In-browser inference (MediaPipe Face Landmarker, GPU/WASM); 52 expression
   channels + head pose + experimental upper body, smoothed with One Euro filters
+- Camera device/resolution/fps controls, persisted tracker/viewer settings,
+  guided calibration profiles, local JSONL recording and replay, signal
+  quality warnings, and wrap-safe viewer jitter handling
 - Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
-  WebTransport datagrams (lowest latency, Rust relay)
+  WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
+- Tauri desktop shell that launches the bundled tracker, viewer, and replay
+  tools, with virtual camera backend status surfaced per OS
 - VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
 - A landing hub with a mock tracking visualization demo under [landing/](landing/)
 
@@ -44,9 +51,22 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
 1. Open http://localhost:8000/tracker/ and press **Start tracking**
 2. Keep mode: local and press **Connect**
 3. "Open viewer in another tab" — it works via BroadcastChannel in the same browser
-4. Drop a `.vrm` file onto the viewer to swap in your own avatar
+4. Drop a `.vrm` file onto the viewer to swap in your own avatar. For recorded
+   motion, drop a tracker `.jsonl` onto the viewer or open `/replay/` and publish
+   it to the same local room.
 
 The landing hub and mock demo are at http://localhost:8000/landing/.
+GitHub Pages publishes the static tracker/viewer/replay/landing files directly
+from `main`.
+
+For offline model serving:
+
+```sh
+./scripts/fetch-models.sh
+```
+
+The tracker will prefer `vendor/mediapipe/` and fall back to the pinned CDN
+URLs when local assets are absent.
 
 ### 2. WebSocket relay (viewer on another machine)
 
@@ -55,6 +75,7 @@ cd relay-node && npm install && npm start   # serves the site + relays on :8787
 ```
 
 Set mode: ws on both tracker and viewer, use the same room name, Connect.
+Set `MINAMO_RELAY_TOKEN` to require the room token field.
 
 ### 3. WebTransport relay (lowest latency)
 
@@ -65,18 +86,47 @@ cd relay-rs && cargo run --release
 Paste the `cert sha-256` from the startup log into the cert field of tracker
 and viewer, set mode: wt, Connect. The certificate is self-signed (14-day
 limit) and regenerates on restart. relay-rs follows the wtransport 0.7 API
-docs but CI compilation is tracked in KGM-009.
+docs and is built, linted, and tested in CI.
 
 More setup detail: [docs/QUICKSTART.md](docs/QUICKSTART.md).
+LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).
+
+### 4. Desktop shell
+
+```sh
+npm run desktop:check
+npm run desktop:dev
+```
+
+Desktop packaging details: [docs/product/desktop-app.md](docs/product/desktop-app.md).
+
+### 5. OBS Browser Source
+
+Use the viewer as a transparent OBS source:
+
+```text
+viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked
+```
+
+OBS settings: Browser Source, width 1920, height 1080, 60 FPS when the machine
+can sustain it, and custom CSS `body { background-color: rgba(0, 0, 0, 0); margin: 0; overflow: hidden; }`.
+Use `mode=ws` or `mode=wt` plus `token`, `wtUrl`, and `wtHash` for remote relay
+rooms. Scene state is URL-addressable with `scene=soft|anime|flat`,
+`bgColor=%23rrggbb`, `bloom=0|1`, and `vignette=0|1`; the viewer **Copy URL**
+button serializes the current setup. Full setup:
+[docs/product/obs-setup.md](docs/product/obs-setup.md).
 
 ## Repository layout
 
 ```
 tracker/     webcam -> 52ch expressions + head pose -> KGM1 publisher
 viewer/      KGM1 receiver -> VRM / built-in bot rendering (OBS browser source)
+replay/      local KGM1 motion JSONL replay publisher
+desktop/     Tauri desktop control surface, built by Vite
 shared/      canonical blendshapes, One Euro, KGM1 codec, transports (JS)
 src/         TypeScript core for the next-gen pipeline (types, filters,
              anatomy constraints, adapters for MediaPipe/VRM/Live2D/Inochi2D)
+src-tauri/   Minamo Studio native shell and desktop window commands
 crates/      Rust KGM1 binary header codec
 relay-node/  static serving + WebSocket relay (Node, ws only)
 relay-rs/    WebTransport datagram relay (Rust / wtransport)
@@ -106,6 +156,12 @@ Bulk registration prompts:
 [docs/ISSUE_REGISTRATION_PROMPT.md](docs/ISSUE_REGISTRATION_PROMPT.md) and
 [issues/register-prompt.md](issues/register-prompt.md).
 
+Contributor and release docs:
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md),
+[docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md),
+[docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), and
+[docs/DEPENDENCY_POLICY.md](docs/DEPENDENCY_POLICY.md).
+
 ## Related projects
 
 Kalidokit (solver prior art), OpenSeeFace/VSeeFace (parameter-transport prior
@@ -114,5 +170,8 @@ handcrafted-persona-engine (an intended KGM1 consumer). See the comparison
 table in ARCHITECTURE.md for positioning.
 
 ## License
+
+0BSD. You can use, copy, modify, and distribute this project for almost any purpose.
+
 
 MIT

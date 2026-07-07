@@ -1,36 +1,103 @@
-// KAGAMI viewer.
+// Minamo viewer.
 // Receives KGM1 frames, decodes them, and drives either a loaded VRM avatar
 // or a built-in primitive bot. Incoming values are treated as targets and
 // the render loop eases toward them, so network jitter never reaches bones.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
-import { CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
+import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
 import { decodeFrame } from '../shared/codec.js';
-import { KagamiTransport } from '../shared/transport.js';
+import {
+  createDefaultVrmExpressionMap,
+  createPerfectSyncExpressionMap,
+  detectPerfectSyncExpressions,
+  evaluateExpressionMap,
+  parseExpressionMap,
+  serializeExpressionMap,
+} from '../shared/expression-mapping.js';
+import { parseKgmRecording } from '../shared/kgm-recording.js';
+import {
+  createLayeredAvatarManifest,
+  classifyLayerName,
+  layeredAvatarStateFromWeights,
+  layerTransformForDepth,
+  normalizeLayerDepth,
+} from '../shared/layered-avatar.js';
+import { computeLossPercent } from '../shared/hud-metrics.js';
+import { MinamoTransport } from '../shared/transport.js';
+import {
+  DEFAULT_VIEWER_SETTINGS,
+  VIEWER_STORAGE_KEY,
+  FrameOrderGate,
+  loadJson,
+  parseMotionJsonl,
+  saveJson,
+} from '../shared/runtime.js';
 
+/** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
+const params = new URLSearchParams(location.search);
+
+const SCENE_PRESETS = Object.freeze({
+  soft: Object.freeze({
+    label: 'soft key',
+    backgroundColor: '#0f1220',
+    hemi: [0xdfe6ff, 0x1a1e33, 1.1],
+    key: [0xffffff, 1.6, [0.6, 1.8, 1.2]],
+    rim: [0x6fe3ff, 0.5, [-1.2, 1.4, -1.0]],
+    floor: 0x161a2c,
+    bloom: false,
+    vignette: false,
+  }),
+  anime: Object.freeze({
+    label: 'anime rim',
+    backgroundColor: '#151221',
+    hemi: [0xe9edff, 0x24142f, 0.85],
+    key: [0xfff3d5, 1.25, [0.3, 1.9, 1.3]],
+    rim: [0xff7aa2, 1.35, [-1.3, 1.5, -0.9]],
+    floor: 0x1d1830,
+    bloom: true,
+    vignette: true,
+  }),
+  flat: Object.freeze({
+    label: 'flat',
+    backgroundColor: '#24283a',
+    hemi: [0xffffff, 0xffffff, 1.4],
+    key: [0xffffff, 0.65, [0.2, 1.5, 1.5]],
+    rim: [0xffffff, 0, [-1.2, 1.4, -1.0]],
+    floor: 0x202436,
+    bloom: false,
+    vignette: false,
+  }),
+});
+
+const settings = loadJson(localStorage, VIEWER_STORAGE_KEY, DEFAULT_VIEWER_SETTINGS);
+applyQuerySettings(settings, params);
+document.body.classList.toggle('hud-hidden', params.get('hud') === '0' || params.get('preset') === 'obs');
 
 // ---------------------------------------------------------------- scene
 
 const container = $('scene');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0f1220);
+scene.background = settings.transparent ? null : new THREE.Color(settings.backgroundColor);
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 30);
-camera.position.set(0, 1.42, 1.4);
-camera.lookAt(0, 1.38, 0);
+applyLockedCamera();
 
-scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x1a1e33, 1.1));
+const hemi = new THREE.HemisphereLight(0xdfe6ff, 0x1a1e33, 1.1);
+scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffffff, 1.6);
 key.position.set(0.6, 1.8, 1.2);
 scene.add(key);
@@ -44,11 +111,22 @@ const floor = new THREE.Mesh(
 );
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
+applyBackground();
+
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.28, 0.35, 0.86);
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
+const vignette = $('sceneVignette');
+applySceneState();
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  if (params.get('camera') === 'locked' || params.get('preset') === 'obs') applyLockedCamera();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // Gaze target: a child of the camera, offset by decoded eye-look weights,
@@ -61,12 +139,15 @@ scene.add(camera);
 
 const target = {
   quat: new THREE.Quaternion(),
+  pos: new THREE.Vector3(0, 0, 0.4),
   weights: new Float32Array(NUM_CHANNELS),
   posePoints: null,
+  hands: null,
   fresh: false,
 };
 const current = {
   quat: new THREE.Quaternion(),
+  pos: new THREE.Vector3(0, 0, 0.4),
   weights: new Float32Array(NUM_CHANNELS),
 };
 const refQuatInv = new THREE.Quaternion(); // calibration: "Center" pose
@@ -74,10 +155,27 @@ let hasRef = false;
 
 const IDENT = new THREE.Quaternion();
 const tmpQ = new THREE.Quaternion();
+const tmpPos = new THREE.Vector3();
+const tmpA = new THREE.Vector3();
+const tmpB = new THREE.Vector3();
+const tmpC = new THREE.Vector3();
+const tmpEuler = new THREE.Euler();
+const BONE_DOWN = new THREE.Vector3(0, -1, 0);
 
 let vrm = null;
 let bot = buildBot();
 scene.add(bot.group);
+let expressionMap = createDefaultVrmExpressionMap();
+let availableExpressionNames = [];
+let perfectSyncState = detectPerfectSyncExpressions([]);
+let mappingEditTimer = null;
+const layeredAvatar = {
+  active: false,
+  layers: [],
+  manifest: createLayeredAvatarManifest([]),
+  parallaxPx: 18,
+};
+const layeredAvatarRoot = $('layeredAvatar');
 
 // ---------------------------------------------------------------- built-in bot
 
@@ -140,6 +238,8 @@ function buildBot() {
 
 function applyBot(dt) {
   const w = current.weights;
+  const lean = avatarLeanOffset();
+  bot.group.position.set(lean.x, 1.15 + lean.y, lean.z);
   bot.head.quaternion.copy(current.quat);
 
   const blinkL = w[C.eyeBlinkLeft];
@@ -174,6 +274,106 @@ function applyBot(dt) {
   }
 }
 
+function disableLayeredAvatar() {
+  layeredAvatar.active = false;
+  layeredAvatarRoot.hidden = true;
+  for (const layer of layeredAvatar.layers) {
+    if (layer.url?.startsWith('blob:')) URL.revokeObjectURL(layer.url);
+  }
+  layeredAvatar.layers = [];
+  layeredAvatarRoot.replaceChildren();
+  if (vrm?.scene) vrm.scene.visible = true;
+}
+
+function setLayeredAvatarLayers(entries, label) {
+  disableLayeredAvatar();
+  layeredAvatar.manifest = createLayeredAvatarManifest(entries.map((entry) => entry.name));
+  layeredAvatar.layers = entries.map((entry) => {
+    const slot = entry.slot || classifyLayerName(entry.name);
+    const depth = normalizeLayerDepth(entry.depth, layeredAvatar.manifest.layers.find((layer) => layer.name === entry.name)?.depth ?? 0);
+    const image = document.createElement('img');
+    image.src = entry.url;
+    image.alt = entry.name;
+    image.dataset.slot = slot;
+    image.draggable = false;
+    layeredAvatarRoot.appendChild(image);
+    return { ...entry, slot, depth, image };
+  });
+  layeredAvatar.active = layeredAvatar.layers.length > 0;
+  layeredAvatarRoot.hidden = !layeredAvatar.active;
+  layeredAvatar.parallaxPx = Number($('rngLayerParallax').value) || layeredAvatar.manifest.parallaxPx;
+  if (vrm?.scene) vrm.scene.visible = false;
+  bot.group.visible = !layeredAvatar.active && !vrm;
+  $('statAvatar').textContent = layeredAvatar.active ? `layered ${label}` : 'built-in bot';
+}
+
+async function loadLayeredPngFiles(files) {
+  const pngs = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.png'));
+  if (pngs.length === 0) return false;
+  const entries = pngs.map((file) => ({
+    name: file.name,
+    slot: classifyLayerName(file.name),
+    url: URL.createObjectURL(file),
+  }));
+  setLayeredAvatarLayers(entries, `${pngs.length} PNG layers`);
+  return true;
+}
+
+async function loadLayeredPsdFile(file) {
+  const { getLayerCanvas, readPsd } = await import('ag-psd');
+  const psd = readPsd(new Uint8Array(await file.arrayBuffer()), { skipCompositeImageData: true });
+  const entries = [];
+  collectPsdLayers(psd.children || [], entries, getLayerCanvas);
+  if (entries.length === 0) throw new Error('PSD has no visible raster layers');
+  setLayeredAvatarLayers(entries, file.name);
+}
+
+function collectPsdLayers(nodes, entries, getLayerCanvas) {
+  for (const node of nodes) {
+    if (node.hidden) continue;
+    if (node.children?.length) collectPsdLayers(node.children, entries, getLayerCanvas);
+    const canvas = getLayerCanvas(node);
+    if (!canvas) continue;
+    entries.push({
+      name: node.name || `layer-${entries.length + 1}`,
+      slot: classifyLayerName(node.name),
+      url: canvas.toDataURL('image/png'),
+    });
+  }
+}
+
+function applyLayeredAvatar() {
+  const state = layeredAvatarStateFromWeights(current.weights);
+  tmpEuler.setFromQuaternion(current.quat, 'XYZ');
+  layeredAvatarRoot.style.setProperty('--mouth-scale-x', state.squashX.toFixed(3));
+  layeredAvatarRoot.style.setProperty('--mouth-scale-y', state.squashY.toFixed(3));
+  for (const layer of layeredAvatar.layers) {
+    const visible = layerVisible(layer.slot, state);
+    const transform = layerTransformForDepth({
+      yaw: tmpEuler.y,
+      pitch: tmpEuler.x,
+      depth: layer.depth,
+      parallaxPx: layeredAvatar.parallaxPx,
+    });
+    const scaleX = layer.slot === 'mouthOpen' ? transform.scale * state.squashX : transform.scale;
+    const scaleY = layer.slot === 'mouthOpen' ? transform.scale * state.squashY : transform.scale;
+    layer.image.style.opacity = visible ? '1' : '0';
+    layer.image.style.transform = [
+      'translate(-50%, -50%)',
+      `translate(${transform.x.toFixed(2)}px, ${transform.y.toFixed(2)}px)`,
+      `scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
+    ].join(' ');
+  }
+}
+
+function layerVisible(slot, state) {
+  if (slot === 'eyesOpen') return !state.eyesClosed;
+  if (slot === 'eyesClosed') return state.eyesClosed;
+  if (slot === 'mouthClosed') return !state.mouthOpen;
+  if (slot === 'mouthOpen') return state.mouthOpen;
+  return true;
+}
+
 // ---------------------------------------------------------------- vrm
 
 async function loadVrmFromUrl(url, label) {
@@ -191,10 +391,12 @@ async function loadVrmFromUrl(url, label) {
     scene.remove(vrm.scene);
     try { VRMUtils.deepDispose(vrm.scene); } catch {}
   }
+  disableLayeredAvatar();
   vrm = next;
   vrm.scene.position.set(0, 0, 0);
   scene.add(vrm.scene);
   if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
+  configureExpressionMapping(label);
   bot.group.visible = false;
   $('statAvatar').textContent = label;
 }
@@ -205,9 +407,80 @@ const expr = (name, v) => {
 };
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
+function listVrmExpressionNames(model = vrm) {
+  if (!model?.expressionManager) return [];
+  const em = model.expressionManager;
+  const known = new Set([
+    ...ARKIT_52,
+    'aa', 'ih', 'ou', 'ee', 'oh',
+    'blink', 'blinkLeft', 'blinkRight',
+    'happy', 'angry', 'sad', 'relaxed', 'surprised', 'neutral',
+  ]);
+  const found = [];
+  for (const name of known) {
+    if (em.getExpressionTrackName(name) !== null) found.push(name);
+  }
+  return found;
+}
+
+function configureExpressionMapping(label = 'avatar') {
+  availableExpressionNames = listVrmExpressionNames();
+  perfectSyncState = detectPerfectSyncExpressions(availableExpressionNames);
+  expressionMap = perfectSyncState.active
+    ? createPerfectSyncExpressionMap(availableExpressionNames)
+    : createDefaultVrmExpressionMap(availableExpressionNames);
+  expressionMap.name = `${label} ${perfectSyncState.active ? 'Perfect Sync' : 'fallback'} map`;
+  refreshExpressionMapEditor();
+}
+
+function refreshExpressionMapEditor() {
+  $('txtExpressionMap').value = serializeExpressionMap(expressionMap);
+  $('statMapping').textContent = perfectSyncState.active
+    ? `Perfect Sync ${perfectSyncState.matched.length}/52`
+    : `fallback ${expressionMap.targets.length} targets`;
+}
+
+function applyExpressionMapFromEditor() {
+  try {
+    expressionMap = parseExpressionMap($('txtExpressionMap').value);
+    $('statMapping').textContent = `${expressionMap.targets.length} mapped targets`;
+    chip.textContent = 'mapping applied';
+    chip.dataset.state = 'open';
+  } catch (err) {
+    chip.textContent = `mapping error: ${err.message}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+function queueExpressionMapApply() {
+  if (mappingEditTimer !== null) clearTimeout(mappingEditTimer);
+  mappingEditTimer = setTimeout(() => {
+    mappingEditTimer = null;
+    applyExpressionMapFromEditor();
+  }, 250);
+}
+
+function applyVrmExpressionMap(weights) {
+  for (const targetExpression of evaluateExpressionMap(expressionMap, weights)) {
+    expr(targetExpression.out, targetExpression.value);
+  }
+}
+
+function exportExpressionMap() {
+  const blob = new Blob([serializeExpressionMap(expressionMap)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${(expressionMap.name || 'minamo-expression-map').replace(/[^a-z0-9._-]+/gi, '-')}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function applyVrm(dt) {
   const w = current.weights;
   const h = vrm.humanoid;
+  const lean = avatarLeanOffset();
+  vrm.scene.position.set(lean.x, lean.y, lean.z);
 
   // Distribute head rotation across head and neck for a natural look.
   const head = h.getNormalizedBoneNode('head');
@@ -215,49 +488,105 @@ function applyVrm(dt) {
   if (head) head.quaternion.copy(IDENT).slerp(current.quat, 0.65);
   if (neck) neck.quaternion.copy(IDENT).slerp(current.quat, 0.35);
 
-  // Eyes
-  const blinkL = w[C.eyeBlinkLeft];
-  const blinkR = w[C.eyeBlinkRight];
-  const em = vrm.expressionManager;
-  const hasPerEye = em && em.getExpressionTrackName('blinkLeft') !== null;
-  if (hasPerEye) {
-    expr('blinkLeft', blinkL);
-    expr('blinkRight', blinkR);
-  } else {
-    expr('blink', Math.max(blinkL, blinkR));
-  }
+  // Expressions are retargeted through the editable mapping profile. Perfect
+  // Sync avatars use ARKit 52 names 1:1; other VRMs use a curated fallback map.
+  applyVrmExpressionMap(w);
   lookAtTarget.position.set(gazeX(w) * 0.6, gazeY(w) * 0.4, 0);
 
-  // Mouth: visemes from jaw and lip channels.
-  const aa = clamp01(w[C.jawOpen] * 1.4);
-  const damp = 1 - aa * 0.6; // keep vowels from stacking on a wide-open jaw
-  expr('aa', aa);
-  expr('oh', clamp01(w[C.mouthFunnel] * 1.2) * damp);
-  expr('ou', clamp01(w[C.mouthPucker] * 1.2) * damp);
-  expr('ee', clamp01((w[C.mouthStretchLeft] + w[C.mouthStretchRight]) * 0.6) * damp);
-  expr('ih', clamp01((w[C.mouthLowerDownLeft] + w[C.mouthLowerDownRight]) * 0.55) * damp);
-
-  // Emotions, kept conservative so they read as accents.
-  expr('happy', clamp01((w[C.mouthSmileLeft] + w[C.mouthSmileRight]) * 0.6));
-  expr('angry', clamp01((w[C.browDownLeft] + w[C.browDownRight]) * 0.4));
-  expr('surprised', clamp01(w[C.browInnerUp] * 0.6 + (w[C.eyeWideLeft] + w[C.eyeWideRight]) * 0.25));
-
-  // Experimental chest sway from pose points.
   if (target.posePoints) {
-    const p = target.posePoints;
-    const dx = p[2 * 3 + 0] - p[1 * 3 + 0];
-    const dy = p[2 * 3 + 1] - p[1 * 3 + 1];
-    const dz = p[2 * 3 + 2] - p[1 * 3 + 2];
-    const roll = Math.atan2(dy, Math.abs(dx) || 1e-4) * 0.6;
-    const yaw = Math.atan2(dz, dx) * 0.4;
-    const chest = h.getNormalizedBoneNode('chest') || h.getNormalizedBoneNode('spine');
-    if (chest) {
-      tmpQ.setFromEuler(new THREE.Euler(0, yaw, roll));
-      chest.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 6));
-    }
+    applyVrmUpperBodyPose(h, target.posePoints, dt);
   }
 
+  if (target.hands) applyVrmHands(h, target.hands);
+
   vrm.update(dt);
+}
+
+function avatarLeanOffset() {
+  return tmpPos.set(
+    current.pos.x * 0.5,
+    current.pos.y * 0.35,
+    (0.4 - current.pos.z) * 0.9
+  );
+}
+
+const FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+const FINGER_BONES = {
+  thumb: ['ThumbMetacarpal', 'ThumbProximal', 'ThumbDistal'],
+  index: ['IndexProximal', 'IndexIntermediate', 'IndexDistal'],
+  middle: ['MiddleProximal', 'MiddleIntermediate', 'MiddleDistal'],
+  ring: ['RingProximal', 'RingIntermediate', 'RingDistal'],
+  pinky: ['LittleProximal', 'LittleIntermediate', 'LittleDistal'],
+};
+
+function applyVrmHands(humanoid, hands) {
+  for (const hand of hands) {
+    const side = hand.handedness === 'Left' ? 'left' : 'right';
+    const handBone = humanoid.getNormalizedBoneNode(`${side}Hand`);
+    if (handBone && hand.wrist) {
+      tmpQ.setFromEuler(new THREE.Euler(
+        Math.max(-0.45, Math.min(0.45, -(hand.wrist[1] || 0) * 0.4)),
+        Math.max(-0.45, Math.min(0.45, (hand.wrist[0] || 0) * 0.4)),
+        Math.max(-0.45, Math.min(0.45, (hand.wrist[2] || 0) * 0.3)),
+      ));
+      handBone.quaternion.slerp(tmpQ, 0.25);
+    }
+    for (let i = 0; i < FINGER_NAMES.length; i++) {
+      const finger = FINGER_NAMES[i];
+      const curl = smoothstep(clamp01(hand.curls?.[i] ?? 0));
+      const spread = Math.max(-0.6, Math.min(0.6, hand.spreads?.[i] ?? 0));
+      const bones = FINGER_BONES[finger];
+      for (let j = 0; j < bones.length; j++) {
+        const bone = humanoid.getNormalizedBoneNode(`${side}${bones[j]}`);
+        if (!bone) continue;
+        const curlScale = j === 0 ? 1.0 : j === 1 ? 0.85 : 0.7;
+        const spreadScale = j === 0 ? 0.35 : 0;
+        tmpQ.setFromEuler(new THREE.Euler(curl * curlScale, spread * spreadScale, 0));
+        bone.quaternion.slerp(tmpQ, 0.45);
+      }
+    }
+  }
+}
+
+function applyVrmUpperBodyPose(humanoid, p, dt) {
+  const dx = p[2 * 3 + 0] - p[1 * 3 + 0];
+  const dy = p[2 * 3 + 1] - p[1 * 3 + 1];
+  const dz = p[2 * 3 + 2] - p[1 * 3 + 2];
+  const roll = Math.atan2(dy, Math.abs(dx) || 1e-4) * 0.6;
+  const yaw = Math.atan2(dz, dx) * 0.4;
+  const chest = humanoid.getNormalizedBoneNode('chest') || humanoid.getNormalizedBoneNode('spine');
+  if (chest) {
+    tmpQ.setFromEuler(new THREE.Euler(0, yaw, roll));
+    chest.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 6));
+  }
+  if (!settings.armSolver) return;
+  applyArmChain(humanoid, 'left', posePoint(p, 1), posePoint(p, 3), posePoint(p, 5), dt);
+  applyArmChain(humanoid, 'right', posePoint(p, 2), posePoint(p, 4), posePoint(p, 6), dt);
+}
+
+function applyArmChain(humanoid, side, shoulder, elbow, wrist, dt) {
+  const upper = tmpA.copy(elbow).sub(shoulder);
+  const lower = tmpB.copy(wrist).sub(elbow);
+  const reach = tmpC.copy(wrist).sub(shoulder);
+  if (upper.length() < 0.04 || lower.length() < 0.04 || reach.length() < 0.08) return;
+  const upperArm = humanoid.getNormalizedBoneNode(`${side}UpperArm`);
+  const lowerArm = humanoid.getNormalizedBoneNode(`${side}LowerArm`);
+  if (upperArm) {
+    tmpQ.setFromUnitVectors(BONE_DOWN, upper.normalize());
+    upperArm.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 10));
+  }
+  if (lowerArm) {
+    tmpQ.setFromUnitVectors(BONE_DOWN, lower.normalize());
+    lowerArm.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 12));
+  }
+}
+
+function posePoint(points, index) {
+  return new THREE.Vector3(points[index * 3], points[index * 3 + 1], points[index * 3 + 2]);
+}
+
+function smoothstep(value) {
+  return value * value * (3 - 2 * value);
 }
 
 // Signed gaze from the four eye-look channel pairs. Positive x = look left
@@ -272,14 +601,27 @@ function gazeY(w) {
 
 // ---------------------------------------------------------------- receive
 
-const transport = new KagamiTransport();
+const transport = new MinamoTransport();
+const orderGate = new FrameOrderGate();
 let recvFrames = 0;
 let lastBytesIn = 0;
 let lastStats = performance.now();
+let replayTimer = null;
+let replayToken = 0;
 
-transport.addEventListener('frame', (ev) => {
-  const frame = decodeFrame(ev.detail);
-  if (!frame || !frame.face) return;
+function resetOrderGate() {
+  orderGate.lastSeq = null;
+  orderGate.accepted = 0;
+  orderGate.reordered = 0;
+  orderGate.lost = 0;
+  orderGate.lastAcceptedAt = null;
+  orderGate.sourceFps = 0;
+}
+
+function applyIncomingFrame(frame) {
+  if (!frame || !frame.face) return false;
+  const accepted = orderGate.accept(frame);
+  if (!accepted.ok) return false;
   const q = frame.face.quat;
   tmpQ.set(q[0], q[1], q[2], q[3]);
   if (!hasRef) {
@@ -287,13 +629,21 @@ transport.addEventListener('frame', (ev) => {
     hasRef = true;
   }
   target.quat.copy(refQuatInv).multiply(tmpQ); // rotation relative to Center
+  target.pos.set(frame.face.pos[0], frame.face.pos[1], frame.face.pos[2]);
   target.weights.set(frame.face.weights);
   target.posePoints = frame.pose ? frame.pose.points : null;
+  target.hands = frame.hands;
   target.fresh = true;
   recvFrames++;
+  return true;
+}
+
+transport.addEventListener('frame', (/** @type {any} */ ev) => {
+  const frame = decodeFrame(ev.detail);
+  applyIncomingFrame(frame);
 });
 
-transport.addEventListener('status', (ev) => {
+transport.addEventListener('status', (/** @type {any} */ ev) => {
   chip.textContent = ev.detail.detail || ev.detail.state;
   chip.dataset.state = ev.detail.state;
 });
@@ -303,23 +653,31 @@ transport.addEventListener('status', (ev) => {
 const clock = new THREE.Clock();
 function render() {
   const dt = Math.min(clock.getDelta(), 0.1);
-  const k = 1 - Math.exp(-dt * 24); // easing toward network targets
+  const k = 1 - Math.exp(-dt * orderGate.easingPerSecond()); // adapts to inbound source fps
 
   current.quat.slerp(target.quat, k);
+  current.pos.lerp(target.pos, k);
   for (let i = 0; i < NUM_CHANNELS; i++) {
     current.weights[i] += (target.weights[i] - current.weights[i]) * k;
   }
 
-  if (vrm) applyVrm(dt);
+  if (layeredAvatar.active) applyLayeredAvatar();
+  else if (vrm) applyVrm(dt);
   else applyBot(dt);
 
-  renderer.render(scene, camera);
+  if (settings.bloom && !settings.transparent) composer.render();
+  else renderer.render(scene, camera);
 
   const now = performance.now();
   if (now - lastStats > 500) {
     const dts = (now - lastStats) / 1000;
+    const transportStats = transport.getStats();
     $('statFps').textContent = (recvFrames / dts).toFixed(0);
     $('statRate').textContent = ((transport.bytesIn - lastBytesIn) / dts / 1024).toFixed(1);
+    $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
+    $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
+    $('statLoss').textContent = computeLossPercent(orderGate.lost, orderGate.accepted).toFixed(1);
+    $('statReorder').textContent = String(orderGate.reordered);
     recvFrames = 0;
     lastBytesIn = transport.bytesIn;
     lastStats = now;
@@ -330,23 +688,202 @@ render();
 
 // ---------------------------------------------------------------- ui
 
-const params = new URLSearchParams(location.search);
-if (params.get('room')) $('inpRoom').value = params.get('room');
+function applySettingsToUi() {
+  $('selMode').value = settings.mode;
+  $('inpRoom').value = settings.room;
+  $('inpToken').value = settings.token;
+  $('inpWtUrl').value = settings.wtUrl;
+  $('inpWtHash').value = settings.wtHash;
+  $('selScenePreset').value = settings.scenePreset;
+  $('inpBgColor').value = normalizeHexColor(settings.backgroundColor) || SCENE_PRESETS.soft.backgroundColor;
+  $('chkTransparent').checked = Boolean(settings.transparent);
+  $('chkArmSolver').checked = Boolean(settings.armSolver);
+  $('chkBloom').checked = Boolean(settings.bloom);
+  $('chkVignette').checked = Boolean(settings.vignette);
+  updateModeFields();
+  applySceneState();
+}
 
-$('selMode').addEventListener('change', () => {
+function readSettingsFromUi() {
+  settings.mode = $('selMode').value;
+  settings.room = $('inpRoom').value || 'demo';
+  settings.token = $('inpToken').value;
+  settings.wtUrl = $('inpWtUrl').value;
+  settings.wtHash = $('inpWtHash').value;
+  settings.scenePreset = $('selScenePreset').value;
+  settings.backgroundColor = normalizeHexColor($('inpBgColor').value) || SCENE_PRESETS.soft.backgroundColor;
+  settings.transparent = $('chkTransparent').checked;
+  settings.armSolver = $('chkArmSolver').checked;
+  settings.bloom = $('chkBloom').checked;
+  settings.vignette = $('chkVignette').checked;
+  return settings;
+}
+
+function persistSettings() {
+  saveJson(localStorage, VIEWER_STORAGE_KEY, readSettingsFromUi());
+}
+
+function updateModeFields() {
   const wt = $('selMode').value === 'wt';
   $('fieldWtUrl').hidden = !wt;
   $('fieldWtHash').hidden = !wt;
+}
+
+function applyBackground() {
+  settings.backgroundColor = normalizeHexColor(settings.backgroundColor) || SCENE_PRESETS.soft.backgroundColor;
+  renderer.setClearColor(0x000000, settings.transparent ? 0 : 1);
+  scene.background = settings.transparent ? null : new THREE.Color(settings.backgroundColor);
+  floor.visible = !settings.transparent;
+}
+
+function activeScenePreset() {
+  if (!SCENE_PRESETS[settings.scenePreset]) settings.scenePreset = 'soft';
+  return SCENE_PRESETS[settings.scenePreset];
+}
+
+function applyScenePresetDefaults(targetSettings, presetName) {
+  const preset = SCENE_PRESETS[presetName];
+  if (!preset) return;
+  targetSettings.scenePreset = presetName;
+  targetSettings.backgroundColor = preset.backgroundColor;
+  targetSettings.bloom = preset.bloom;
+  targetSettings.vignette = preset.vignette;
+}
+
+function applySceneState() {
+  const preset = activeScenePreset();
+  hemi.color.setHex(preset.hemi[0]);
+  hemi.groundColor.setHex(preset.hemi[1]);
+  hemi.intensity = preset.hemi[2];
+  key.color.setHex(preset.key[0]);
+  key.intensity = preset.key[1];
+  key.position.set(...preset.key[2]);
+  rim.color.setHex(preset.rim[0]);
+  rim.intensity = preset.rim[1];
+  rim.position.set(...preset.rim[2]);
+  floor.material.color.setHex(preset.floor);
+  bloomPass.enabled = Boolean(settings.bloom && !settings.transparent);
+  bloomPass.strength = settings.bloom ? 0.28 : 0;
+  renderer.toneMappingExposure = settings.bloom ? 1.05 : 1;
+  vignette.classList.toggle('enabled', Boolean(settings.vignette && !settings.transparent));
+  applyBackground();
+}
+
+function normalizeHexColor(value) {
+  const text = String(value || '').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(text)) return text.toLowerCase();
+  if (/^[0-9a-fA-F]{6}$/.test(text)) return `#${text.toLowerCase()}`;
+  return null;
+}
+
+function parseBoolParam(value) {
+  if (value === '1' || value === 'true') return true;
+  if (value === '0' || value === 'false') return false;
+  return null;
+}
+
+function serializeViewerSceneUrl() {
+  const url = new URL(location.href);
+  url.searchParams.set('mode', settings.mode);
+  url.searchParams.set('room', settings.room || 'demo');
+  if (settings.token) url.searchParams.set('token', settings.token);
+  else url.searchParams.delete('token');
+  if (settings.wtUrl) url.searchParams.set('wtUrl', settings.wtUrl);
+  if (settings.wtHash) url.searchParams.set('wtHash', settings.wtHash);
+  url.searchParams.set('scene', settings.scenePreset);
+  url.searchParams.set('bg', settings.transparent ? 'transparent' : 'solid');
+  url.searchParams.set('bgColor', settings.backgroundColor);
+  url.searchParams.set('bloom', settings.bloom ? '1' : '0');
+  url.searchParams.set('vignette', settings.vignette ? '1' : '0');
+  url.searchParams.set('camera', params.get('camera') || 'locked');
+  if (document.body.classList.contains('hud-hidden')) url.searchParams.set('hud', '0');
+  return url.toString();
+}
+
+async function copySceneUrl() {
+  const url = serializeViewerSceneUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    chip.textContent = 'scene URL copied';
+    chip.dataset.state = 'open';
+  } catch {
+    chip.textContent = url;
+    chip.dataset.state = 'open';
+  }
+}
+
+$('selMode').addEventListener('change', () => {
+  updateModeFields();
+  persistSettings();
+});
+$('inpRoom').addEventListener('input', persistSettings);
+$('inpToken').addEventListener('input', persistSettings);
+$('inpWtUrl').addEventListener('input', persistSettings);
+$('inpWtHash').addEventListener('input', persistSettings);
+$('selScenePreset').addEventListener('change', () => {
+  applyScenePresetDefaults(settings, $('selScenePreset').value);
+  applySettingsToUi();
+  persistSettings();
+});
+$('inpBgColor').addEventListener('input', () => {
+  settings.backgroundColor = normalizeHexColor($('inpBgColor').value) || settings.backgroundColor;
+  settings.transparent = false;
+  $('chkTransparent').checked = false;
+  applySceneState();
+  persistSettings();
+});
+$('chkTransparent').addEventListener('change', () => {
+  persistSettings();
+  applySceneState();
+});
+$('chkArmSolver').addEventListener('change', persistSettings);
+$('chkBloom').addEventListener('change', () => {
+  persistSettings();
+  applySceneState();
+});
+$('chkVignette').addEventListener('change', () => {
+  persistSettings();
+  applySceneState();
+});
+$('btnCopySceneUrl').addEventListener('click', copySceneUrl);
+$('txtExpressionMap').addEventListener('input', queueExpressionMapApply);
+$('btnApplyMapping').addEventListener('click', applyExpressionMapFromEditor);
+$('btnExportMapping').addEventListener('click', exportExpressionMap);
+$('btnImportMapping').addEventListener('click', () => $('fileExpressionMap').click());
+$('btnResetMapping').addEventListener('click', () => {
+  expressionMap = perfectSyncState.active
+    ? createPerfectSyncExpressionMap(availableExpressionNames)
+    : createDefaultVrmExpressionMap(availableExpressionNames);
+  refreshExpressionMapEditor();
+});
+$('fileExpressionMap').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    expressionMap = parseExpressionMap(await file.text());
+    refreshExpressionMapEditor();
+    chip.textContent = `mapping loaded: ${file.name}`;
+    chip.dataset.state = 'open';
+  } catch (err) {
+    chip.textContent = `mapping error: ${err.message}`;
+    chip.dataset.state = 'error';
+  } finally {
+    e.target.value = '';
+  }
 });
 
 $('btnConnect').addEventListener('click', async () => {
   try {
-    await transport.connect({
+    persistSettings();
+    stopReplay();
+    resetOrderGate();
+    await transport.connectAuto({
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'sub',
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
+      token: $('inpToken').value,
     });
   } catch (e) {
     chip.textContent = `connect error: ${e.message}`;
@@ -363,6 +900,14 @@ $('fileVrm').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (file) await loadVrmFile(file);
 });
+$('btnLoadLayered').addEventListener('click', () => $('fileLayeredAvatar').click());
+$('fileLayeredAvatar').addEventListener('change', async (e) => {
+  await loadLayeredFiles(e.target.files);
+  e.target.value = '';
+});
+$('rngLayerParallax').addEventListener('input', () => {
+  layeredAvatar.parallaxPx = Number($('rngLayerParallax').value) || 0;
+});
 
 async function loadVrmFile(file) {
   const url = URL.createObjectURL(file);
@@ -376,6 +921,82 @@ async function loadVrmFile(file) {
   }
 }
 
+function isMotionJsonlFile(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.jsonl') || name.endsWith('.ndjson');
+}
+
+function isKgmRecordingFile(file) {
+  return file.name.toLowerCase().endsWith('.kgm');
+}
+
+async function loadLayeredFiles(files) {
+  const list = Array.from(files || []);
+  const psd = list.find((file) => file.name.toLowerCase().endsWith('.psd'));
+  try {
+    if (psd) {
+      await loadLayeredPsdFile(psd);
+      return true;
+    }
+    return await loadLayeredPngFiles(list);
+  } catch (err) {
+    chip.textContent = `layered avatar error: ${err.message}`;
+    chip.dataset.state = 'error';
+    return false;
+  }
+}
+
+async function loadReplayFile(file) {
+  try {
+    const frames = isKgmRecordingFile(file)
+      ? parseKgmRecording(await file.arrayBuffer()).frames
+      : parseMotionJsonl(await file.text());
+    startReplay(frames, file.name);
+  } catch (err) {
+    chip.textContent = `replay error: ${err.message}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+function stopReplay() {
+  replayToken++;
+  if (replayTimer !== null) {
+    clearTimeout(replayTimer);
+    replayTimer = null;
+  }
+}
+
+function startReplay(frames, label) {
+  stopReplay();
+  transport.close().catch(() => {});
+  resetOrderGate();
+  hasRef = false;
+  recvFrames = 0;
+  lastBytesIn = transport.bytesIn;
+  lastStats = performance.now();
+  const token = replayToken;
+  let index = 0;
+  chip.textContent = `replay ${label}`;
+  chip.dataset.state = 'open';
+
+  const step = () => {
+    if (token !== replayToken) return;
+    const frame = frames[index];
+    applyIncomingFrame(frame);
+    index++;
+    if (index >= frames.length) {
+      replayTimer = null;
+      chip.textContent = `replay complete: ${label}`;
+      chip.dataset.state = 'idle';
+      return;
+    }
+    const dt = Number(frames[index].t) - Number(frame.t);
+    const delay = Number.isFinite(dt) && dt > 0 ? Math.min(dt, 250) : 1000 / 60;
+    replayTimer = setTimeout(step, delay);
+  };
+  step();
+}
+
 // drag and drop
 let dragDepth = 0;
 document.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
@@ -386,7 +1007,11 @@ document.addEventListener('drop', async (e) => {
   dragDepth = 0;
   document.body.classList.remove('dragging');
   const file = e.dataTransfer.files[0];
-  if (file && file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
+  if (!file) return;
+  const files = Array.from(e.dataTransfer.files);
+  if (file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
+  else if (files.some((entry) => entry.name.toLowerCase().endsWith('.psd')) || files.some((entry) => entry.name.toLowerCase().endsWith('.png'))) await loadLayeredFiles(files);
+  else if (isMotionJsonlFile(file) || isKgmRecordingFile(file)) await loadReplayFile(file);
 });
 
 // ?vrm=<url> loads a model directly (must be CORS-accessible)
@@ -398,6 +1023,48 @@ if (params.get('vrm')) {
 }
 
 // auto-connect local mode when opened from the tracker link
+applySettingsToUi();
+refreshExpressionMapEditor();
 if (params.get('room')) {
-  transport.connect({ mode: 'local', room: params.get('room'), role: 'sub' }).catch(() => {});
+  transport.connectAuto({
+    mode: settings.mode,
+    room: settings.room,
+    role: 'sub',
+    wtUrl: settings.wtUrl,
+    certHashHex: settings.wtHash,
+    token: settings.token,
+  }).catch(() => {});
+}
+
+function applyQuerySettings(targetSettings, query) {
+  if (query.get('preset') === 'obs') {
+    targetSettings.transparent = true;
+  }
+  if (SCENE_PRESETS[query.get('scene')]) {
+    applyScenePresetDefaults(targetSettings, query.get('scene'));
+  }
+  const mode = query.get('mode');
+  if (['local', 'ws', 'wt'].includes(mode)) targetSettings.mode = mode;
+  if (query.get('room')) targetSettings.room = query.get('room');
+  if (query.get('token')) targetSettings.token = query.get('token');
+  if (query.get('wtUrl')) targetSettings.wtUrl = query.get('wtUrl');
+  if (query.get('wtHash')) targetSettings.wtHash = query.get('wtHash');
+  if (query.get('arms') === '0') targetSettings.armSolver = false;
+  if (query.get('arms') === '1') targetSettings.armSolver = true;
+  if (query.get('bg') === 'transparent' || query.get('transparent') === '1') targetSettings.transparent = true;
+  if (query.get('bg') === 'solid' || query.get('transparent') === '0') targetSettings.transparent = false;
+  const bgColor = normalizeHexColor(query.get('bgColor')) || normalizeHexColor(query.get('bg'));
+  if (bgColor) {
+    targetSettings.backgroundColor = bgColor;
+    targetSettings.transparent = false;
+  }
+  const bloom = parseBoolParam(query.get('bloom'));
+  if (bloom !== null) targetSettings.bloom = bloom;
+  const vignetteParam = parseBoolParam(query.get('vignette'));
+  if (vignetteParam !== null) targetSettings.vignette = vignetteParam;
+}
+
+function applyLockedCamera() {
+  camera.position.set(0, 1.42, 1.4);
+  camera.lookAt(0, 1.38, 0);
 }

@@ -13,6 +13,14 @@ Mapping targets:
 - expression presets
 - hand bones and finger curls
 
+Preset profiles use the `minamo.avatar-preset.v1` schema documented in
+[../product/avatar-preset-profile.schema.json](../product/avatar-preset-profile.schema.json).
+Runtime target names are intentionally explicit:
+
+- `expression:aa`, `expression:blinkLeft`, `expression:happy`
+- `lookAt:yaw`, `lookAt:pitch`
+- `finger:Right:index:proximal`, `finger:Left:thumb:spread`
+
 ## 2. Live2D
 
 Use Live2D for 2D character streaming.
@@ -30,7 +38,45 @@ Mapping targets:
 
 Use Inochi2D-compatible parameters for open 2D avatar pipelines. Keep a separate mapper because parameter naming and rig semantics differ from Live2D.
 
-## 4. OBS
+## 4. Layered PNG / PSD
+
+Layered PNG/PSD mode is the zero-rig fallback. Drop a PSD or a PNG set into the
+viewer using the naming conventions in [../product/layered-avatar.md](../product/layered-avatar.md).
+Blink weights switch `eyesOpen`/`eyesClosed`, jaw and rounded-mouth weights
+switch `mouthClosed`/`mouthOpen`, and head pose drives per-layer parallax depth.
+
+## 5. Rig limits and custom mappings
+
+Every preset can clamp unsafe rig movement per target and can map one generated
+target into a custom target expected by a creator rig.
+
+```json
+{
+  "schema": "minamo.avatar-preset.v1",
+  "name": "streaming rig",
+  "format": "vrm",
+  "rigLimits": {
+    "lookAt:yaw": { "min": -0.25, "max": 0.25 },
+    "ParamCustomSmile": { "min": 0, "max": 0.5 }
+  },
+  "mappings": [
+    {
+      "source": "expression:happy",
+      "target": "ParamCustomSmile",
+      "weight": 0.8,
+      "curve": "linear"
+    }
+  ]
+}
+```
+
+Expression retargeting uses the shareable
+[`minamo.expression-map.v1`](../product/expression-mapping.schema.json) format.
+Perfect Sync VRMs are auto-detected when at least 45 ARKit expression names are
+present; the viewer then drives the matching expressions 1:1. Other rigs use
+weighted source-channel mappings that can be edited live and exported as JSON.
+
+## 6. OBS
 
 OBS path:
 
@@ -39,7 +85,7 @@ OBS path:
 - Spout/NDI future
 - hotkeys for calibration and reset
 
-## 5. AI character engines
+## 7. AI character engines
 
 AIRI/persona-engine-like projects can consume:
 

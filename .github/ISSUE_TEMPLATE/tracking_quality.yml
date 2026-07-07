@@ -1,0 +1,87 @@
+name: Tracking quality report
+description: Report jitter, lost tracking, bad calibration, or unstable avatar motion
+labels: ["type/bug", "area/quality"]
+body:
+  - type: dropdown
+    id: tracking_area
+    attributes:
+      label: Tracking area
+      options:
+        - face / eyes / mouth
+        - hands / fingers
+        - upper body
+        - drums
+        - avatar mapping
+        - transport / viewer
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 126, Safari 18, Firefox 128
+    validations:
+      required: true
+  - type: input
+    id: camera
+    attributes:
+      label: Camera
+      placeholder: Built-in webcam, USB model, phone camera, resolution/fps
+    validations:
+      required: true
+  - type: input
+    id: fps
+    attributes:
+      label: Observed FPS
+      placeholder: 30 fps tracker, 60 fps viewer, or unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: lighting
+    attributes:
+      label: Lighting
+      options:
+        - bright front light
+        - normal room light
+        - low light
+        - backlit
+        - mixed / flickering light
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Transport mode
+      options:
+        - local
+        - ws
+        - wt
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: symptoms
+    attributes:
+      label: Symptoms
+      description: Describe jitter, flicker, left/right swap, broken fingers, stale motion, or false hits.
+    validations:
+      required: true
+  - type: textarea
+    id: capture_checklist
+    attributes:
+      label: Capture checklist
+      value: |
+        - [ ] Camera permission was granted
+        - [ ] Face and hands were inside the frame
+        - [ ] Lighting conditions are listed above
+        - [ ] Tracker FPS or browser performance warning is listed above
+        - [ ] No private raw camera recording is attached
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: Start tracker, connect viewer, enable mirror mode, move left hand quickly...
+    validations:
+      required: true

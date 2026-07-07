@@ -7,7 +7,7 @@ Status: design. Backlog: KGM-045, KGM-046.
 Visual mouth tracking fails exactly when streamers need it: low light, face
 partially off-frame, camera below 30 fps. Audio always knows when you are
 talking. VSeeFace-class tools treat audio lipsync as a fallback switch;
-KAGAMI should fuse both continuously.
+Minamo should fuse both continuously.
 
 ## Goals
 
@@ -48,6 +48,23 @@ mouthStretch*) so the protocol is unchanged.
 
 Audio never leaves the device; only the derived mouth channels do. State
 this explicitly in the UI the first time the mic is enabled.
+
+## Voice accents
+
+Voice accents are default off and share the same local-only microphone
+path. When enabled, VAD energy adds only bounded brow micro-raises and a
+sub-degree head pitch accent before KGM encoding. A silent VAD level returns identity weights and zero head-nod amplitude, so silence does not create
+extra motion.
+
+## Audio lipsync implementation
+
+Audio lipsync is an opt-in tracker feature that reuses the local microphone
+path and no cloud ASR. An AudioWorklet posts viseme frames every 20 ms from
+RMS plus low/mid/high energy bands. The tracker fuses those frames into the
+existing ARKit mouth channels before KGM encoding, with audio driving
+jawOpen timing and visual confidence deciding how much audio shape detail
+fills mouthFunnel, mouthPucker, and mouthStretch*. Frames older than the
+80 ms target are ignored instead of being replayed late.
 
 ## Risks
 

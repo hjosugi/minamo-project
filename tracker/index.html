@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>KAGAMI Tracker</title>
-  <link rel="stylesheet" href="../assets/kagami.css" />
+  <title>Minamo Tracker</title>
+  <link rel="stylesheet" href="../assets/minamo.css" />
 </head>
 <body>
   <header class="topbar">
-    <span class="wordmark">KAGAM<span class="mirror">I</span></span>
+    <span class="wordmark">Minamo</span>
     <span class="page-name">tracker</span>
     <span class="spacer"></span>
     <span class="status-chip" id="statusChip" data-state="idle">idle</span>
@@ -25,20 +25,168 @@
       <div class="controls">
         <button id="btnStart" class="primary">Start tracking</button>
         <button id="btnStop" disabled>Stop</button>
+        <button id="btnResetTracking" title="Reset tracking filters (R)">Reset tracking</button>
         <label class="check"><input type="checkbox" id="chkMirror" checked />Mirror view</label>
         <label class="check"><input type="checkbox" id="chkPose" />Upper-body pose (experimental)</label>
+        <label class="check"><input type="checkbox" id="chkHands" />Hands (experimental)</label>
+        <label class="check"><input type="checkbox" id="chkVoiceAccents" />Voice accents</label>
+        <label class="check"><input type="checkbox" id="chkAudioLipsync" />Audio lipsync</label>
+        <label class="check"><input type="checkbox" id="chkFaceLock" />Face lock</label>
+        <label class="check"><input type="checkbox" id="chkPrivacy" checked />Local-only privacy</label>
+      </div>
+      <div class="form-grid compact">
+        <div class="field">
+          <span>camera</span>
+          <select id="selCamera">
+            <option value="">default camera</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>resolution</span>
+          <select id="selResolution">
+            <option value="480p">480p</option>
+            <option value="720p" selected>720p</option>
+            <option value="1080p">1080p</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>target fps</span>
+          <select id="selFps">
+            <option value="30">30</option>
+            <option value="60" selected>60</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>quality</span>
+          <output id="qualityChip" class="mini-chip" data-state="idle">waiting</output>
+        </div>
+        <div class="field">
+          <span>lean range</span>
+          <input type="range" id="rngHeadLean" min="0" max="20" step="0.5" value="8" />
+          <output id="outHeadLean">8 cm</output>
+        </div>
+        <div class="field">
+          <span>body mode</span>
+          <select id="selBodyMode">
+            <option value="seated" selected>seated</option>
+            <option value="standing">standing</option>
+          </select>
+        </div>
       </div>
       <div class="stats">
         <span>fps <b id="statFps">--</b></span>
         <span>inference <b id="statInfer">--</b> ms</span>
+        <span>infer p50 <b id="statInferP50">--</b> ms</span>
+        <span>infer p95 <b id="statInferP95">--</b> ms</span>
         <span>packet <b id="statPacket">--</b> B</span>
         <span>out <b id="statRate">--</b> KB/s</span>
+        <span>filter lag <b id="statFilterLag">--</b> ms</span>
+        <span>jitter <b id="statJitter">--</b> ms</span>
+        <span>camera <b id="statCamera">--</b></span>
+        <span>hands <b id="statHands">0</b></span>
+        <span>voice <b id="statVoiceAccent">off</b></span>
+        <span>lipsync <b id="statAudioLipsync">off</b></span>
+        <span>dropped <b id="statDropped">0</b></span>
+        <span>transport <b id="statTransportMode">local</b></span>
+        <span>latency <b id="statLatency">--</b> ms</span>
+        <span>net drop <b id="statTransportDrop">0</b></span>
+      </div>
+      <canvas id="handDebug" class="hand-debug-canvas" aria-label="Hand finger debug graph"></canvas>
+      <ul class="warning-list" id="warningList"></ul>
+      <div class="signal-checklist" aria-label="Camera exposure and lighting checklist">
+        <div class="check-title">lighting checklist</div>
+        <ul>
+          <li id="checkExposure" data-state="idle"><b>wait</b><span>face exposure</span><small>start camera</small></li>
+          <li id="checkFps" data-state="idle"><b>wait</b><span>steady camera fps</span><small>start camera</small></li>
+          <li id="checkBlur" data-state="idle"><b>wait</b><span>low motion blur</span><small>start camera</small></li>
+          <li id="checkConfidence" data-state="idle"><b>wait</b><span>stable landmark confidence</span><small>start camera</small></li>
+        </ul>
       </div>
     </section>
 
     <section class="panel">
       <h2><span class="dot face"></span>Blendshape mixer / 52ch</h2>
       <canvas id="meters" class="meters-canvas"></canvas>
+      <div class="form-grid compact">
+        <div class="field">
+          <span>selected channel</span>
+          <output id="outChannel">jawOpen</output>
+        </div>
+        <div class="field">
+          <span>gain</span>
+          <input type="range" id="rngGain" min="0" max="2" step="0.01" value="1" />
+        </div>
+        <div class="field">
+          <span>deadzone</span>
+          <input type="range" id="rngDeadzone" min="0" max="0.2" step="0.005" value="0" />
+        </div>
+        <div class="field">
+          <span>signal group</span>
+          <select id="selSmoothingGroup">
+            <option value="face">face weights</option>
+            <option value="headRotation">head rotation</option>
+            <option value="headPosition">head position</option>
+            <option value="pose">upper-body pose</option>
+            <option value="hands">hands</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>preset</span>
+          <select id="selFilterPreset">
+            <option value="responsive">responsive</option>
+            <option value="balanced" selected>balanced</option>
+            <option value="smooth">smooth</option>
+            <option value="custom">custom</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>min cutoff</span>
+          <input type="range" id="rngMinCutoff" min="0.2" max="4" step="0.05" value="1.6" />
+        </div>
+        <div class="field">
+          <span>beta</span>
+          <input type="range" id="rngBeta" min="0" max="1.5" step="0.01" value="0.4" />
+        </div>
+        <div class="field">
+          <span>effective</span>
+          <output id="outSmoothingEffective">face 1.60 / 0.40</output>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btnMuteChannel">Mute channel</button>
+        <button id="btnStartCalibration">Start guided calibration</button>
+        <button id="btnStartGazeCalibration">Start gaze calibration</button>
+        <button id="btnStartHandCalibration">Start hand calibration</button>
+        <button id="btnCalibrateNeutral">Capture neutral</button>
+        <button id="btnExportProfile">Export profile</button>
+        <button id="btnImportProfile">Import profile</button>
+        <button id="btnResetSettings">Reset settings</button>
+        <input type="file" id="fileProfile" accept="application/json,.json" hidden />
+      </div>
+      <div id="calibrationGuide" class="calibration-guide" hidden>
+        <div class="calibration-guide-head">
+          <strong id="calibrationStep">Neutral hold</strong>
+          <span id="calibrationTime">30.0s</span>
+        </div>
+        <progress id="calibrationProgress" max="1" value="0"></progress>
+        <output id="calibrationResult">waiting</output>
+      </div>
+      <div id="gazeCalibrationGuide" class="calibration-guide" hidden>
+        <div class="calibration-guide-head">
+          <strong id="gazeCalibrationStep">Look center</strong>
+          <span id="gazeCalibrationTime">10.0s</span>
+        </div>
+        <progress id="gazeCalibrationProgress" max="1" value="0"></progress>
+        <output id="gazeCalibrationResult">waiting</output>
+      </div>
+      <div id="handCalibrationGuide" class="calibration-guide" hidden>
+        <div class="calibration-guide-head">
+          <strong id="handCalibrationStep">Open palm</strong>
+          <span id="handCalibrationTime">10.0s</span>
+        </div>
+        <progress id="handCalibrationProgress" max="1" value="0"></progress>
+        <output id="handCalibrationResult">waiting</output>
+      </div>
     </section>
 
     <section class="panel" style="grid-column: 1 / -1;">
@@ -56,6 +204,10 @@
           <span>room</span>
           <input type="text" id="inpRoom" value="demo" />
         </div>
+        <div class="field">
+          <span>room token</span>
+          <input type="password" id="inpToken" autocomplete="off" />
+        </div>
         <div class="field" id="fieldWtUrl" hidden>
           <span>wt url</span>
           <input type="text" id="inpWtUrl" value="https://localhost:4433" />
@@ -68,6 +220,9 @@
       <div class="controls">
         <button id="btnConnect">Connect</button>
         <button id="btnDisconnect" disabled>Disconnect</button>
+        <label class="check"><input type="checkbox" id="chkRecord" />Record .kgm locally</label>
+        <button id="btnDownloadRecording" disabled>Download .kgm</button>
+        <button id="btnDownloadJsonl" disabled>Download JSONL</button>
         <a id="lnkViewer" href="../viewer/?room=demo" target="_blank">Open viewer in a new tab →</a>
       </div>
       <p class="note">In local mode no server is needed. Just open the viewer from the link above in the same browser and it works.</p>

@@ -1,4 +1,4 @@
-// KAGAMI relay (Node).
+// Minamo relay (Node).
 // One process does two jobs:
 //   1. serves the repo as a static site (tracker / viewer pages)
 //   2. relays KGM1 binary frames between rooms over WebSocket
@@ -9,13 +9,19 @@
 // Then open http://localhost:8787
 
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = normalize(join(fileURLToPath(import.meta.url), '..', '..')); // repo root
+const ROOM_TOKEN = process.env.MINAMO_RELAY_TOKEN || process.env.ROOM_TOKEN || '';
+const ALLOWED_ORIGINS = (process.env.MINAMO_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -55,27 +61,38 @@ wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
   const room = url.searchParams.get('room') || 'demo';
   const role = url.searchParams.get('role') || 'sub';
-  ws.kagami = { room, role };
+  const token = url.searchParams.get('token') || '';
+
+  if (!originAllowed(req.headers.origin)) {
+    ws.close(4403, 'origin not allowed');
+    return;
+  }
+  if (ROOM_TOKEN && !constantTimeEqual(token, ROOM_TOKEN)) {
+    ws.close(4401, 'invalid room token');
+    return;
+  }
+  if (role !== 'pub' && role !== 'sub') {
+    ws.close(1008, 'role must be pub or sub');
+    return;
+  }
+
+  ws.minamo = { room, role };
 
   if (!rooms.has(room)) rooms.set(room, new Set());
   rooms.get(room).add(ws);
   console.log(`[ws] join room=${room} role=${role} (${rooms.get(room).size} in room)`);
 
   ws.on('message', (data, isBinary) => {
-    if (!isBinary) return; // KGM1 frames are always binary
+    if (!isBinary && !isKgm1Json(data)) return;
     for (const peer of rooms.get(room) ?? []) {
       if (peer !== ws && peer.readyState === peer.OPEN) {
-        peer.send(data, { binary: true });
+        peer.send(data, { binary: isBinary });
       }
     }
   });
 
   ws.on('close', () => {
-    const set = rooms.get(room);
-    if (set) {
-      set.delete(ws);
-      if (set.size === 0) rooms.delete(room);
-    }
+    leaveRoom(rooms, room, ws);
     console.log(`[ws] leave room=${room} role=${role}`);
   });
 });
@@ -88,14 +105,63 @@ const beat = setInterval(() => {
     ws.ping();
   }
 }, 30_000);
+beat.unref?.();
 wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 });
 wss.on('close', () => clearInterval(beat));
 
-http.listen(PORT, () => {
-  console.log(`KAGAMI relay-node`);
-  console.log(`  site : http://localhost:${PORT}`);
-  console.log(`  ws   : ws://localhost:${PORT}/ws?room=<room>&role=<pub|sub>`);
-});
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  http.listen(PORT, () => {
+    console.log(`Minamo relay-node`);
+    console.log(`  site : http://localhost:${PORT}`);
+    console.log(`  ws   : ws://localhost:${PORT}/ws?room=<room>&role=<pub|sub>`);
+    if (ROOM_TOKEN) console.log(`  auth : MINAMO_RELAY_TOKEN required`);
+    if (ALLOWED_ORIGINS.length) console.log(`  origins: ${ALLOWED_ORIGINS.join(', ')}`);
+  });
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+}
+
+export function originAllowed(origin, allowedOrigins = ALLOWED_ORIGINS) {
+  if (!allowedOrigins.length || !origin) return true;
+  return allowedOrigins.includes(origin);
+}
+
+export function constantTimeEqual(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  const max = Math.max(left.length, right.length, 1);
+  const leftPadded = Buffer.alloc(max);
+  const rightPadded = Buffer.alloc(max);
+  left.copy(leftPadded);
+  right.copy(rightPadded);
+  return timingSafeEqual(leftPadded, rightPadded) && left.length === right.length;
+}
+
+export function isKgm1Json(data) {
+  try {
+    const msg = JSON.parse(String(data));
+    return msg && msg.type === 'kgm1' && typeof msg.payload === 'string';
+  } catch {
+    return false;
+  }
+}
+
+export function leaveRoom(roomMap, room, ws) {
+  const set = roomMap.get(room);
+  if (!set) return 0;
+  set.delete(ws);
+  if (set.size === 0) roomMap.delete(room);
+  return roomMap.get(room)?.size ?? 0;
+}
+
+function shutdown() {
+  clearInterval(beat);
+  for (const ws of wss.clients) ws.close(1001, 'server shutdown');
+  wss.close(() => {
+    http.close(() => process.exit(0));
+  });
+  setTimeout(() => process.exit(0), 2000).unref();
+}

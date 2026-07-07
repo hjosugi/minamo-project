@@ -7,7 +7,7 @@ Status: design. Backlog: KGM-038.
 The 2D VTuber ecosystem is dominated by a proprietary format (Live2D).
 Inochi2D is the open alternative (puppet formats .inp/.inx), and inox2d is
 its Rust renderer. Browsers are the one place it does not comfortably run
-yet; KAGAMI wants a first-class open 2D path.
+yet; Minamo wants a first-class open 2D path.
 
 ## Goals
 

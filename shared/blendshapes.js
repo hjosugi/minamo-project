@@ -1,4 +1,4 @@
-// KAGAMI canonical blendshape channel list.
+// Minamo canonical blendshape channel list.
 // The wire protocol (KGM1) always carries these 52 channels in this exact order.
 // The list follows the ARKit 52 naming. MediaPipe Face Landmarker outputs the
 // same names (it adds "_neutral" and omits "tongueOut"; both cases are handled

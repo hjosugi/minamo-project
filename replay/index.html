@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minamo Replay</title>
+  <link rel="stylesheet" href="../assets/minamo.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="wordmark">Minamo</span>
+    <span class="page-name">replay</span>
+    <span class="spacer"></span>
+    <span class="status-chip" id="statusChip" data-state="idle">idle</span>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <h2><span class="dot pose"></span>KGM motion recording</h2>
+      <div class="form-grid">
+        <div class="field">
+          <span>room</span>
+          <input id="inpRoom" type="text" value="demo" />
+        </div>
+        <div class="field">
+          <span>room token</span>
+          <input id="inpToken" type="password" autocomplete="off" />
+        </div>
+        <div class="field wide">
+          <span>recording</span>
+          <input id="fileReplay" type="file" accept=".kgm,.jsonl,.ndjson,application/x-ndjson,text/plain" />
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btnPlay" class="primary" disabled>Play</button>
+        <button id="btnPause" disabled>Pause</button>
+        <button id="btnReset" disabled>Reset</button>
+        <button id="btnExportVrma" disabled>Export .vrma</button>
+        <a id="lnkViewer" href="../viewer/?room=demo" target="_blank">Open viewer</a>
+      </div>
+      <div class="form-grid compact">
+        <div class="field">
+          <span>trim start</span>
+          <input id="inpTrimStart" type="number" min="0" step="0.01" value="0" />
+        </div>
+        <div class="field">
+          <span>trim end</span>
+          <input id="inpTrimEnd" type="number" min="0" step="0.01" value="0" />
+        </div>
+        <label class="check"><input type="checkbox" id="chkVrmaLoop" />Loop clip</label>
+      </div>
+      <div class="stats">
+        <span>frames <b id="statFrames">0</b></span>
+        <span>cursor <b id="statCursor">0</b></span>
+        <span>duration <b id="statDuration">0.0</b>s</span>
+      </div>
+      <div class="validation-panel" id="replayValidation" data-state="idle" aria-live="polite">
+        <strong id="replayValidationSummary">No recording loaded.</strong>
+        <ul class="error-list" id="replayErrors"></ul>
+      </div>
+      <p class="note">Replays tracker .kgm or JSONL locally through BroadcastChannel. No upload is performed.</p>
+    </section>
+  </main>
+
+  <script type="module" src="./replay.js"></script>
+</body>
+</html>

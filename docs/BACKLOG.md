@@ -1,4 +1,4 @@
-# KAGAMI Backlog
+# Minamo Backlog
 
 Issue-ready backlog. Every entry follows the same fixed format so it can be
 parsed and registered to GitHub Issues automatically. See
@@ -161,9 +161,9 @@ relay is started with a secret, publishers must present `?token=` (ws) or a
 path segment (wt). Subscribers optionally too. Constant-time comparison.
 
 Acceptance criteria:
-- [ ] relay-node and relay-rs both support tokens
-- [ ] Tracker and viewer UIs have a token field
-- [ ] Wrong token closes the connection with a clear code
+- [x] relay-node and relay-rs both support tokens
+- [x] Tracker and viewer UIs have a token field
+- [x] Wrong token closes the connection with a clear code
 
 ### [KGM-009] relay-rs build and integration test in CI
 - Labels: area/infra, type/chore
@@ -178,9 +178,9 @@ WebTransport client (wtransport client feature) doing pub -> sub echo of a
 KGM1 frame through a room.
 
 Acceptance criteria:
-- [ ] cargo build + clippy + fmt in CI
-- [ ] pub/sub integration test passes in CI
-- [ ] README badge reflects build status
+- [x] cargo build + clippy + fmt in CI
+- [x] pub/sub integration test passes in CI
+- [x] README badge reflects build status
 
 ### [KGM-010] relay-rs and relay-node: room garbage collection
 - Labels: area/transport, type/bug
@@ -243,9 +243,9 @@ expressions) that computes per-channel offset and gain, applied before
 filtering. Store per profile.
 
 Acceptance criteria:
-- [ ] 30-second guided flow produces offset/gain per channel
-- [ ] Calibrated neutral shows all channels < 0.05
-- [ ] Profiles can be saved, loaded, exported as JSON
+- [x] 30-second guided flow produces offset/gain per channel
+- [x] Calibrated neutral shows all channels < 0.05
+- [x] Profiles can be saved, loaded, exported as JSON
 
 ### [KGM-014] Interactive mixer: per-channel gain, deadzone, and mute
 - Labels: area/tracking, type/feature
@@ -259,9 +259,9 @@ right-click or long-press to mute, small deadzone slider. This is the
 manual complement to KGM-013 and doubles as the debugging surface.
 
 Acceptance criteria:
-- [ ] Gain 0-2x and deadzone 0-0.2 per channel
-- [ ] Settings persist and export with the calibration profile
-- [ ] Muted channels render dimmed in the meters
+- [x] Gain 0-2x and deadzone 0-0.2 per channel
+- [x] Settings persist and export with the calibration profile
+- [x] Muted channels render dimmed in the meters
 
 ### [KGM-015] Low-light robustness and signal quality indicator
 - Labels: area/tracking, type/feature
@@ -275,8 +275,8 @@ signal quality chip. Below a threshold, suggest fixes (light, camera). Try
 `exposureMode`/`brightness` constraints where supported.
 
 Acceptance criteria:
-- [ ] Quality chip: good / degraded / poor with reasons
-- [ ] No false "poor" in normal indoor lighting
+- [x] Quality chip: good / degraded / poor with reasons
+- [x] No false "poor" in normal indoor lighting
 
 ### [KGM-016] True gaze from iris landmarks
 - Labels: area/tracking, type/feature
@@ -291,9 +291,9 @@ vector from iris center vs eye contour, calibrate with a 5-point look
 target flow, and feed the viewer lookAt with it (new optional KGM2 field).
 
 Acceptance criteria:
-- [ ] Gaze tracks a moving on-screen target within ~5 deg after calibration
-- [ ] Blink does not spike gaze
-- [ ] Falls back to blendshape gaze when iris is unavailable
+- [x] Gaze tracks a moving on-screen target within ~5 deg after calibration
+- [x] Blink does not spike gaze
+- [x] Falls back to blendshape gaze when iris is unavailable
 
 ### [KGM-017] Head distance mapping and position stabilization
 - Labels: area/tracking, type/feature
@@ -307,8 +307,8 @@ range, and clamp position drift with a slow re-centering term so the avatar
 stays framed during long streams.
 
 Acceptance criteria:
-- [ ] Lean range configurable 0-20 cm, default subtle
-- [ ] One-hour session shows no visible drift
+- [x] Lean range configurable 0-20 cm, default subtle
+- [x] One-hour session shows no visible drift
 
 ### [KGM-018] Blink hysteresis and wink disambiguation
 - Labels: area/tracking, type/feature
@@ -323,9 +323,9 @@ wink classifier (one eye clearly lower than the other for N frames) that
 snaps the open eye to open.
 
 Acceptance criteria:
-- [ ] Deliberate winks register as winks >90% in a 50-trial manual test
-- [ ] Normal blinks stay symmetric
-- [ ] No flicker at half-closed eye positions
+- [x] Deliberate winks register as winks >90% in a 50-trial manual test
+- [x] Normal blinks stay symmetric
+- [x] No flicker at half-closed eye positions
 
 ### [KGM-019] Filter presets and live tuning panel
 - Labels: area/tracking, type/feature
@@ -339,8 +339,8 @@ Expose One Euro (minCutoff, beta) as presets: "responsive", "balanced",
 readout so users can see the tradeoff.
 
 Acceptance criteria:
-- [ ] Three presets switchable while tracking
-- [ ] Advanced sliders apply without restart
+- [x] Three presets switchable while tracking
+- [x] Advanced sliders apply without restart
 
 ### [KGM-020] Tracking-loss fade and re-acquisition easing
 - Labels: area/tracking, type/bug
@@ -354,8 +354,8 @@ on re-acquire the avatar snaps. Fade weights toward neutral over ~400 ms on
 loss, reset filters on re-acquire, and ease back over ~250 ms.
 
 Acceptance criteria:
-- [ ] Covering the camera relaxes the avatar to neutral smoothly
-- [ ] Re-entry produces no snap
+- [x] Covering the camera relaxes the avatar to neutral smoothly
+- [x] Re-entry produces no snap
 
 ### [KGM-021] Multi-face selection policy
 - Labels: area/tracking, type/bug
@@ -369,8 +369,8 @@ whose bounding area overlaps the previously tracked one (sticky), fall back
 to largest. Add an optional face-lock rectangle.
 
 Acceptance criteria:
-- [ ] A second person passing behind does not steal tracking
-- [ ] Lock region persists across sessions
+- [x] A second person passing behind does not steal tracking
+- [x] Lock region persists across sessions
 
 ## M2 Body and hands
 
@@ -387,9 +387,9 @@ solver, the encoding (16 bytes/hand target), and scheduling (hands at 30
 fps interleaved with face at 60).
 
 Acceptance criteria:
-- [ ] Open/close/point/peace read correctly on VRM fingers
-- [ ] Face fps does not drop below 50 with hands enabled on a mid GPU
-- [ ] Hands absent -> block omitted, zero cost
+- [x] Open/close/point/peace read correctly on VRM fingers
+- [x] Face fps does not drop below 50 with hands enabled on a mid GPU
+- [x] Hands absent -> block omitted, zero cost
 
 ### [KGM-023] Full-body backend via ONNX Runtime Web (YOLO11-pose / RTMPose)
 - Labels: area/body, type/research
@@ -422,9 +422,9 @@ joint limits, hemisphere disambiguation, and per-bone smoothing. Feed VRM
 normalized bones.
 
 Acceptance criteria:
-- [ ] Waving, crossing arms, and resting pose look plausible on VRM
-- [ ] No elbow pop when the wrist passes near the shoulder
-- [ ] Toggle falls back cleanly to sway-only mode
+- [x] Waving, crossing arms, and resting pose look plausible on VRM
+- [x] No elbow pop when the wrist passes near the shoulder
+- [x] Toggle falls back cleanly to sway-only mode
 
 ### [KGM-025] Seated/standing modes and hip anchoring
 - Labels: area/body, type/feature
@@ -438,8 +438,8 @@ hips, and derives lean from the shoulder midpoint. Standing mode maps hip
 translation within a small range.
 
 Acceptance criteria:
-- [ ] Seated mode shows no leg jitter when legs are off-frame
-- [ ] Mode persists per profile
+- [x] Seated mode shows no leg jitter when legs are off-frame
+- [x] Mode persists per profile
 
 ### [KGM-026] Finger curl to VRM finger bones mapping
 - Labels: area/body, type/feature
@@ -453,8 +453,8 @@ finger bones per hand with natural coupling curves (proximal leads,
 distal follows).
 
 Acceptance criteria:
-- [ ] Curl 0/0.5/1 produce natural open/half/fist
-- [ ] Works on VRM0 and VRM1 models
+- [x] Curl 0/0.5/1 produce natural open/half/fist
+- [x] Works on VRM0 and VRM1 models
 
 ## M3 Protocol v2
 
@@ -470,8 +470,8 @@ instead of 8, halving rotation cost ahead of hand/body blocks that carry
 many quaternions.
 
 Acceptance criteria:
-- [ ] Max angular error < 0.5 deg over 1M random rotations
-- [ ] JS encode+decode < 1 us per quat
+- [x] Max angular error < 0.5 deg over 1M random rotations
+- [x] JS encode+decode < 1 us per quat
 
 ### [KGM-028] KGM2: delta frames with periodic keyframes
 - Labels: area/protocol, type/feature
@@ -486,9 +486,9 @@ size reduction on typical face streams. Must stay stateless enough that
 loss only degrades until the next keyframe.
 
 Acceptance criteria:
-- [ ] Average frame size reduced >= 35% on a recorded session corpus
-- [ ] 10% random loss recovers within one keyframe interval
-- [ ] Decoder rejects deltas whose base keyframe was never seen
+- [x] Average frame size reduced >= 35% on a recorded session corpus
+- [x] 10% random loss recovers within one keyframe interval
+- [x] Decoder rejects deltas whose base keyframe was never seen
 
 ### [KGM-029] KGM2: sparse channel mask
 - Labels: area/protocol, type/feature
@@ -501,8 +501,8 @@ A 52-bit (7-byte) presence mask so encoders can send only channels above a
 change threshold. Combines with deltas; useful for low-power mode.
 
 Acceptance criteria:
-- [ ] Masked frames decode with unchanged channels held
-- [ ] Idle-face frames drop below 30 bytes
+- [x] Masked frames decode with unchanged channels held
+- [x] Idle-face frames drop below 30 bytes
 
 ### [KGM-030] Sender clock sync for multi-source scenes
 - Labels: area/protocol, type/feature
@@ -516,8 +516,8 @@ clocks. Add a lightweight offset estimation (relay echoes receive time, or
 NTP-style probe frames) so sources can be aligned within ~10 ms.
 
 Acceptance criteria:
-- [ ] Two sources on one screen show no visible phase offset
-- [ ] Works over both ws and wt
+- [x] Two sources on one screen show no visible phase offset
+- [x] Works over both ws and wt
 
 ### [KGM-031] Reference codec implementations in Rust and Python
 - Labels: area/protocol, type/chore
@@ -531,8 +531,8 @@ Ship `kgm-codec` crates/packages so relays can inspect frames and tools
 golden-vector tests generated from the JS implementation.
 
 Acceptance criteria:
-- [ ] Rust and Python decode the JS golden vectors bit-exactly
-- [ ] Published as workspace members, not to registries yet
+- [x] Rust and Python decode the JS golden vectors bit-exactly
+- [x] Published as workspace members, not to registries yet
 
 ## M4 Scale-out
 
@@ -550,9 +550,9 @@ natively. KGM frames stay opaque binaries. See design doc for topology,
 backpressure, and the Rust-sidecar-vs-NIF decision.
 
 Acceptance criteria:
-- [ ] 1 publisher -> 5,000 subscribers across 3 nodes, p99 relay latency < 30 ms (lab)
-- [ ] Node loss drops only that node's subscribers
-- [ ] Load test harness committed
+- [x] 1 publisher -> 5,000 subscribers across 3 nodes, p99 relay latency < 30 ms (lab)
+- [x] Node loss drops only that node's subscribers
+- [x] Load test harness committed
 
 ### [KGM-033] relay-rs observability: metrics and structured logs
 - Labels: area/transport, type/chore
@@ -565,8 +565,8 @@ Prometheus endpoint: rooms, connections, datagrams in/out, drop counters,
 fan-out latency histogram. tracing-subscriber JSON logs.
 
 Acceptance criteria:
-- [ ] /metrics scrapeable
-- [ ] Grafana dashboard JSON committed
+- [x] /metrics scrapeable
+- [x] Grafana dashboard JSON committed
 
 ### [KGM-034] Congestion-aware newest-only delivery per subscriber
 - Labels: area/transport, type/feature
@@ -580,8 +580,8 @@ Replace the per-room broadcast buffer semantics for subscribers with a
 1-slot mailbox (latest frame wins) and drop counters.
 
 Acceptance criteria:
-- [ ] Artificially slowed subscriber stays < 1 frame behind on reconnect-free stream
-- [ ] Fast subscribers unaffected (no added latency)
+- [x] Artificially slowed subscriber stays < 1 frame behind on reconnect-free stream
+- [x] Fast subscribers unaffected (no added latency)
 
 ### [KGM-035] MoQ (Media over QUIC) distribution evaluation
 - Labels: area/transport, type/research
@@ -595,7 +595,7 @@ delivery. Deliverable is a written evaluation and a prototype against a
 public MoQ relay, not production code.
 
 Acceptance criteria:
-- [ ] Report: mapping design, latency measurements, go/no-go recommendation
+- [x] Report: mapping design, latency measurements, go/no-go recommendation
 
 ### [KGM-036] Automatic transport negotiation and downgrade
 - Labels: area/transport, type/feature
@@ -609,8 +609,8 @@ Safari). Reconnect with exponential backoff, session resume by room+token,
 and a visible "degraded transport" indicator.
 
 Acceptance criteria:
-- [ ] Blocking UDP flips an active session to ws within 3 s
-- [ ] UI shows the active transport truthfully
+- [x] Blocking UDP flips an active session to ws within 3 s
+- [x] UI shows the active transport truthfully
 
 ### [KGM-037] End-to-end encryption of tracking frames
 - Labels: area/transport, type/feature
@@ -625,9 +625,9 @@ out-of-band (room URL fragment). Relays forward opaque ciphertext; seq and
 timestamp move inside the sealed payload, a minimal outer header remains.
 
 Acceptance criteria:
-- [ ] Relay cannot decode frames (test asserts ciphertext)
-- [ ] Overhead <= 24 bytes/frame
-- [ ] Wrong-key subscriber shows a clear error, not garbage motion
+- [x] Relay cannot decode frames (test asserts ciphertext)
+- [x] Overhead <= 24 bytes/frame
+- [x] Wrong-key subscriber shows a clear error, not garbage motion
 
 ## M5 Render backends
 
@@ -640,7 +640,7 @@ Acceptance criteria:
 
 Render `.inp/.inx` 2D puppets in the viewer by compiling inox2d to WASM
 (wgpu/WebGL backend) and mapping KGM channels to Inochi2D parameters. This
-is the high-quality 2D path that makes KAGAMI cover the Live2D-style use
+is the high-quality 2D path that makes Minamo cover the Live2D-style use
 case with an open format.
 
 Acceptance criteria:
@@ -673,7 +673,7 @@ Acceptance criteria:
 
 Viewer query params: `?bg=transparent` (alpha canvas + no floor), `?hud=0`,
 locked camera. Document the OBS Browser Source recipe (custom CSS,
-resolution). This single issue makes KAGAMI usable in real streams.
+resolution). This single issue makes Minamo usable in real streams.
 
 Acceptance criteria:
 - [ ] Transparent background verified in OBS Browser Source
@@ -687,7 +687,7 @@ Acceptance criteria:
 - Milestone: M5 Render backends
 - Design doc: -
 
-For hosted avatars, add a CLI (`kagami-pack`) that runs gltfpack
+For hosted avatars, add a CLI (`minamo-pack`) that runs gltfpack
 (EXT_meshopt_compression) or Draco plus KTX2/BasisU texture encoding on
 VRM files, and wire the corresponding three.js loaders in the viewer.
 Typical VRM shrinks 60-80% and textures stay compressed on GPU.
@@ -862,7 +862,7 @@ Acceptance criteria:
 - Design doc: -
 
 Deploy the static site (tracker+viewer, local mode) to GitHub Pages so
-anyone can try KAGAMI with zero setup. Actions workflow on main.
+anyone can try Minamo with zero setup. Branch-based Pages publish from main.
 
 Acceptance criteria:
 - [ ] Public URL runs local-mode demo end to end

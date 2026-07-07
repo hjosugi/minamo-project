@@ -15,7 +15,7 @@ entry is issue-ready; larger items have design docs under docs/design/.
 
 Sequencing notes:
 - KGM-040 (OBS transparency) is deliberately small and P0: it is the single
-  change that makes KAGAMI usable in real streams today.
+  change that makes Minamo usable in real streams today.
 - KGM-047 (recording) unblocks the KGM2 corpus and CI fixtures; schedule it
   before M3 work starts even though it sits in M6.
 - KGM-009 (relay-rs CI) should land before any relay feature work.

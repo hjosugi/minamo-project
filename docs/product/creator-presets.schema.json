@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://minamo.local/schemas/creator-presets.schema.json",
+  "title": "Minamo Creator Preset",
+  "type": "object",
+  "required": ["schema", "name", "tracking", "viewer"],
+  "properties": {
+    "schema": { "const": "minamo.creator-preset.v1" },
+    "name": { "type": "string", "minLength": 1 },
+    "tracking": {
+      "type": "object",
+      "properties": {
+        "resolution": { "enum": ["480p", "720p", "1080p"] },
+        "fps": { "enum": [30, 60] },
+        "filterPreset": { "enum": ["responsive", "balanced", "smooth"] },
+        "hands": { "type": "boolean" },
+        "pose": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "viewer": {
+      "type": "object",
+      "properties": {
+        "transparent": { "type": "boolean" },
+        "avatarScale": { "type": "number", "minimum": 0.1, "maximum": 3 },
+        "scene": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

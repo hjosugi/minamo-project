@@ -2,6 +2,9 @@
 
 Status: design. Backlog: KGM-047, KGM-048.
 
+Implementation note: the browser records both the compact `.kgm` container and
+newline-delimited `minamo.kgm1.motion-jsonl.v1` debug files. The viewer and replay page can load dropped `.kgm`, `.jsonl`, and `.ndjson` files.
+
 ## Motivation
 
 Three consumers of the same feature:
@@ -36,9 +39,10 @@ irrelevant.
 ## Viewer replay
 
 Drop a .kgm file: a transport-like source replays records on their dt
-schedule (with a speed control), feeding the same 'frame' event path.
-Loop toggle. Scrub bar is v2 (needs a keyframe index; trivial once KGM2
-keyframes exist).
+schedule (with a speed control), feeding the same frame application path.
+The JSONL MVP uses the same path after parsing recorded face, pose, and
+hand fields. Loop toggle. Scrub bar is v2 (needs a keyframe index; trivial
+once KGM2 keyframes exist).
 
 ## VRMA export (KGM-048)
 
@@ -46,6 +50,12 @@ Replay through the VRM application layer while sampling normalized bone
 rotations and expression values at fixed dt, then serialize to VRM
 Animation glTF. Runs in the viewer so the export reflects the active
 mapping (KGM-044). Trim in/out points before export.
+
+Implemented exporter writes a binary `.vrma` GLB with the
+`VRMC_vrm_animation` extension. The replay page exposes trim start/end
+fields and a loop marker. The exported clip includes the required humanoid
+bone map, head humanoid bone rotation keyframes, and preset expression
+nodes whose translation X stores scalar weights. The expression weights are exported for aa/ih/ou/ee/oh, blink, smile/happy, angry, surprised, and neutral presets.
 
 ## Testing use
 

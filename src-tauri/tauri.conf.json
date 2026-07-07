@@ -1,0 +1,40 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Minamo Studio",
+  "version": "0.1.0",
+  "identifier": "app.minamo.studio",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173/desktop/",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Minamo Studio",
+        "url": "desktop/index.html",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 920,
+        "minHeight": 620,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Video",
+    "shortDescription": "Local-first avatar tracking studio",
+    "longDescription": "Minamo Studio packages the tracker, viewer, and replay tools as a desktop application.",
+    "macOS": {
+      "infoPlist": "Info.plist"
+    }
+  }
+}

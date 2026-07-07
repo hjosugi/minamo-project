@@ -13,7 +13,9 @@ Serve the repository root with any local HTTP server:
 Then open:
 
 - http://localhost:8000/tracker/ — the real webcam tracker (52ch face + head pose)
-- http://localhost:8000/viewer/ — the VRM viewer (drop a `.vrm` to swap avatars)
+- http://localhost:8000/viewer/ — the VRM viewer (drop a `.vrm` to swap avatars,
+  or a tracker `.jsonl` recording to replay motion)
+- http://localhost:8000/replay/ — local JSONL replay publisher for viewer testing
 - http://localhost:8000/landing/ — the landing hub; **Start demo** overlays mock
   face/hand/drum tracking on your webcam (falls back to mock-only without one)
 

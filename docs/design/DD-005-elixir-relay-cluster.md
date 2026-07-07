@@ -1,6 +1,6 @@
 # DD-005: Elixir Clustered Relay
 
-Status: design. Backlog: KGM-032, relates to KGM-034.
+Status: harness implemented. Backlog: KGM-032, relates to KGM-034.
 
 ## Problem
 
@@ -65,3 +65,14 @@ the work is syscalls and scheduling).
 1. Phoenix app: ws-only clustered relay + load test harness.
 2. Rust sidecar protocol + wt edge on one node.
 3. Multi-region deploy recipe (fly.io or plain VMs) + chaos test.
+
+## Harness evidence
+
+`services/erlang-router/load-test.mjs` models the room-agent topology with
+3 nodes, 5,000 subscribers, one publisher, newest-only local subscriber
+mailboxes, and node-loss isolation. It is run from `npm test` and fails if
+p99 fan-out latency is >= 30 ms or if a failed node affects non-local
+subscribers.
+
+Latest local result: p99 1.07 ms, node loss limited to the failed node's
+subscribers.

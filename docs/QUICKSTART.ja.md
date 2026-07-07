@@ -13,7 +13,9 @@
 ブラウザで開きます。
 
 - http://localhost:8000/tracker/ — 実webcamトラッカー(表情52ch + 頭部姿勢)
-- http://localhost:8000/viewer/ — VRMビューア(`.vrm` をドロップで差し替え)
+- http://localhost:8000/viewer/ — VRMビューア(`.vrm` をドロップで差し替え、
+  trackerの`.jsonl`記録をドロップでモーション再生)
+- http://localhost:8000/replay/ — viewer検証用のローカルJSONLリプレイ送信ページ
 - http://localhost:8000/landing/ — ランディングハブ。**Start demo** を押すと、
   Webcamが使える環境では映像の上にモックの顔・手・ドラムトラッキングが重なります。
   Webcamが使えない場合もモックアニメーションだけで動作します。

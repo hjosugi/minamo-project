@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": [
+    "types/browser-js.d.ts",
+    "shared/*.js",
+    "tracker/tracker.js",
+    "viewer/viewer.js",
+    "replay/replay.js"
+  ]
+}

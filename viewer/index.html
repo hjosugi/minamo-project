@@ -3,19 +3,53 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>KAGAMI Viewer</title>
-  <link rel="stylesheet" href="../assets/kagami.css" />
+  <title>Minamo Viewer</title>
+  <link rel="stylesheet" href="../assets/minamo.css" />
   <style>
     html, body { height: 100%; overflow: hidden; }
     #scene { position: fixed; inset: 0; }
+    #sceneVignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      background: radial-gradient(circle at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.36) 100%);
+      transition: opacity 160ms ease;
+    }
+    #sceneVignette.enabled { opacity: 1; }
+    #layeredAvatar {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #layeredAvatar img {
+      position: absolute;
+      left: 50%;
+      top: 52%;
+      max-width: min(72vw, 760px);
+      max-height: 92vh;
+      object-fit: contain;
+      transform-origin: 50% 58%;
+      transition: opacity 80ms linear, transform 80ms linear;
+      image-rendering: auto;
+    }
     .hud {
       position: fixed;
       top: 14px; left: 14px;
       width: min(340px, calc(100vw - 28px));
       z-index: 10;
     }
-    .hud .panel { backdrop-filter: blur(6px); background: rgba(22, 26, 44, 0.88); }
+    .hud .panel {
+      max-height: calc(100vh - 28px);
+      overflow: auto;
+      backdrop-filter: blur(6px);
+      background: rgba(22, 26, 44, 0.88);
+    }
     .hud .stats { margin-top: 8px; }
+    body.hud-hidden .hud { display: none; }
     .dropveil {
       position: fixed; inset: 0; z-index: 20;
       display: none; place-items: center;
@@ -29,11 +63,13 @@
 </head>
 <body>
   <div id="scene"></div>
+  <div id="sceneVignette"></div>
+  <div id="layeredAvatar" hidden></div>
 
   <div class="hud">
     <div class="panel">
       <div class="topbar" style="padding: 0 0 10px; border: none;">
-        <span class="wordmark" style="font-size:16px;">KAGAM<span class="mirror">I</span></span>
+        <span class="wordmark" style="font-size:16px;">Minamo</span>
         <span class="page-name">viewer</span>
         <span class="spacer"></span>
         <span class="status-chip" id="statusChip" data-state="idle">idle</span>
@@ -51,6 +87,22 @@
           <span>room</span>
           <input type="text" id="inpRoom" value="demo" />
         </div>
+        <div class="field">
+          <span>scene</span>
+          <select id="selScenePreset">
+            <option value="soft">soft key</option>
+            <option value="anime">anime rim</option>
+            <option value="flat">flat</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>background</span>
+          <input type="color" id="inpBgColor" value="#0f1220" />
+        </div>
+        <div class="field">
+          <span>room token</span>
+          <input type="password" id="inpToken" autocomplete="off" />
+        </div>
         <div class="field" id="fieldWtUrl" hidden>
           <span>wt url</span>
           <input type="text" id="inpWtUrl" value="https://localhost:4433" />
@@ -64,18 +116,44 @@
         <button id="btnConnect" class="primary">Connect</button>
         <button id="btnCenter">Center</button>
         <button id="btnLoadVrm">Open VRM</button>
+        <button id="btnLoadLayered">Open PNG/PSD</button>
+        <button id="btnCopySceneUrl">Copy URL</button>
+        <label class="check"><input type="checkbox" id="chkTransparent" />Transparent</label>
+        <label class="check"><input type="checkbox" id="chkArmSolver" checked />Arm solver</label>
+        <label class="check"><input type="checkbox" id="chkBloom" />Bloom</label>
+        <label class="check"><input type="checkbox" id="chkVignette" />Vignette</label>
+        <label class="field" style="min-width: 130px;">
+          <span>parallax</span>
+          <input id="rngLayerParallax" type="range" min="0" max="48" step="1" value="18" />
+        </label>
         <input type="file" id="fileVrm" accept=".vrm" hidden />
+        <input type="file" id="fileLayeredAvatar" accept=".png,.psd" multiple hidden />
       </div>
       <div class="stats">
         <span>recv <b id="statFps">--</b> fps</span>
         <span>in <b id="statRate">--</b> KB/s</span>
+        <span>mode <b id="statTransportMode">local</b></span>
+        <span>latency <b id="statLatency">--</b> ms</span>
+        <span>loss <b id="statLoss">0.0</b>%</span>
+        <span>reorder <b id="statReorder">0</b></span>
         <span>avatar <b id="statAvatar">built-in bot</b></span>
       </div>
-      <p class="note">Drop a VRM file to swap the avatar. Without a VRM, the built-in bot still works.</p>
+      <details class="mapping-editor" open>
+        <summary>Mapping <b id="statMapping">fallback</b></summary>
+        <textarea id="txtExpressionMap" rows="8" spellcheck="false"></textarea>
+        <div class="controls">
+          <button id="btnApplyMapping">Apply</button>
+          <button id="btnImportMapping">Load</button>
+          <button id="btnExportMapping">Save</button>
+          <button id="btnResetMapping">Reset</button>
+          <input type="file" id="fileExpressionMap" accept=".json,application/json" hidden />
+        </div>
+      </details>
+      <p class="note">Drop a VRM, PSD, layered PNG set, or tracker JSONL recording.</p>
     </div>
   </div>
 
-  <div class="dropveil">drop .vrm to load</div>
+  <div class="dropveil">drop .vrm, .psd, .png set, or .jsonl</div>
 
   <script type="importmap">
   {

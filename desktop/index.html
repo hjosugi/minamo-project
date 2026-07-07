@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Minamo Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <span class="eyebrow">Minamo Studio</span>
+          <h1>Desktop Control</h1>
+        </div>
+        <div class="status-strip" aria-label="runtime status">
+          <span id="runtimeStatus" class="status">web preview</span>
+          <span id="offlineStatus" class="status ok">offline pages</span>
+          <span id="cameraStatus" class="status warn">virtual camera</span>
+        </div>
+      </header>
+
+      <section class="workbench" aria-label="desktop controls">
+        <div class="launcher-panel">
+          <div class="section-heading">
+            <span class="eyebrow">Launch</span>
+            <h2>Workspace</h2>
+          </div>
+          <div class="launch-grid">
+            <button class="launch-button" type="button" data-command="open_tracker" data-fallback="../tracker/">
+              <span class="button-mark">IN</span>
+              <span>Tracker</span>
+            </button>
+            <button class="launch-button" type="button" data-command="open_viewer" data-fallback="../viewer/">
+              <span class="button-mark">OUT</span>
+              <span>Viewer</span>
+            </button>
+            <button class="launch-button" type="button" data-command="open_replay" data-fallback="../replay/">
+              <span class="button-mark">REC</span>
+              <span>Replay</span>
+            </button>
+          </div>
+          <div id="pageList" class="page-list" aria-label="bundled pages"></div>
+        </div>
+
+        <div class="monitor-panel">
+          <div class="section-heading">
+            <span class="eyebrow">Signal</span>
+            <h2>KGM1 Monitor</h2>
+          </div>
+          <canvas id="signalCanvas" width="960" height="320" aria-label="motion signal preview"></canvas>
+          <div class="meter-row">
+            <div>
+              <span class="meter-label">tracking</span>
+              <strong id="trackingMeter">local</strong>
+            </div>
+            <div>
+              <span class="meter-label">relay</span>
+              <strong id="relayMeter">idle</strong>
+            </div>
+            <div>
+              <span class="meter-label">render</span>
+              <strong id="renderMeter">ready</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="camera-panel">
+          <div class="section-heading">
+            <span class="eyebrow">Output</span>
+            <h2>Virtual Camera</h2>
+          </div>
+          <dl class="status-table">
+            <div>
+              <dt>OS</dt>
+              <dd id="vcOs">detecting</dd>
+            </div>
+            <div>
+              <dt>Backend</dt>
+              <dd id="vcBackend">detecting</dd>
+            </div>
+            <div>
+              <dt>Device</dt>
+              <dd id="vcDevice">detecting</dd>
+            </div>
+            <div>
+              <dt>State</dt>
+              <dd id="vcState">detecting</dd>
+            </div>
+          </dl>
+          <div class="action-row">
+            <button id="refreshStatus" class="secondary-button" type="button">Refresh</button>
+            <a class="secondary-link" href="../docs/product/desktop-app.md">Desktop guide</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./desktop.js" type="module"></script>
+  </body>
+</html>
