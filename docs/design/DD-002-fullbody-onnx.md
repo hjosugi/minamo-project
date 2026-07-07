@@ -31,6 +31,14 @@ interface PoseBackend {
 The solver and codec only see CanonicalPose. Backends: `mediapipe` (today),
 `onnx-yolo-pose`, `onnx-rtmpose`.
 
+The implemented TypeScript boundary lives in `src/core/ml.ts`:
+
+- `PoseBackend`
+- `OnnxModelSpec`
+- `OnnxRuntimeAdapter`
+- `chooseExecutionProvider()`
+- `createModelExportManifest()`
+
 ## Model candidates
 
 | Model | Points | Notes to verify at implementation time |
@@ -56,6 +64,9 @@ the default build; they can be a user-side plugin.
 Fixed recorded clips (KGM-047 fixtures) scored on: keypoint stability
 (temporal variance at rest), seated-pose plausibility (manual rubric),
 fps and VRAM on three GPU tiers. Results table committed to docs.
+
+Use `summarizeModelBenchmark()` for the committed benchmark table so WebGPU,
+WASM, and CPU fallback results are comparable.
 
 ## Risks
 

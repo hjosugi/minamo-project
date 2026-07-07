@@ -5,7 +5,7 @@ import {
   type FaceLandmarkerResult,
   type HandLandmarkerResult,
 } from '@mediapipe/tasks-vision';
-import { defaultEye, defaultMouth, inferVowel, solveHandState, type HandSolveInput } from '../core';
+import { solveFaceStateFromBlendshapes, solveHandState, type FaceSolveInput, type HandSolveInput } from '../core';
 import type { FaceState, HandState, Handedness, Landmark, Quat } from '../core/types';
 
 export interface MediaPipeAdapterOptions {
@@ -26,6 +26,7 @@ export class MediaPipeTasksAdapter {
   private faceLandmarker?: FaceLandmarker;
   private handLandmarker?: HandLandmarker;
   private previousHands = new Map<Handedness, HandState>();
+  private previousFace?: FaceState;
   private previousTimeMs?: number;
 
   constructor(private readonly options: MediaPipeAdapterOptions) {}
@@ -56,7 +57,8 @@ export class MediaPipeTasksAdapter {
     this.previousTimeMs = timeMs;
     const hands = convertHands(handResult, this.previousHands, dtSec);
     this.previousHands = new Map(hands.map((hand) => [hand.handedness, hand]));
-    const face = convertFace(faceResult);
+    const face = convertFace(faceResult, this.previousFace);
+    if (face) this.previousFace = face;
     return face ? { face, hands } : { hands };
   }
 }
@@ -81,62 +83,24 @@ function convertHands(
   });
 }
 
-function convertFace(result: FaceLandmarkerResult): FaceState | undefined {
+function convertFace(result: FaceLandmarkerResult, previous?: FaceState): FaceState | undefined {
   if (!result.faceBlendshapes.length && !result.faceLandmarks.length) return undefined;
   const blendshapes: Record<string, number> = {};
   for (const category of result.faceBlendshapes[0]?.categories ?? []) {
     if (category.categoryName !== '_neutral') blendshapes[category.categoryName] = category.score;
   }
-  const mouth = defaultMouth();
-  mouth.open = clamp01(blendshapes.jawOpen ?? 0);
-  mouth.wide = clamp01(((blendshapes.mouthStretchLeft ?? 0) + (blendshapes.mouthStretchRight ?? 0)) * 0.6);
-  mouth.pucker = clamp01(((blendshapes.mouthPucker ?? 0) + (blendshapes.mouthFunnel ?? 0)) * 0.65);
-  mouth.smileLeft = clamp01(blendshapes.mouthSmileLeft ?? 0);
-  mouth.smileRight = clamp01(blendshapes.mouthSmileRight ?? 0);
-  mouth.frownLeft = clamp01(blendshapes.mouthFrownLeft ?? 0);
-  mouth.frownRight = clamp01(blendshapes.mouthFrownRight ?? 0);
-  mouth.jawForward = clamp01(blendshapes.jawForward ?? 0);
-  mouth.vowel = inferVowel(mouth.open, mouth.wide, mouth.pucker);
-  mouth.confidence = result.faceLandmarks.length ? 1 : 0;
-
-  const leftEye = defaultEye();
-  leftEye.blink = clamp01(blendshapes.eyeBlinkLeft ?? 0);
-  leftEye.openness = clamp01(1 - leftEye.blink);
-  leftEye.squint = clamp01(blendshapes.eyeSquintLeft ?? 0);
-  leftEye.gaze = {
-    x: clampSigned((blendshapes.eyeLookOutLeft ?? 0) - (blendshapes.eyeLookInLeft ?? 0)),
-    y: clampSigned((blendshapes.eyeLookUpLeft ?? 0) - (blendshapes.eyeLookDownLeft ?? 0)),
-    z: 1,
-  };
-  leftEye.confidence = mouth.confidence;
-
-  const rightEye = defaultEye();
-  rightEye.blink = clamp01(blendshapes.eyeBlinkRight ?? 0);
-  rightEye.openness = clamp01(1 - rightEye.blink);
-  rightEye.squint = clamp01(blendshapes.eyeSquintRight ?? 0);
-  rightEye.gaze = {
-    x: clampSigned((blendshapes.eyeLookInRight ?? 0) - (blendshapes.eyeLookOutRight ?? 0)),
-    y: clampSigned((blendshapes.eyeLookUpRight ?? 0) - (blendshapes.eyeLookDownRight ?? 0)),
-    z: 1,
-  };
-  rightEye.confidence = mouth.confidence;
-
-  const face: FaceState = {
-    detected: true,
-    confidence: mouth.confidence,
-    leftEye,
-    rightEye,
-    mouth,
+  const landmarks = result.faceLandmarks[0]?.map(toCoreLandmark);
+  const headRotation = result.facialTransformationMatrixes[0]
+    ? mat4ToQuat(result.facialTransformationMatrixes[0].data)
+    : undefined;
+  const input: FaceSolveInput = {
     blendshapes,
-    warnings: [],
+    confidence: landmarks?.length ? 1 : 0,
   };
-  if (result.facialTransformationMatrixes[0]) {
-    face.headRotation = mat4ToQuat(result.facialTransformationMatrixes[0].data);
-  }
-  if (result.faceLandmarks[0]) {
-    face.landmarks = result.faceLandmarks[0].map(toCoreLandmark);
-  }
-  return face;
+  if (landmarks) input.landmarks = landmarks;
+  if (headRotation) input.headRotation = headRotation;
+  if (previous) input.previous = previous;
+  return solveFaceStateFromBlendshapes(input);
 }
 
 function normalizeHandedness(value: string | undefined): Handedness {
@@ -147,16 +111,6 @@ function toCoreLandmark(landmark: { x: number; y: number; z: number; visibility?
   const out: Landmark = { x: landmark.x, y: landmark.y, z: landmark.z };
   if (landmark.visibility !== undefined) out.visibility = landmark.visibility;
   return out;
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
-
-function clampSigned(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(-1, Math.min(1, value));
 }
 
 function mat4ToQuat(m: readonly number[]): Quat {

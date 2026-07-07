@@ -5,6 +5,15 @@ export interface InochiParamOutput {
   value: number;
 }
 
+export interface Inochi2DRuntimeAdapter {
+  load(bytes: ArrayBuffer): Promise<void>;
+  setParam(name: string, value: number): void;
+  update(dtSec: number): void;
+  render(target?: OffscreenCanvas | HTMLCanvasElement): void;
+  listParams(): readonly string[];
+  dispose(): void;
+}
+
 export function mapKGM1ToInochi2D(frame: KGM1Frame): InochiParamOutput[] {
   const face = frame.tracking.face;
   if (!face) return [];
@@ -19,6 +28,18 @@ export function mapKGM1ToInochi2D(frame: KGM1Frame): InochiParamOutput[] {
     { name: 'smile_l', value: clamp01(face.mouth.smileLeft) },
     { name: 'smile_r', value: clamp01(face.mouth.smileRight) },
   ];
+}
+
+export function filterInochiParamsForRuntime(
+  outputs: readonly InochiParamOutput[],
+  availableParams: readonly string[],
+): InochiParamOutput[] {
+  const available = new Set(availableParams.map(normalizeParamName));
+  return outputs.filter((output) => available.has(normalizeParamName(output.name)));
+}
+
+function normalizeParamName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function clamp01(value: number): number {

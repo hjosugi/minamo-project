@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapKGM1HandsToLive2D, mapKGM1ToLive2D } from '../src/adapters/live2d_mapper';
 import { mapKGM1HandsToVrmFingers, mapKGM1ToVrmExpressions, mapKGM1ToVrmLookAt } from '../src/adapters/vrm_mapper';
-import { mapKGM1ToInochi2D } from '../src/adapters/inochi2d_mapper';
+import { filterInochiParamsForRuntime, mapKGM1ToInochi2D } from '../src/adapters/inochi2d_mapper';
 import {
   applyRigLimit,
   createAvatarPresetProfile,
@@ -104,6 +104,10 @@ describe('avatar mapper snapshots', () => {
     expect(live2d.map((p) => p.id)).toContain('ParamEyeBallX');
     expect(live2d.some((p) => p.id === 'ParamHandRIndexCurl')).toBe(true);
     expect(inochi.map((p) => p.name)).toContain('mouth_pucker');
+    expect(filterInochiParamsForRuntime(inochi, ['Mouth Pucker', 'Eye L Open']).map((p) => p.name)).toEqual([
+      'eye_l_open',
+      'mouth_pucker',
+    ]);
     for (const output of [...live2d.map((p) => p.value), ...inochi.map((p) => p.value)]) {
       expect(output).toBeGreaterThanOrEqual(-1);
       expect(output).toBeLessThanOrEqual(1);

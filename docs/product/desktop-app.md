@@ -20,14 +20,21 @@ npm run desktop:build
 
 ## Virtual Camera Backends
 
-The desktop shell reports the platform backend state but does not yet stream
-viewer frames into a conferencing-visible device.
+The desktop shell reports the platform backend state. Viewer-frame streaming
+is intentionally behind the native backend boundary because each OS needs a
+different signed driver or extension path.
 
 | OS | Backend target | Current state |
 |---|---|---|
-| Linux | `v4l2loopback` | Driver detection in the desktop shell |
+| Linux | `v4l2loopback` | Driver and first `/dev/video*` detection in the desktop shell |
 | Windows | Media Foundation softcam | Backend bridge not installed |
 | macOS | CoreMediaIO camera extension | Extension not installed |
 
-Keep issue KGM-050 open until viewer frames are visible as a virtual camera in
-one conferencing app on Linux, Windows, and macOS.
+Ship criteria for the output backend:
+
+- explicit user opt-in before writing frames
+- visible device in one conferencing app per OS
+- OBS Browser Source remains available as the no-driver fallback
+- desktop status panel reports backend, device, and state
+
+Keep issue KGM-050 open until viewer frames are visible as a virtual camera in one conferencing app on Linux, Windows, and macOS.

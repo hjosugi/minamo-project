@@ -7,27 +7,47 @@ import {
   OcclusionStateMachine,
   TemporalOutlierRejector,
   VelocityClamp,
+  audioAssistMouthOpen,
+  blinkFalsePositiveRate,
+  candidateToDrumHit,
   clampRigParameter,
   classifyHandGesture,
+  classifyGlassesGlare,
+  classifyHandObjectContact,
   confidenceWeightedBlend,
   computeFingerCurl,
   computePalmBasis,
+  createDrumDatasetAnnotation,
+  createEmptyFrame,
+  createModelExportManifest,
   createSyntheticHandLandmarks,
   deriveFingerChain,
   detectHandSwap,
+  detectVisualDrumHitCandidates,
   finiteNumber,
   finiteVec3Guard,
   fuseVisualHitWithAudio,
   estimateHitVelocity,
+  estimateStickTipTrajectory,
   classifyLowLight,
   classifyMotionBlur,
+  deriveIrisCenter,
+  inferHiHatPedalState,
+  inferKickPedalHit,
   HAND_LANDMARK_COUNT,
+  latestFrameByParticipant,
+  mouthFlickerScore,
   privacyPreservingDatasetRecord,
+  scoreDrumBenchmark,
   verifyModelHash,
+  solveFaceStateFromBlendshapes,
+  summarizeModelBenchmark,
   shortestPathQuat,
   slerpQuat,
   solveHandState,
+  stabilizeBlink,
   voiceActivityMouthAccent,
+  wrapKGM1FrameForRoom,
 } from '../src/core';
 
 describe('hand solver', () => {
@@ -153,6 +173,142 @@ describe('ML support helpers', () => {
     expect(record.landmarks[0].x).toBe(0.1235);
     expect(record.label).toBe('open-hand');
   });
+
+  it('summarizes model benchmarks and export manifests', () => {
+    const benchmark = summarizeModelBenchmark('stick-yolo-n', 'webgpu', [
+      { latencyMs: 10, memoryMb: 96 },
+      { latencyMs: 20, memoryMb: 104 },
+      { latencyMs: 30, memoryMb: 101 },
+    ]);
+    expect(benchmark.averageLatencyMs).toBe(20);
+    expect(benchmark.p95LatencyMs).toBe(30);
+    expect(benchmark.memoryMb).toBe(104);
+    expect(classifyHandObjectContact(0.01, 0.9).state).toBe('good');
+    expect(createModelExportManifest({
+      name: 'stick-yolo-n',
+      url: 'models/stick.onnx',
+      inputShape: [1, 3, 320, 320],
+      outputNames: ['boxes', 'scores'],
+      sha256: 'abc',
+    }, 'int8')).toMatchObject({
+      schema: 'minamo.model-export.v1',
+      modelName: 'stick-yolo-n',
+      quantization: 'int8',
+      sha256: 'abc',
+    });
+  });
+});
+
+describe('room envelope helpers', () => {
+  it('keeps newest motion frame per participant without changing KGM1 frames', () => {
+    const first = wrapKGM1FrameForRoom('stage', 'alice', createEmptyFrame(1, 100), 100);
+    const second = wrapKGM1FrameForRoom('stage', 'alice', createEmptyFrame(2, 120), 120);
+    const bob = wrapKGM1FrameForRoom('stage', 'bob', createEmptyFrame(3, 110), 110);
+    const latest = latestFrameByParticipant([first, second, bob]);
+    expect(latest.get('alice')?.frame.frameId).toBe(2);
+    expect(latest.get('bob')?.frame.frameId).toBe(3);
+  });
+});
+
+describe('face solver', () => {
+  it('maps blendshapes into semantic face controls', () => {
+    const face = solveFaceStateFromBlendshapes({
+      blendshapes: {
+        jawOpen: 0.74,
+        mouthSmileLeft: 0.82,
+        mouthSmileRight: 0.2,
+        mouthFrownRight: 0.35,
+        eyeBlinkLeft: 0.88,
+        eyeBlinkRight: 0.12,
+        eyeLookOutLeft: 0.75,
+        eyeLookInRight: 0.5,
+      },
+      confidence: 1,
+    });
+
+    expect(face.detected).toBe(true);
+    expect(face.mouth.open).toBeCloseTo(0.74);
+    expect(face.mouth.vowel).toBe('A');
+    expect(face.mouth.smileLeft).toBeGreaterThan(face.mouth.smileRight);
+    expect(face.mouth.frownRight).toBeGreaterThan(face.mouth.frownLeft);
+    expect(face.leftEye.blink).toBeGreaterThan(face.rightEye.blink);
+    expect(face.leftEye.gaze.x).toBeGreaterThan(0);
+    expect(face.rightEye.gaze.x).toBeGreaterThan(0);
+    expect(Math.hypot(face.leftEye.gaze.x, face.leftEye.gaze.y, face.leftEye.gaze.z)).toBeLessThanOrEqual(1.000001);
+  });
+
+  it('keeps blink transitions independent and hysteretic', () => {
+    const closing = stabilizeBlink(0.9, 0.1, 0);
+    const heldClosed = stabilizeBlink(0.5, 0.85, 0);
+    const heldOpen = stabilizeBlink(0.5, 0.1, 0);
+
+    expect(closing).toBeGreaterThan(0.7);
+    expect(heldClosed).toBeGreaterThan(heldOpen);
+    expect(heldOpen).toBeLessThan(0.45);
+  });
+
+  it('derives iris centers when Face Landmarker exposes iris points', () => {
+    const landmarks = Array.from({ length: 478 }, () => ({ x: 0, y: 0, z: 0 }));
+    for (const index of [468, 469, 470, 471, 472]) {
+      landmarks[index] = { x: 0.25, y: 0.4, z: 0 };
+    }
+    for (const index of [473, 474, 475, 476, 477]) {
+      landmarks[index] = { x: 0.75, y: 0.41, z: 0 };
+    }
+
+    const face = solveFaceStateFromBlendshapes({
+      blendshapes: {},
+      landmarks,
+      confidence: 1,
+    });
+
+    expect(face.leftEye.irisCenter).toEqual({ x: 0.25, y: 0.4 });
+    expect(face.rightEye.irisCenter).toEqual({ x: 0.75, y: 0.41 });
+    expect(deriveIrisCenter(landmarks, [468, 469])).toEqual({ x: 0.25, y: 0.4 });
+  });
+
+  it('reduces likely smile leakage under strong head yaw', () => {
+    const neutral = solveFaceStateFromBlendshapes({
+      blendshapes: {
+        mouthSmileLeft: 0.8,
+        mouthSmileRight: 0.8,
+      },
+      confidence: 1,
+    });
+    const yawRad = 0.85;
+    const yawed = solveFaceStateFromBlendshapes({
+      blendshapes: {
+        mouthSmileLeft: 0.8,
+        mouthSmileRight: 0.8,
+      },
+      headRotation: {
+        x: 0,
+        y: Math.sin(yawRad / 2),
+        z: 0,
+        w: Math.cos(yawRad / 2),
+      },
+      confidence: 1,
+    });
+
+    expect(yawed.mouth.smileLeft).toBeLessThan(neutral.mouth.smileLeft);
+    expect(yawed.mouth.smileRight).toBeLessThan(neutral.mouth.smileRight);
+  });
+
+  it('adds audio mouth support, glare warnings, and benchmark metrics', () => {
+    expect(audioAssistMouthOpen(0.1, 0.12)).toBeGreaterThan(0.1);
+    expect(classifyGlassesGlare({
+      confidence: 0.4,
+      eyeSquintLeft: 0.7,
+      eyeBlinkLeft: 0.8,
+      eyeBlinkRight: 0.1,
+    }).likely).toBe(true);
+    expect(mouthFlickerScore([0.1, 0.12, 0.11, 0.13])).toBeLessThan(0.05);
+    expect(blinkFalsePositiveRate([
+      { blink: 0.1, expectedClosed: false },
+      { blink: 0.8, expectedClosed: false },
+      { blink: 0.7, expectedClosed: true },
+    ])).toBeCloseTo(1 / 3);
+  });
 });
 
 describe('audio and drum helpers', () => {
@@ -181,6 +337,33 @@ describe('audio and drum helpers', () => {
     const fused = fuseVisualHitWithAudio(hit, [{ timeMs: 112, strength: 0.8 }], 20);
     expect(fused.audioAligned).toBe(true);
     expect(fused.confidence).toBeGreaterThan(hit.confidence);
+  });
+
+  it('derives visual drum candidates, assigns pedals, and scores rolls', () => {
+    const trajectory = estimateStickTipTrajectory(
+      { id: 'stick-r', timeMs: 50, tip: { x: 0, y: 0.02, z: 0 }, confidence: 0.9, hand: 'Right' },
+      { id: 'stick-r', timeMs: 0, tip: { x: 0, y: -0.04, z: 0 }, confidence: 0.9, hand: 'Right' },
+    );
+    const candidates = detectVisualDrumHitCandidates(trajectory, [{
+      id: 'snare',
+      type: 'snare',
+      center: { x: 0, y: 0.02, z: 0 },
+      radius: 0.08,
+      cooldownMs: 45,
+    }]);
+    expect(candidates.length).toBe(1);
+    const hit = candidateToDrumHit(candidates[0]);
+    expect(hit.hand).toBe('Right');
+    expect(inferHiHatPedalState([{ timeMs: 52, strength: 0.8, frequencyHz: 3000 }], 50)).toBeGreaterThan(0.7);
+    expect(inferKickPedalHit([{ timeMs: 54, strength: 0.7, frequencyHz: 80 }], 50)?.zoneType).toBe('kick');
+    const score = scoreDrumBenchmark([50, 100], [hit, { ...hit, eventId: 'h2', timeNs: 100_000_000 }]);
+    expect(score.recall).toBe(1);
+    expect(createDrumDatasetAnnotation('frame-1', [{
+      kind: 'stick',
+      id: 'stick-r',
+      points: [{ x: 0, y: 0, z: 0 }],
+      hand: 'Right',
+    }]).schema).toBe('minamo.drum-dataset.v1');
   });
 
   it('adds conservative audio-assisted mouth accent', () => {

@@ -20,8 +20,9 @@ yet; Minamo wants a first-class open 2D path.
 1. Compile inox2d with a WebGL2 (glow) or wgpu backend to wasm32 via
    wasm-bindgen. Verify upstream's current wasm story first; contribute
    fixes upstream rather than forking.
-2. Thin JS wrapper: `Inox2dAvatar { load(bytes), setParam(name, v),
-   update(dt), render() }` on an OffscreenCanvas layered into the viewer.
+2. Thin JS wrapper matching `Inochi2DRuntimeAdapter` in
+   `src/adapters/inochi2d_mapper.ts`: `load(bytes)`, `setParam(name, v)`,
+   `update(dt)`, `render(target)`, `listParams()`, `dispose()`.
 3. Parameter discovery: puppets expose named parameters (e.g. "Head:: Yaw",
    "Eye:: Blink"). Enumerate them at load and feed the mapping editor.
 
@@ -37,6 +38,9 @@ yet; Minamo wants a first-class open 2D path.
 
 Fuzzy matching by normalized parameter names; anything unmatched appears
 unmapped in the editor rather than guessing.
+
+The current mapper exposes `filterInochiParamsForRuntime()` so a runtime can
+drop unsupported parameters deterministically.
 
 ## Risks
 

@@ -1,5 +1,13 @@
 import type { KGM1Frame } from './types';
 
+export interface KGM1RoomEnvelope {
+  schema: 'minamo.room-envelope.v1';
+  room: string;
+  participantId: string;
+  sentAtMs: number;
+  frame: KGM1Frame;
+}
+
 export function encodeKGM1Json(frame: KGM1Frame): string {
   validateFrame(frame);
   return JSON.stringify(frame);
@@ -42,4 +50,31 @@ export function createEmptyFrame(frameId: number, nowMs = performance.now()): KG
       warnings: [],
     },
   };
+}
+
+export function wrapKGM1FrameForRoom(
+  room: string,
+  participantId: string,
+  frame: KGM1Frame,
+  sentAtMs = performance.now(),
+): KGM1RoomEnvelope {
+  validateFrame(frame);
+  return {
+    schema: 'minamo.room-envelope.v1',
+    room,
+    participantId,
+    sentAtMs,
+    frame,
+  };
+}
+
+export function latestFrameByParticipant(envelopes: readonly KGM1RoomEnvelope[]): Map<string, KGM1RoomEnvelope> {
+  const latest = new Map<string, KGM1RoomEnvelope>();
+  for (const envelope of envelopes) {
+    const previous = latest.get(envelope.participantId);
+    if (!previous || envelope.sentAtMs >= previous.sentAtMs) {
+      latest.set(envelope.participantId, envelope);
+    }
+  }
+  return latest;
 }
