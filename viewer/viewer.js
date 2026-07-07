@@ -34,6 +34,8 @@ import {
   DEFAULT_VIEWER_SETTINGS,
   VIEWER_STORAGE_KEY,
   FrameOrderGate,
+  createDefaultDrumKitConfig,
+  deriveDrumOverlayState,
   loadJson,
   parseMotionJsonl,
   saveJson,
@@ -44,6 +46,11 @@ const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
 const params = new URLSearchParams(location.search);
+const drumOverlayRoot = $('drumOverlay');
+const drumOverlayKit = $('drumOverlayKit');
+const drumOverlayHands = $('drumOverlayHands');
+const viewerDrumKit = createDefaultDrumKitConfig('viewer overlay');
+viewerDrumKit.zones = viewerDrumKit.zones.map((zone) => ({ ...zone, calibrated: true }));
 
 const SCENE_PRESETS = Object.freeze({
   soft: Object.freeze({
@@ -664,6 +671,7 @@ function render() {
   if (layeredAvatar.active) applyLayeredAvatar();
   else if (vrm) applyVrm(dt);
   else applyBot(dt);
+  if (settings.drumOverlay) updateDrumOverlay();
 
   if (settings.bloom && !settings.transparent) composer.render();
   else renderer.render(scene, camera);
@@ -686,6 +694,38 @@ function render() {
 }
 render();
 
+function updateDrumOverlayVisibility() {
+  drumOverlayRoot.hidden = !settings.drumOverlay;
+  if (settings.drumOverlay) updateDrumOverlay();
+}
+
+function updateDrumOverlay() {
+  drumOverlayRoot.hidden = false;
+  const overlayState = deriveDrumOverlayState(target.hands || [], viewerDrumKit);
+  const active = new Set(overlayState.activeZoneIds);
+  drumOverlayKit.replaceChildren(...overlayState.zones.map((zone) => {
+    const node = document.createElement('div');
+    node.className = 'zone';
+    node.dataset.state = active.has(zone.id) ? 'active' : 'idle';
+    node.textContent = zone.label;
+    return node;
+  }));
+  const handNodes = overlayState.hands.map((hand) => {
+    const node = document.createElement('span');
+    node.className = 'hand';
+    node.dataset.state = hand.active ? 'active' : 'idle';
+    node.textContent = `${hand.handedness} ${hand.gesture.label}${hand.zoneId ? ` ${hand.zoneId}` : ''}`;
+    return node;
+  });
+  if (!handNodes.length) {
+    const empty = document.createElement('span');
+    empty.className = 'hand';
+    empty.textContent = 'hands waiting';
+    handNodes.push(empty);
+  }
+  drumOverlayHands.replaceChildren(...handNodes);
+}
+
 // ---------------------------------------------------------------- ui
 
 function applySettingsToUi() {
@@ -698,10 +738,12 @@ function applySettingsToUi() {
   $('inpBgColor').value = normalizeHexColor(settings.backgroundColor) || SCENE_PRESETS.soft.backgroundColor;
   $('chkTransparent').checked = Boolean(settings.transparent);
   $('chkArmSolver').checked = Boolean(settings.armSolver);
+  $('chkDrumOverlay').checked = Boolean(settings.drumOverlay);
   $('chkBloom').checked = Boolean(settings.bloom);
   $('chkVignette').checked = Boolean(settings.vignette);
   updateModeFields();
   applySceneState();
+  updateDrumOverlayVisibility();
 }
 
 function readSettingsFromUi() {
@@ -714,6 +756,7 @@ function readSettingsFromUi() {
   settings.backgroundColor = normalizeHexColor($('inpBgColor').value) || SCENE_PRESETS.soft.backgroundColor;
   settings.transparent = $('chkTransparent').checked;
   settings.armSolver = $('chkArmSolver').checked;
+  settings.drumOverlay = $('chkDrumOverlay').checked;
   settings.bloom = $('chkBloom').checked;
   settings.vignette = $('chkVignette').checked;
   return settings;
@@ -795,6 +838,7 @@ function serializeViewerSceneUrl() {
   url.searchParams.set('bgColor', settings.backgroundColor);
   url.searchParams.set('bloom', settings.bloom ? '1' : '0');
   url.searchParams.set('vignette', settings.vignette ? '1' : '0');
+  url.searchParams.set('drum', settings.drumOverlay ? '1' : '0');
   url.searchParams.set('camera', params.get('camera') || 'locked');
   if (document.body.classList.contains('hud-hidden')) url.searchParams.set('hud', '0');
   return url.toString();
@@ -837,6 +881,10 @@ $('chkTransparent').addEventListener('change', () => {
   applySceneState();
 });
 $('chkArmSolver').addEventListener('change', persistSettings);
+$('chkDrumOverlay').addEventListener('change', () => {
+  persistSettings();
+  updateDrumOverlayVisibility();
+});
 $('chkBloom').addEventListener('change', () => {
   persistSettings();
   applySceneState();
@@ -1051,6 +1099,8 @@ function applyQuerySettings(targetSettings, query) {
   if (query.get('wtHash')) targetSettings.wtHash = query.get('wtHash');
   if (query.get('arms') === '0') targetSettings.armSolver = false;
   if (query.get('arms') === '1') targetSettings.armSolver = true;
+  const drum = parseBoolParam(query.get('drum'));
+  if (drum !== null) targetSettings.drumOverlay = drum;
   if (query.get('bg') === 'transparent' || query.get('transparent') === '1') targetSettings.transparent = true;
   if (query.get('bg') === 'solid' || query.get('transparent') === '0') targetSettings.transparent = false;
   const bgColor = normalizeHexColor(query.get('bgColor')) || normalizeHexColor(query.get('bg'));

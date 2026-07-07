@@ -52,6 +52,16 @@ export const HAND_CALIBRATION_STEPS = Object.freeze([
   Object.freeze({ id: 'drum-grip', label: 'Drum grip', kind: 'range', durationMs: 2500 }),
 ]);
 export const HAND_CALIBRATION_TOTAL_MS = HAND_CALIBRATION_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
+export const DRUM_KIT_STORAGE_KEY = 'minamo.drum-kit.calibration.v1';
+export const DRUM_KIT_SCHEMA = 'minamo.drum-kit-calibration.v1';
+export const DRUM_ZONE_DEFS = Object.freeze([
+  Object.freeze({ id: 'hihat', label: 'Hi-hat', type: 'hihat', x: 0.32, y: 0.58, radius: 0.075 }),
+  Object.freeze({ id: 'snare', label: 'Snare', type: 'snare', x: 0.50, y: 0.66, radius: 0.085 }),
+  Object.freeze({ id: 'tom', label: 'Tom', type: 'tom', x: 0.58, y: 0.52, radius: 0.08 }),
+  Object.freeze({ id: 'ride', label: 'Ride', type: 'ride', x: 0.72, y: 0.50, radius: 0.09 }),
+  Object.freeze({ id: 'crash', label: 'Crash', type: 'crash', x: 0.38, y: 0.42, radius: 0.095 }),
+  Object.freeze({ id: 'kick', label: 'Kick', type: 'kick', x: 0.50, y: 0.82, radius: 0.105 }),
+]);
 
 export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   mode: 'local',
@@ -65,6 +75,7 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   voiceAccents: false,
   audioLipsync: false,
   faceLock: false,
+  drummerMode: false,
   cameraId: '',
   resolution: '720p',
   fps: '60',
@@ -86,6 +97,7 @@ export const DEFAULT_VIEWER_SETTINGS = Object.freeze({
   wtHash: '',
   transparent: false,
   armSolver: true,
+  drumOverlay: false,
   scenePreset: 'soft',
   backgroundColor: '#0f1220',
   bloom: false,
@@ -575,6 +587,91 @@ export function handTargetDebugRows(targets = []) {
       recovered: Boolean((target.flags || 0) & 0x02),
     }));
   });
+}
+
+export function createDefaultDrumKitConfig(name = 'default') {
+  return {
+    schema: DRUM_KIT_SCHEMA,
+    name,
+    createdAt: new Date().toISOString(),
+    zones: DRUM_ZONE_DEFS.map((zone) => ({
+      id: zone.id,
+      label: zone.label,
+      type: zone.type,
+      x: zone.x,
+      y: zone.y,
+      radius: zone.radius,
+      calibrated: false,
+    })),
+  };
+}
+
+export function normalizeDrumKitConfig(config) {
+  const base = /** @type {any} */ (createDefaultDrumKitConfig(config?.name || 'default'));
+  if (!config || typeof config !== 'object' || (config.schema && config.schema !== DRUM_KIT_SCHEMA)) return base;
+  base.createdAt = typeof config.createdAt === 'string' ? config.createdAt : base.createdAt;
+  const incoming = new Map(Array.isArray(config.zones) ? config.zones.map((zone) => [String(zone.id || ''), zone]) : []);
+  base.zones = base.zones.map((zone) => {
+    const raw = incoming.get(zone.id) || {};
+    return {
+      ...zone,
+      x: clamp(Number(raw.x ?? zone.x), 0, 1),
+      y: clamp(Number(raw.y ?? zone.y), 0, 1),
+      radius: clamp(Number(raw.radius ?? zone.radius), 0.03, 0.18),
+      calibrated: Boolean(raw.calibrated),
+    };
+  });
+  return base;
+}
+
+export function drumKitCalibrationSummary(config) {
+  const kit = normalizeDrumKitConfig(config);
+  const missing = kit.zones.filter((zone) => !zone.calibrated).map((zone) => zone.id);
+  return {
+    total: kit.zones.length,
+    calibrated: kit.zones.length - missing.length,
+    ready: missing.length === 0,
+    missing,
+  };
+}
+
+export function handWristToDrumStage(hand = {}) {
+  const wrist = hand.wrist || [0, 0, 0];
+  return {
+    x: clamp(0.5 + Number(wrist[0] || 0), 0, 1),
+    y: clamp(0.5 - Number(wrist[1] || 0), 0, 1),
+  };
+}
+
+export function deriveDrumOverlayState(hands = [], config = createDefaultDrumKitConfig()) {
+  const kit = normalizeDrumKitConfig(config);
+  const zones = kit.zones.filter((zone) => zone.calibrated);
+  const handStates = hands.map((hand) => {
+    const point = handWristToDrumStage(hand);
+    const gesture = hand.gesture || classifyHandGesture(hand);
+    const nearest = zones
+      .map((zone) => ({
+        zone,
+        distance: Math.hypot(point.x - zone.x, point.y - zone.y),
+      }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    const inZone = nearest && nearest.distance <= nearest.zone.radius * 1.35;
+    return {
+      handedness: hand.handedness || 'Right',
+      confidence: clamp(Number(hand.confidence ?? 1)),
+      point,
+      gesture,
+      zoneId: inZone ? nearest.zone.id : null,
+      zoneType: inZone ? nearest.zone.type : null,
+      active: Boolean(inZone && gesture.drumGrip),
+    };
+  });
+  return {
+    zones: kit.zones,
+    hands: handStates,
+    activeZoneIds: [...new Set(handStates.filter((hand) => hand.active && hand.zoneId).map((hand) => hand.zoneId))],
+    summary: drumKitCalibrationSummary(kit),
+  };
 }
 
 export function normalizeHeadLeanRangeCm(value) {

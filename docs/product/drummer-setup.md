@@ -9,10 +9,12 @@
 ## Calibration
 
 1. Start tracker.
-2. Enable Hands.
-3. Keep both sticks still over the snare for two seconds.
-4. Tap each kit zone slowly: snare, hi-hat, ride, crash, toms.
-5. Check that visual hit candidates align with audio onsets.
+2. Enable Drummer mode. The tracker enables hand tracking automatically.
+3. Pick a zone in Drummer setup.
+4. Press **Place zone** and click the camera preview where that zone appears.
+5. Adjust radius until the overlay covers the playable area.
+6. Repeat for snare, hi-hat, ride, crash, tom, and kick.
+7. Check that the hand debug and drum zone list respond while holding a drum grip.
 
 ## Reliability checks
 
@@ -23,16 +25,18 @@
 
 ## Drummer Mode Setup Screen
 
-The tracker should expose one setup surface with:
+The tracker exposes one setup surface with:
 
 - camera preview and hand/stick confidence
-- zone list: snare, hi-hat, ride, crash, tom, floor tom, kick
-- per-zone radius and cooldown
-- tap-to-capture zone center from the current stick tip
+- zone list: snare, hi-hat, ride, crash, tom, kick
+- per-zone radius
+- click-to-place zone center from the camera preview
 - audio onset meter
 - benchmark result summary
 
-Persist zones in local settings. Do not publish calibration data unless the user connects to a room.
+Zones persist in local settings under `minamo.drum-kit.calibration.v1`.
+Calibration data is not published over KGM1; the viewer overlay derives its
+live state from compact hand curl and wrist targets.
 
 ## Pedal Inference
 
@@ -50,10 +54,19 @@ Kick pedal:
 
 ## OBS Overlay
 
-For an OBS-friendly drum overlay, render only recent `DrumHitEvent` pulses:
+Use the tracker **Copy OBS overlay URL** button or open:
+
+```text
+viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked&drum=1
+```
+
+The current OBS-friendly overlay renders hand-derived drum grip activity:
 
 - transparent background
-- zone labels hidden by default
-- hit pulse opacity from confidence
-- optional hand color coding
+- zone labels with active-zone highlighting
+- hand labels showing gesture and nearest zone
+- no camera video
+
+Future `DrumHitEvent` transport can replace the hand-derived pulse source
+without changing the OBS URL.
 - no camera video

@@ -4,7 +4,7 @@
 //        -> KGM1 binary encode -> transport (local / ws / wt).
 // The camera image never leaves this page. Only ~76 bytes/frame go out.
 
-import { ARKIT_52, NUM_CHANNELS, MIRROR_INDEX, POSE_POINTS, NUM_POSE_POINTS } from '../shared/blendshapes.js';
+import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS, POSE_POINTS, NUM_POSE_POINTS } from '../shared/blendshapes.js';
 import { OneEuroArray, OneEuroQuat } from '../shared/filters.js';
 import { encodeFrame } from '../shared/codec.js';
 import { MinamoTransport } from '../shared/transport.js';
@@ -12,6 +12,7 @@ import {
   CALIBRATION_GUIDE_TOTAL_MS,
   DEFAULT_SMOOTHING_SETTINGS,
   DEFAULT_TRACKER_SETTINGS,
+  DRUM_KIT_STORAGE_KEY,
   FILTER_PRESETS,
   GAZE_CALIBRATION_STEPS,
   GAZE_CALIBRATION_TOTAL_MS,
@@ -43,12 +44,15 @@ import {
   collectGazeCalibrationSample,
   computeQualityScore,
   createCalibrationProfile,
+  createDefaultDrumKitConfig,
   createGazeCalibrationSession,
   createGuidedCalibrationSession,
   createHandCalibrationProfile,
   createHandCalibrationSession,
   collectGuidedCalibrationSample,
   defaultFaceLockRegion,
+  deriveDrumOverlayState,
+  drumKitCalibrationSummary,
   estimateLandmarkConfidence,
   estimateOneEuroLagMs,
   handCalibrationProgress,
@@ -56,6 +60,7 @@ import {
   isEditableTarget,
   loadJson,
   mirrorFacePayload,
+  normalizeDrumKitConfig,
   normalizeHandCalibrationProfile,
   normalizeProfile,
   normalizeHeadLeanRangeCm,
@@ -101,6 +106,8 @@ const overlay = $('overlay');
 const overlayCtx = overlay.getContext('2d');
 const meters = $('meters');
 const metersCtx = meters.getContext('2d');
+const faceDebug = $('faceDebug');
+const faceDebugCtx = faceDebug.getContext('2d');
 const handDebug = $('handDebug');
 const handDebugCtx = handDebug.getContext('2d');
 const chip = $('statusChip');
@@ -116,6 +123,7 @@ const COLOR_INK = css.getPropertyValue('--ink').trim();
 const settings = normalizeTrackerSettings(loadJson(localStorage, TRACKER_STORAGE_KEY, DEFAULT_TRACKER_SETTINGS));
 let profile = normalizeProfile(loadJson(localStorage, PROFILE_STORAGE_KEY, createCalibrationProfile('default')));
 let handProfile = normalizeHandCalibrationProfile(loadJson(localStorage, HAND_PROFILE_STORAGE_KEY, createHandCalibrationProfile('default')));
+let drumKit = normalizeDrumKitConfig(loadJson(localStorage, DRUM_KIT_STORAGE_KEY, createDefaultDrumKitConfig('default')));
 let resolvedAssets = null;
 
 const state = {
@@ -140,6 +148,9 @@ const state = {
   lastHandResult: null,
   lastHandInferenceMs: -Infinity,
   handDebugRows: [],
+  faceDebugHistory: [],
+  drumPlacementArmed: false,
+  drumOverlayState: deriveDrumOverlayState([], drumKit),
   trackedFaceBox: null,
   nameToIndex: null, // built from the first MediaPipe result
   // filters
@@ -248,6 +259,7 @@ function normalizeTrackerSettings(raw) {
   base.headLeanRangeCm = normalizeHeadLeanRangeCm(base.headLeanRangeCm);
   if (!['seated', 'standing'].includes(base.bodyMode)) base.bodyMode = 'seated';
   base.faceLock = Boolean(base.faceLock);
+  base.drummerMode = Boolean(base.drummerMode);
   base.voiceAccents = Boolean(base.voiceAccents);
   base.audioLipsync = Boolean(base.audioLipsync);
   if (!raw?.smoothing?.face) {
@@ -822,6 +834,13 @@ function loop() {
       frameWarnings.push(...stableHands.warnings);
     }
 
+    state.drumOverlayState = deriveDrumOverlayState(state.handTargets || [], drumKit);
+    if (settings.drummerMode) {
+      const summary = state.drumOverlayState.summary;
+      if (!summary.ready) frameWarnings.push(`DRUM_KIT_INCOMPLETE:${summary.missing.join(',')}`);
+      if (!state.handsEnabled) frameWarnings.push('DRUMMER_MODE_NEEDS_HANDS');
+    }
+
     const landmarkConfidence = state.confidenceTracker.sample(estimateLandmarkConfidence(selectedLandmarks), nowMs);
     state.quality = computeQualityScore({
       meanLuma: sampleLuma(),
@@ -867,6 +886,8 @@ function loop() {
 
     drawOverlay(faceRes, poseRes, handRes, faceIndex);
     drawMeters();
+    sampleFaceDebug(nowMs);
+    drawFaceDebug();
     drawHandDebug();
     state.frames++;
   }
@@ -937,6 +958,104 @@ function drawOverlay(faceRes, poseRes, handRes, faceIndex = 0) {
     }
   }
   overlayCtx.restore();
+  if (settings.drummerMode) drawDrumZoneOverlay(w, h);
+}
+
+function drawDrumZoneOverlay(width, height) {
+  const activeZones = new Set(state.drumOverlayState.activeZoneIds || []);
+  const selectedId = $('selDrumZone').value;
+  overlayCtx.save();
+  overlayCtx.font = '12px "IBM Plex Mono", monospace';
+  overlayCtx.textBaseline = 'middle';
+  for (const zone of drumKit.zones) {
+    const x = (state.mirror ? 1 - zone.x : zone.x) * width;
+    const y = zone.y * height;
+    const radius = zone.radius * Math.min(width, height);
+    const active = activeZones.has(zone.id);
+    overlayCtx.globalAlpha = zone.calibrated ? 0.92 : 0.38;
+    overlayCtx.lineWidth = zone.id === selectedId ? 4 : 2;
+    overlayCtx.strokeStyle = active ? COLOR_POSE : zone.calibrated ? COLOR_FACE : COLOR_DIM;
+    overlayCtx.fillStyle = active ? 'rgba(111,227,255,0.16)' : 'rgba(255,122,162,0.10)';
+    overlayCtx.beginPath();
+    overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
+    overlayCtx.fill();
+    overlayCtx.stroke();
+    overlayCtx.globalAlpha = 1;
+    overlayCtx.fillStyle = active ? COLOR_POSE : zone.calibrated ? COLOR_INK : COLOR_DIM;
+    overlayCtx.fillText(zone.label, x + radius + 6, y);
+  }
+  if (state.drumPlacementArmed) {
+    overlayCtx.fillStyle = COLOR_POSE;
+    overlayCtx.fillText('placing zone', 12, height - 18);
+  }
+  overlayCtx.restore();
+}
+
+const FACE_DEBUG_CHANNELS = Object.freeze([
+  { name: 'jaw', index: CHANNEL_INDEX.jawOpen, color: '#ff7aa2' },
+  { name: 'wide', index: CHANNEL_INDEX.mouthStretchLeft, color: '#ffc46b' },
+  { name: 'smile', index: CHANNEL_INDEX.mouthSmileLeft, color: '#7ce7a9' },
+  { name: 'blink', index: CHANNEL_INDEX.eyeBlinkLeft, color: '#6fe3ff' },
+  { name: 'brow', index: CHANNEL_INDEX.browInnerUp, color: '#e9ebf8' },
+]);
+
+function sampleFaceDebug(nowMs) {
+  state.faceDebugHistory.push({
+    timeMs: nowMs,
+    values: FACE_DEBUG_CHANNELS.map((channel) => clamp(state.weights[channel.index] || 0)),
+  });
+  const cutoff = nowMs - 4000;
+  while (state.faceDebugHistory.length && state.faceDebugHistory[0].timeMs < cutoff) state.faceDebugHistory.shift();
+}
+
+function drawFaceDebug() {
+  const dpr = window.devicePixelRatio || 1;
+  const cw = faceDebug.clientWidth, ch = faceDebug.clientHeight;
+  if (faceDebug.width !== cw * dpr) { faceDebug.width = cw * dpr; faceDebug.height = ch * dpr; }
+  const ctx = faceDebugCtx;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.fillStyle = '#0b0e1a';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.font = '10px "IBM Plex Mono", monospace';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = COLOR_DIM;
+  ctx.fillText('face expression debug', 8, 12);
+  if (state.faceDebugHistory.length < 2) {
+    ctx.fillText('start tracking to inspect mouth, blink, brow, and smile stability', 8, ch / 2);
+    return;
+  }
+  const left = 42;
+  const top = 22;
+  const width = Math.max(10, cw - left - 8);
+  const height = Math.max(20, ch - top - 12);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = top + (height * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(left + width, y);
+    ctx.stroke();
+  }
+  const start = state.faceDebugHistory[0].timeMs;
+  const span = Math.max(1, state.faceDebugHistory[state.faceDebugHistory.length - 1].timeMs - start);
+  for (let c = 0; c < FACE_DEBUG_CHANNELS.length; c++) {
+    const channel = FACE_DEBUG_CHANNELS[c];
+    ctx.strokeStyle = channel.color;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let i = 0; i < state.faceDebugHistory.length; i++) {
+      const sample = state.faceDebugHistory[i];
+      const x = left + ((sample.timeMs - start) / span) * width;
+      const y = top + height * (1 - sample.values[c]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = channel.color;
+    ctx.fillText(channel.name, 8, top + 10 + c * 18);
+  }
 }
 
 const HAND_CHAINS = [
@@ -1156,6 +1275,7 @@ function updateStats(nowMs) {
   ];
   renderWarnings([...new Set(visibleWarnings)]);
   renderLightingChecklist();
+  updateDrumKitUi();
   state.lastBytesOut = state.transport.bytesOut;
   state.frames = 0;
   state.lastStats = nowMs;
@@ -1230,6 +1350,7 @@ function applySettingsToUi() {
   $('chkVoiceAccents').checked = Boolean(settings.voiceAccents);
   $('chkAudioLipsync').checked = Boolean(settings.audioLipsync);
   $('chkFaceLock').checked = Boolean(settings.faceLock);
+  $('chkDrummerMode').checked = Boolean(settings.drummerMode);
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
   $('selResolution').value = settings.resolution;
   $('selFps').value = settings.fps;
@@ -1245,6 +1366,7 @@ function applySettingsToUi() {
   updateModeFields();
   updateViewerLink();
   updateChannelControls();
+  updateDrumKitUi();
 }
 
 function readSettingsFromUi() {
@@ -1259,6 +1381,7 @@ function readSettingsFromUi() {
   settings.voiceAccents = $('chkVoiceAccents').checked;
   settings.audioLipsync = $('chkAudioLipsync').checked;
   settings.faceLock = $('chkFaceLock').checked;
+  settings.drummerMode = $('chkDrummerMode').checked;
   settings.privacyLocalOnly = $('chkPrivacy').checked;
   settings.cameraId = $('selCamera').value;
   settings.resolution = $('selResolution').value;
@@ -1295,6 +1418,91 @@ function updateChannelControls() {
   $('rngDeadzone').value = profile.deadzones[i];
   $('btnMuteChannel').textContent = profile.muted[i] ? 'Unmute channel' : 'Mute channel';
   drawMeters();
+}
+
+function selectedDrumZone() {
+  return drumKit.zones.find((zone) => zone.id === $('selDrumZone').value) || drumKit.zones[0];
+}
+
+function saveDrumKit() {
+  drumKit = normalizeDrumKitConfig(drumKit);
+  saveJson(localStorage, DRUM_KIT_STORAGE_KEY, drumKit);
+  state.drumOverlayState = deriveDrumOverlayState(state.handTargets || [], drumKit);
+  updateDrumKitUi();
+}
+
+function updateDrumKitUi() {
+  const zone = selectedDrumZone();
+  if (zone) {
+    $('rngDrumZoneRadius').value = String(zone.radius);
+    $('outDrumZoneRadius').textContent = `${(zone.radius * 100).toFixed(1)}%`;
+  }
+  const summary = drumKitCalibrationSummary(drumKit);
+  $('drumKitStatus').textContent = `${summary.calibrated}/${summary.total} zones`;
+  $('drumKitStatus').dataset.state = summary.ready ? 'good' : summary.calibrated ? 'degraded' : 'idle';
+  $('btnArmDrumZone').textContent = state.drumPlacementArmed ? 'Cancel placement' : 'Place zone';
+  renderDrumZoneList();
+}
+
+function renderDrumZoneList() {
+  const active = new Set(state.drumOverlayState.activeZoneIds || []);
+  $('drumZoneList').replaceChildren(...drumKit.zones.map((zone) => {
+    const li = document.createElement('li');
+    li.dataset.state = active.has(zone.id) ? 'active' : zone.calibrated ? 'set' : 'idle';
+    const label = document.createElement('span');
+    label.textContent = `${zone.label} ${zone.calibrated ? 'set' : 'unset'}`;
+    const detail = document.createElement('small');
+    detail.textContent = `${(zone.x * 100).toFixed(0)} / ${(zone.y * 100).toFixed(0)} / ${(zone.radius * 100).toFixed(1)}%`;
+    li.append(label, detail);
+    return li;
+  }));
+}
+
+function updateSelectedDrumZone(patch) {
+  const id = $('selDrumZone').value;
+  drumKit.zones = drumKit.zones.map((zone) => zone.id === id ? { ...zone, ...patch } : zone);
+  drumKit.createdAt = new Date().toISOString();
+  saveDrumKit();
+}
+
+function placeSelectedDrumZoneFromEvent(ev) {
+  if (!state.drumPlacementArmed || !settings.drummerMode) return;
+  ev.preventDefault();
+  const rect = overlay.getBoundingClientRect();
+  const displayX = clamp((ev.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+  const displayY = clamp((ev.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+  updateSelectedDrumZone({
+    x: state.mirror ? 1 - displayX : displayX,
+    y: displayY,
+    calibrated: true,
+  });
+  state.drumPlacementArmed = false;
+  updateDrumKitUi();
+  chip.textContent = 'drum zone placed';
+  chip.dataset.state = 'open';
+}
+
+async function copyDrumObsUrl() {
+  persistSettings();
+  const url = new URL('../viewer/', location.href);
+  url.searchParams.set('preset', 'obs');
+  url.searchParams.set('mode', settings.mode);
+  url.searchParams.set('room', settings.room || 'demo');
+  if (settings.token) url.searchParams.set('token', settings.token);
+  if (settings.wtUrl) url.searchParams.set('wtUrl', settings.wtUrl);
+  if (settings.wtHash) url.searchParams.set('wtHash', settings.wtHash);
+  url.searchParams.set('bg', 'transparent');
+  url.searchParams.set('hud', '0');
+  url.searchParams.set('camera', 'locked');
+  url.searchParams.set('drum', '1');
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    chip.textContent = 'OBS drum overlay URL copied';
+    chip.dataset.state = 'open';
+  } catch {
+    chip.textContent = url.toString();
+    chip.dataset.state = 'open';
+  }
 }
 
 function currentSmoothingGroup() {
@@ -1678,6 +1886,16 @@ function cameraErrorMessage(e) {
   return e?.message || 'Camera startup failed.';
 }
 
+async function ensureHandLandmarkerIfRunning() {
+  if (!state.handsEnabled || !state.running || state.handLandmarker || !state._fileset) return;
+  const assets = await resolveModelAssets();
+  state.handLandmarker = await HandLandmarker.createFromOptions(state._fileset, {
+    baseOptions: { modelAssetPath: assets.handModel, delegate: 'GPU' },
+    runningMode: 'VIDEO',
+    numHands: 2,
+  });
+}
+
 $('btnStart').addEventListener('click', async () => {
   $('btnStart').disabled = true;
   try {
@@ -1704,6 +1922,7 @@ $('btnStart').addEventListener('click', async () => {
 
 $('btnStop').addEventListener('click', () => {
   state.running = false;
+  state.drumPlacementArmed = false;
   cancelGuidedCalibration('calibration stopped');
   cancelGazeCalibration('gaze calibration stopped');
   cancelHandCalibration('hand calibration stopped');
@@ -1741,14 +1960,7 @@ $('chkPose').addEventListener('change', async (e) => {
 $('chkHands').addEventListener('change', async (e) => {
   state.handsEnabled = e.target.checked;
   persistSettings();
-  if (state.handsEnabled && state.running && !state.handLandmarker && state._fileset) {
-    const assets = await resolveModelAssets();
-    state.handLandmarker = await HandLandmarker.createFromOptions(state._fileset, {
-      baseOptions: { modelAssetPath: assets.handModel, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numHands: 2,
-    });
-  }
+  await ensureHandLandmarkerIfRunning();
 });
 
 $('chkVoiceAccents').addEventListener('change', async (e) => {
@@ -1766,11 +1978,58 @@ $('chkFaceLock').addEventListener('change', () => {
   state.trackedFaceBox = null;
   persistSettings();
 });
+$('chkDrummerMode').addEventListener('change', async (e) => {
+  settings.drummerMode = e.target.checked;
+  if (settings.drummerMode) {
+    $('chkHands').checked = true;
+    settings.hands = true;
+    state.handsEnabled = true;
+    await ensureHandLandmarkerIfRunning();
+  } else {
+    state.drumPlacementArmed = false;
+  }
+  persistSettings();
+  updateDrumKitUi();
+});
 $('selCamera').addEventListener('change', restartCameraIfRunning);
 $('selResolution').addEventListener('change', restartCameraIfRunning);
 $('selFps').addEventListener('change', restartCameraIfRunning);
 $('rngHeadLean').addEventListener('input', persistSettings);
 $('selBodyMode').addEventListener('change', persistSettings);
+overlay.addEventListener('pointerdown', placeSelectedDrumZoneFromEvent);
+$('selDrumZone').addEventListener('change', updateDrumKitUi);
+$('rngDrumZoneRadius').addEventListener('input', (e) => {
+  updateSelectedDrumZone({ radius: Number(e.target.value) });
+});
+$('btnArmDrumZone').addEventListener('click', () => {
+  if (!settings.drummerMode) {
+    $('chkDrummerMode').checked = true;
+    settings.drummerMode = true;
+    settings.hands = true;
+    $('chkHands').checked = true;
+    state.handsEnabled = true;
+    persistSettings();
+    ensureHandLandmarkerIfRunning().catch((error) => {
+      chip.textContent = `hand model error: ${error.message}`;
+      chip.dataset.state = 'error';
+    });
+  }
+  state.drumPlacementArmed = !state.drumPlacementArmed;
+  updateDrumKitUi();
+});
+$('btnClearDrumZone').addEventListener('click', () => {
+  updateSelectedDrumZone({ calibrated: false });
+  chip.textContent = 'drum zone cleared';
+  chip.dataset.state = 'idle';
+});
+$('btnResetDrumKit').addEventListener('click', () => {
+  state.drumPlacementArmed = false;
+  drumKit = createDefaultDrumKitConfig('default');
+  saveDrumKit();
+  chip.textContent = 'drum kit reset';
+  chip.dataset.state = 'idle';
+});
+$('btnCopyDrumObsUrl').addEventListener('click', copyDrumObsUrl);
 
 $('selMode').addEventListener('change', () => {
   updateModeFields();
@@ -1862,12 +2121,15 @@ $('btnResetSettings').addEventListener('click', () => {
   cancelGuidedCalibration('calibration reset');
   cancelGazeCalibration('gaze calibration reset');
   cancelHandCalibration('hand calibration reset');
+  state.drumPlacementArmed = false;
   Object.assign(settings, normalizeTrackerSettings(DEFAULT_TRACKER_SETTINGS));
   profile = createCalibrationProfile('default');
   handProfile = createHandCalibrationProfile('default');
+  drumKit = createDefaultDrumKitConfig('default');
   saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
   saveProfile();
   saveJson(localStorage, HAND_PROFILE_STORAGE_KEY, handProfile);
+  saveJson(localStorage, DRUM_KIT_STORAGE_KEY, drumKit);
   applySettingsToUi();
   stopAudioInput();
   resetFilters();

@@ -113,11 +113,14 @@ import {
   collectGazeCalibrationSample,
   computeQualityScore,
   createCalibrationProfile,
+  createDefaultDrumKitConfig,
   createGazeCalibrationSession,
   createGuidedCalibrationSession,
   createHandCalibrationProfile,
   createHandCalibrationSession,
   collectGuidedCalibrationSample,
+  deriveDrumOverlayState,
+  drumKitCalibrationSummary,
   estimateIrisGaze,
   estimateLandmarkConfidence,
   estimateOneEuroLagMs,
@@ -125,6 +128,7 @@ import {
   isEditableTarget,
   mirrorFacePayload,
   mirrorWeights,
+  normalizeDrumKitConfig,
   normalizeHandCalibrationProfile,
   normalizeHeadLeanRangeCm,
   parseMotionJsonl,
@@ -799,6 +803,22 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.equal(classifyHandGesture({ curls: [0.1, 0.1, 0.1, 0.1, 0.1] }).label, 'open');
   assert.equal(classifyHandGesture({ curls: [0.7, 0.1, 0.8, 0.82, 0.84] }).label, 'point');
   assert.equal(classifyHandGesture({ curls: [0.55, 0.55, 0.62, 0.7, 0.72] }).drumGrip, true);
+  const drumKit = createDefaultDrumKitConfig('test-kit');
+  assert.equal(drumKitCalibrationSummary(drumKit).calibrated, 0);
+  const configuredKit = normalizeDrumKitConfig({
+    schema: 'minamo.drum-kit-calibration.v1',
+    name: 'configured',
+    zones: [{ id: 'snare', x: 0.5, y: 0.6, radius: 0.1, calibrated: true }],
+  });
+  assert.equal(drumKitCalibrationSummary(configuredKit).calibrated, 1);
+  const drumOverlay = deriveDrumOverlayState([{
+    handedness: 'Right',
+    confidence: 1,
+    curls: [0.55, 0.55, 0.62, 0.7, 0.72],
+    spreads: [0, 0, 0, 0, 0],
+    wrist: [0, -0.1, 0],
+  }], configuredKit);
+  assert.deepEqual(drumOverlay.activeZoneIds, ['snare']);
 
   const stabilizer = new HandTargetStabilizer({ holdMs: 250, maxCurlDelta: 0.2, maxSpreadDelta: 0.3 });
   stabilizer.update([openTarget], 0);

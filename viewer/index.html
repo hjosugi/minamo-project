@@ -50,6 +50,52 @@
     }
     .hud .stats { margin-top: 8px; }
     body.hud-hidden .hud { display: none; }
+    .drum-overlay {
+      position: fixed;
+      left: 50%;
+      bottom: 34px;
+      z-index: 9;
+      width: min(760px, calc(100vw - 40px));
+      transform: translateX(-50%);
+      pointer-events: none;
+      font-family: var(--font-mono);
+    }
+    .drum-overlay[hidden] { display: none; }
+    .drum-overlay .kit {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .drum-overlay .zone {
+      min-height: 46px;
+      padding: 7px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(15, 18, 32, 0.58);
+      color: rgba(233, 235, 248, 0.78);
+      font-size: 11px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .drum-overlay .zone[data-state='active'] {
+      border-color: var(--pose);
+      background: rgba(111, 227, 255, 0.26);
+      color: var(--ink);
+    }
+    .drum-overlay .hands {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+      min-height: 24px;
+      color: var(--ink-dim);
+      font-size: 11px;
+    }
+    .drum-overlay .hand[data-state='active'] { color: var(--pose); }
+    @media (max-width: 620px) {
+      .drum-overlay .kit { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
     .dropveil {
       position: fixed; inset: 0; z-index: 20;
       display: none; place-items: center;
@@ -65,6 +111,10 @@
   <div id="scene"></div>
   <div id="sceneVignette"></div>
   <div id="layeredAvatar" hidden></div>
+  <div id="drumOverlay" class="drum-overlay" hidden>
+    <div class="kit" id="drumOverlayKit"></div>
+    <div class="hands" id="drumOverlayHands"></div>
+  </div>
 
   <div class="hud">
     <div class="panel">
@@ -120,6 +170,7 @@
         <button id="btnCopySceneUrl">Copy URL</button>
         <label class="check"><input type="checkbox" id="chkTransparent" />Transparent</label>
         <label class="check"><input type="checkbox" id="chkArmSolver" checked />Arm solver</label>
+        <label class="check"><input type="checkbox" id="chkDrumOverlay" />Drum overlay</label>
         <label class="check"><input type="checkbox" id="chkBloom" />Bloom</label>
         <label class="check"><input type="checkbox" id="chkVignette" />Vignette</label>
         <label class="field" style="min-width: 130px;">

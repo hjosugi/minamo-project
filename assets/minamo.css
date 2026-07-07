@@ -273,14 +273,16 @@ output {
 
 .meters-canvas { width: 100%; height: 460px; display: block; border-radius: 6px; background: #0b0e1a; touch-action: none; }
 
-.hand-debug-canvas {
+.hand-debug-canvas,
+.face-debug-canvas {
   width: 100%;
-  height: 190px;
   display: block;
   margin-top: 10px;
   border-radius: 6px;
   background: #0b0e1a;
 }
+.hand-debug-canvas { height: 190px; }
+.face-debug-canvas { height: 150px; }
 
 .mini-chip {
   border: 1px solid var(--line);
@@ -441,6 +443,50 @@ output {
   color: var(--ink);
 }
 .signal-checklist li[data-state='check'] b { color: var(--warn); }
+
+.drummer-setup {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 18, 32, 0.42);
+}
+.drummer-setup .controls { margin-top: 0; }
+.drum-zone-list {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+  gap: 6px;
+}
+.drum-zone-list li {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.drum-zone-list li[data-state='set'] {
+  border-color: rgba(124, 231, 169, 0.46);
+  background: rgba(124, 231, 169, 0.08);
+  color: var(--ink);
+}
+.drum-zone-list li[data-state='active'] {
+  border-color: rgba(111, 227, 255, 0.62);
+  background: rgba(111, 227, 255, 0.12);
+  color: var(--ink);
+}
+.drum-zone-list small {
+  color: var(--ink-dim);
+  font-size: 10px;
+}
 
 .note { font-size: 13px; color: var(--ink-dim); margin-top: 10px; }
 .note code { font-family: var(--font-mono); color: var(--ink); background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
