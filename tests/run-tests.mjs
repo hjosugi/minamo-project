@@ -29,6 +29,11 @@ import {
   parseVrmaGlb,
 } from '../shared/vrma-export.js';
 import {
+  formatInspection as formatGlbInspection,
+  parseGlb,
+  summarizeGltf,
+} from '../scripts/inspect-glb.mjs';
+import {
   EXPRESSION_MAPPING_SCHEMA,
   createDefaultVrmExpressionMap,
   createPerfectSyncExpressionMap,
@@ -250,6 +255,22 @@ function bytesToHex(bytes) {
 function hexToBytes(hex) {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+function encodeJsonGlb(json) {
+  const encoded = new TextEncoder().encode(JSON.stringify(json));
+  const paddedLength = Math.ceil(encoded.length / 4) * 4;
+  const totalLength = 12 + 8 + paddedLength;
+  const bytes = new Uint8Array(totalLength);
+  bytes.set(encoded, 20);
+  bytes.fill(0x20, 20 + encoded.length, 20 + paddedLength);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 0x46546c67, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, totalLength, true);
+  view.setUint32(12, paddedLength, true);
+  view.setUint32(16, 0x4e4f534a, true);
   return bytes;
 }
 
@@ -1128,6 +1149,38 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.ok(vrma.animations[0].channels.some((channel) => channel.target.path === 'rotation'), 'VRMA exports head rotation animation');
   assert.ok(vrma.animations[0].channels.some((channel) => channel.target.path === 'translation'), 'VRMA exports expression weight animation');
   assert.equal(vrma.animations[0].extras.loop, true, 'VRMA loop marker is preserved in animation extras');
+  const glbFixture = encodeJsonGlb({
+    asset: { version: '2.0', generator: 'minamo-test', copyright: '0BSD' },
+    extensionsUsed: ['VRMC_vrm', 'VRMC_springBone'],
+    extensions: {
+      VRMC_vrm: {
+        humanoid: { humanBones: { hips: { node: 0 }, head: { node: 1 } } },
+        expressions: { preset: { aa: {}, blink: {} }, custom: { smirk: {} } },
+      },
+      VRMC_springBone: {
+        springs: [{ joints: [{ node: 1 }, { node: 2 }] }],
+        colliders: [{ node: 1 }],
+      },
+    },
+    scenes: [{}],
+    nodes: [{ name: 'hips' }, { name: 'head' }, { name: 'hair' }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, targets: [{ POSITION: 1 }, { POSITION: 2 }] }] }],
+    accessors: [{ count: 42 }, { count: 42 }, { count: 42 }, { max: [1.25] }],
+    materials: [{}],
+    textures: [{}],
+    images: [{ mimeType: 'image/png', bufferView: 0 }],
+    skins: [{}],
+    animations: [{ name: 'wave', samplers: [{ input: 3 }], channels: [{}] }],
+  });
+  const glbParsed = parseGlb(glbFixture);
+  const glbSummary = summarizeGltf(glbParsed.json, glbParsed.length);
+  assert.equal(glbSummary.counts.vertices, 42);
+  assert.equal(glbSummary.counts.morphTargets, 2);
+  assert.equal(glbSummary.vrm.expressions.length, 3);
+  assert.equal(glbSummary.vrm.springBoneJoints, 2);
+  assert.equal(glbSummary.animations[0].durationSeconds, 1.25);
+  assert.equal(glbSummary.warnings.length, 0);
+  assert.ok(formatGlbInspection(glbSummary).includes('VRM 1.0'), 'GLB formatter includes VRM summary');
   for (const code of ['LOW_LIGHT', 'MOTION_BLUR', 'DROPPED_FRAMES', 'OCCLUSION', 'NON_FINITE_SIGNAL', 'SIGNAL_CLAMPED']) {
     assert.ok(Object.values(WARNING_TAXONOMY).includes(code), `warning taxonomy exposes ${code}`);
   }
@@ -1194,4 +1247,4 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(transform.y, -2.5);
 }
 
-console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, and shortcut tests passed.`);
+console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, and shortcut tests passed.`);

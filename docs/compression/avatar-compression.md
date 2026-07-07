@@ -31,6 +31,18 @@ Before changing an avatar, record:
 
 Fail the inspection if a tool strips `VRMC_vrm`, `VRM`, morph targets, humanoid nodes, or spring bone extensions.
 
+Use the built-in inspector for a dependency-free first pass:
+
+```bash
+npm run inspect:glb -- avatar.glb
+npm run inspect:glb -- avatar.glb --json
+npm run inspect:glb -- avatar.glb --avatar
+```
+
+`--avatar` exits non-zero when the file is missing VRM metadata, humanoid bone
+mapping, morph targets, or expression names. It is meant as a preflight guard
+before glTF Transform or artist tooling rewrites the file.
+
 ### glTF Transform guide
 
 Use glTF Transform as the first optimizer because it can inspect and rewrite GLB files predictably:
@@ -52,6 +64,14 @@ Only run texture and mesh compression after the pruned file still loads in the v
 
 Default to meshopt for avatars. Use Draco only after visual regression confirms blendshapes and spring bones survive.
 
+Recommended decision record:
+
+- original and optimized file byte size
+- first-frame viewer load time on a low-end device
+- decode time in Chrome performance profile
+- whether every expression in the inspector summary still exists
+- whether spring bone joints and colliders match the original count
+
 ### KTX2 texture guide
 
 KTX2/BasisU is appropriate for large albedo and normal textures. Keep uncompressed PNG/WebP fallbacks for:
@@ -62,13 +82,23 @@ KTX2/BasisU is appropriate for large albedo and normal textures. Keep uncompress
 
 Record before/after GPU memory and first-frame load time.
 
+Texture acceptance checklist:
+
+- albedo maps preserve skin gradients without block artifacts
+- normal maps do not introduce face or clothing shimmer
+- alpha-cutout textures keep clean edges in OBS transparent mode
+- material references still point at the intended image slots
+- mobile browser loads the chosen transcode target without fallback stalls
+
 ## 3. 2D assets
 
-- texture atlas
-- power-of-two option
-- compressed texture variants
-- lazy load expression packs
-- keep rig parameter names stable
+- Keep texture-atlas manifests deterministic: stable layer name, slot, depth,
+  original size, packed rectangle, and transform origin.
+- Offer a power-of-two atlas option for older GPUs, but keep the source PNG/PSD
+  layers exportable for debugging.
+- Generate compressed texture variants only after verifying alpha edges.
+- Lazy-load expression packs that are not active in the current preset.
+- Keep rig parameter names stable across atlas rebuilds.
 
 For layered PNG and PSD mode, atlas only static layers that share the same transform origin. Keep mouth/eye swap layers separate if atlas packing would make debugging harder.
 
@@ -90,6 +120,14 @@ Motion delta quantization policy:
 - drum hits: event packet only; do not stream idle drum state
 - force a keyframe after reconnect, model change, or 2 seconds of continuous deltas
 
+Quantization acceptance gates:
+
+- neutral face round-trips with no visible mouth or blink drift
+- gaze direction error stays below 3 degrees after delta decode
+- hand curl error stays below one rig-visible step after clamp
+- reconnect keyframe restores full state in one frame
+- old deltas are dropped if they arrive after a newer keyframe
+
 ## 5. Quality tradeoffs
 
 Face and mouth signals should usually receive higher priority than detailed landmarks. For remote streaming, send avatar-ready parameters first, raw landmarks second.
@@ -106,6 +144,11 @@ Every optimized avatar must be checked against the original:
 - transparent OBS background
 - one low-end device load test
 
+Capture the original and optimized avatar from the same viewer URL. For each
+pose, compare a full-frame image and a cropped face image. If a pixel-diff tool
+is used, mask the background and hair tips so spring motion does not hide facial
+or material regressions.
+
 ## 7. Asset license checklist
 
 For every bundled or sample asset, record:
@@ -116,3 +159,8 @@ For every bundled or sample asset, record:
 - whether modification/compression is allowed
 - whether attribution is required
 - whether model output or screenshots can be used in docs
+
+Store the license record beside the asset or in the release notes for external
+sample files. Compression, retargeting, and screenshots count as modification
+or derivative use for many creator-marketplace licenses; do not publish an
+optimized sample until redistribution and modification are both allowed.
