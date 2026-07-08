@@ -34,16 +34,25 @@ Primary language is English; documents that originated in Japanese keep a
 - [design/DD-006-kgm2.md](design/DD-006-kgm2.md)
 - [design/DD-007-recording.md](design/DD-007-recording.md)
 - [design/DD-008-calibration-retargeting.md](design/DD-008-calibration-retargeting.md)
+- [design/DD-009-onnx-backend-registry.md](design/DD-009-onnx-backend-registry.md) — runtime-toggleable pose backend registry (#23)
 
 ## Tracking design (target system)
 
 - [tracking/hand-finger-perfect-tracking.md](tracking/hand-finger-perfect-tracking.md) ([日本語](tracking/hand-finger-perfect-tracking.ja.md))
 - [tracking/face-eye-mouth-high-precision.md](tracking/face-eye-mouth-high-precision.md) ([日本語](tracking/face-eye-mouth-high-precision.ja.md))
 - [tracking/drum-performance-tracking.md](tracking/drum-performance-tracking.md) ([日本語](tracking/drum-performance-tracking.ja.md))
+- [tracking/drum-hihat-pedal.md](tracking/drum-hihat-pedal.md) — hi-hat pedal inference (#118)
+- [tracking/drum-kick-pedal.md](tracking/drum-kick-pedal.md) — kick pedal inference (#119)
 - [tracking/stability-anti-jitter.md](tracking/stability-anti-jitter.md)
 - [tracking/occlusion-recovery.md](tracking/occlusion-recovery.md) ([日本語](tracking/occlusion-recovery.ja.md))
 - [tracking/calibration.md](tracking/calibration.md)
 - [tracking/benchmarking.md](tracking/benchmarking.md)
+
+## Research (out-of-MVP evaluations)
+
+- [research/multi-camera-fusion.md](research/multi-camera-fusion.md) (#183)
+- [research/phone-camera-companion.md](research/phone-camera-companion.md) (#184)
+- [research/imu-stick-integration.md](research/imu-stick-integration.md) (#185)
 
 ## Product
 
@@ -53,6 +62,8 @@ Primary language is English; documents that originated in Japanese keep a
 - [product/desktop-app.md](product/desktop-app.md)
 - [product/obs-setup.md](product/obs-setup.md)
 - [product/drummer-setup.md](product/drummer-setup.md)
+- [product/drum-obs-overlay.md](product/drum-obs-overlay.md) — transparent OBS drum overlay (#120)
+- [product/drum-dataset.schema.json](product/drum-dataset.schema.json) — YOLO stick/drum label schema (#122)
 - [product/multi-avatar-rooms.md](product/multi-avatar-rooms.md)
 - [product/phone-tracker.md](product/phone-tracker.md)
 - [product/layered-avatar.md](product/layered-avatar.md)
@@ -68,7 +79,15 @@ Primary language is English; documents that originated in Japanese keep a
 - [transport/webtransport-realtime.md](transport/webtransport-realtime.md)
 - [transport/kgm2-reference-codecs.md](transport/kgm2-reference-codecs.md)
 - [transport/moq-evaluation.md](transport/moq-evaluation.md)
-- [compression/avatar-compression.md](compression/avatar-compression.md)
+- [compression/avatar-compression.md](compression/avatar-compression.md) — overview + kagami-pack CLI (#41)
+- [compression/glb-inspection.md](compression/glb-inspection.md) (#156)
+- [compression/gltf-transform.md](compression/gltf-transform.md) (#157)
+- [compression/ktx2-textures.md](compression/ktx2-textures.md) (#158)
+- [compression/meshopt-vs-draco.md](compression/meshopt-vs-draco.md) (#159)
+- [compression/texture-atlas-2d.md](compression/texture-atlas-2d.md) (#160)
+- [compression/motion-delta-quantization.md](compression/motion-delta-quantization.md) (#161)
+- [compression/visual-regression-checklist.md](compression/visual-regression-checklist.md) (#162)
+- [compression/asset-license-checklist.md](compression/asset-license-checklist.md) (#163)
 
 ## Engineering references
 
@@ -82,9 +101,11 @@ Primary language is English; documents that originated in Japanese keep a
 - [benchmarks/hand-stability-report.md](benchmarks/hand-stability-report.md)
 - [benchmarks/face-quality-benchmarks.md](benchmarks/face-quality-benchmarks.md)
 - [benchmarks/drum-benchmark-metrics.md](benchmarks/drum-benchmark-metrics.md)
+- [benchmarks/onnx-pose-backends.md](benchmarks/onnx-pose-backends.md) — pose backend fps/VRAM table (#23)
 - [dev/implementation-order.md](dev/implementation-order.md)
 - [ml/model-roadmap-yolo-edge.md](ml/model-roadmap-yolo-edge.md)
 - [ml/dataset-labeling-guide.md](ml/dataset-labeling-guide.md)
+- [ml/drum-dataset-schema.md](ml/drum-dataset-schema.md) — YOLO stick/drum training schema (#122)
 - [security/privacy.md](security/privacy.md)
 - [security/e2ee.md](security/e2ee.md)
 - [references/reviewed-sources.md](references/reviewed-sources.md)

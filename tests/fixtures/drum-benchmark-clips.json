@@ -1,0 +1,46 @@
+{
+  "schema": "minamo.drum-benchmark-clips.v1",
+  "note": "Synthetic hit-time fixtures for drum benchmark and fast-roll stress tests (issues #121, #123). Raw audio/video is never committed; only expected and detected hit timestamps.",
+  "toleranceMs": 35,
+  "minimumSeparationMs": 35,
+  "clips": [
+    {
+      "id": "single-snare",
+      "bpm": 60,
+      "zoneId": "snare",
+      "zoneType": "snare",
+      "expectedHitTimesMs": [0, 1000, 2000, 3000],
+      "detectedHitTimesMs": [3, 1002, 1998, 3004],
+      "pass": { "recall": 1.0, "precision": 1.0 }
+    },
+    {
+      "id": "alternating-hands",
+      "bpm": 120,
+      "zoneId": "snare",
+      "zoneType": "snare",
+      "expectedHitTimesMs": [0, 250, 500, 750, 1000, 1250],
+      "detectedHitTimesMs": [4, 247, 503, 752, 998, 1256],
+      "expectedHandSequence": ["Right", "Left", "Right", "Left", "Right", "Left"],
+      "detectedHandSequence": ["Right", "Left", "Right", "Left", "Right", "Left"],
+      "pass": { "recall": 0.95, "handAssignment": 0.9 }
+    },
+    {
+      "id": "fast-roll",
+      "bpm": 200,
+      "zoneId": "snare",
+      "zoneType": "snare",
+      "expectedHitTimesMs": [0, 75, 150, 225, 300, 375, 450, 525, 600],
+      "detectedHitTimesMs": [2, 77, 148, 228, 301, 377, 449, 527, 603],
+      "pass": { "recall": 0.9, "falseDoubleHits": 0 }
+    },
+    {
+      "id": "false-positive-hold",
+      "zoneId": "snare",
+      "zoneType": "snare",
+      "note": "Sticks rest inside the snare zone; no downstroke, so no hits expected.",
+      "expectedHitTimesMs": [],
+      "detectedHitTimesMs": [],
+      "pass": { "detected": 0 }
+    }
+  ]
+}

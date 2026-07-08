@@ -1,5 +1,15 @@
 # Avatar and Motion Compression
 
+Focused per-stage guides:
+[glb-inspection](glb-inspection.md) ·
+[gltf-transform](gltf-transform.md) ·
+[ktx2-textures](ktx2-textures.md) ·
+[meshopt-vs-draco](meshopt-vs-draco.md) ·
+[texture-atlas-2d](texture-atlas-2d.md) ·
+[motion-delta-quantization](motion-delta-quantization.md) ·
+[visual-regression-checklist](visual-regression-checklist.md) ·
+[asset-license-checklist](asset-license-checklist.md).
+
 ## 1. Goals
 
 2D/3D avatars must load quickly on cheap hardware.
@@ -164,3 +174,28 @@ Store the license record beside the asset or in the release notes for external
 sample files. Compression, retargeting, and screenshots count as modification
 or derivative use for many creator-marketplace licenses; do not publish an
 optimized sample until redistribution and modification are both allowed.
+
+## 8. kagami-pack CLI (KGM-041)
+
+`kagami-pack` (`scripts/kagami-pack.mjs`) is the planner and reporter for the
+hosted-avatar pipeline. It inspects a GLB/VRM, plans the conservative stage
+order, emits the exact encoder commands, and renders the before/after table.
+
+```bash
+npm run pack:avatar -- avatar.glb            # meshopt + KTX2 plan
+npm run pack:avatar -- avatar.glb --draco    # Draco geometry instead of meshopt
+```
+
+The planner (`planAvatarPack`) records rig-critical counts and warns before any
+lossy step; the operator runs the emitted `gltf-transform` / `gltfpack` commands,
+then re-inspects with `npm run inspect:glb -- <out> --avatar`. Report size and
+GPU memory before/after with `formatSizeTable`:
+
+| metric | before | after | delta |
+| --- | --- | --- | --- |
+| file size | 8.00 MB | 2.40 MB | -70.0% |
+| gpu memory | 120 MB | 40 MB | -66.7% |
+
+The numbers above are an illustrative target (typical VRM shrinks 60-80%); fill
+in measured values per asset after a visual regression pass
+([visual-regression-checklist.md](visual-regression-checklist.md)).

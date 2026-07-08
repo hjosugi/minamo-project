@@ -57,6 +57,32 @@ REQUIRED = [
     'shared/expression-mapping.js',
     'shared/layered-avatar.js',
     'shared/recording.js',
+    'shared/compression-checklist.js',
+    'shared/motion-quant.js',
+    'shared/drum-overlay.js',
+    'shared/pairing.js',
+    'docs/compression/avatar-compression.md',
+    'docs/compression/glb-inspection.md',
+    'docs/compression/gltf-transform.md',
+    'docs/compression/ktx2-textures.md',
+    'docs/compression/meshopt-vs-draco.md',
+    'docs/compression/texture-atlas-2d.md',
+    'docs/compression/motion-delta-quantization.md',
+    'docs/compression/visual-regression-checklist.md',
+    'docs/compression/asset-license-checklist.md',
+    'viewer/drum-overlay.html',
+    'docs/tracking/drum-hihat-pedal.md',
+    'docs/tracking/drum-kick-pedal.md',
+    'docs/product/drum-obs-overlay.md',
+    'docs/ml/drum-dataset-schema.md',
+    'docs/product/drum-dataset.schema.json',
+    'tests/fixtures/drum-benchmark-clips.json',
+    'docs/research/multi-camera-fusion.md',
+    'docs/research/phone-camera-companion.md',
+    'docs/research/imu-stick-integration.md',
+    'docs/design/DD-009-onnx-backend-registry.md',
+    'docs/benchmarks/onnx-pose-backends.md',
+    'scripts/kagami-pack.mjs',
     'tests/fixtures/kgm1-synthetic.jsonl',
     'tests/fixtures/kgm1-synthetic.kgm',
     'tests/fixtures/hand-golden-clip.json',
@@ -1597,6 +1623,97 @@ def validate_runtime_warning_taxonomy() -> None:
             add_error('shared/runtime.js', f'WARNING_TAXONOMY missing public code {code}')
 
 
+def validate_compression_docs() -> None:
+    focused_docs = [
+        'docs/compression/glb-inspection.md',
+        'docs/compression/gltf-transform.md',
+        'docs/compression/ktx2-textures.md',
+        'docs/compression/meshopt-vs-draco.md',
+        'docs/compression/texture-atlas-2d.md',
+        'docs/compression/motion-delta-quantization.md',
+        'docs/compression/visual-regression-checklist.md',
+        'docs/compression/asset-license-checklist.md',
+    ]
+    for rel in focused_docs:
+        text = read(rel)
+        for heading in ('## Steps', '## Rig-breaking risks', '## Test method'):
+            if heading not in text:
+                add_error(rel, f'compression doc missing required section: {heading}')
+    checklist = read('shared/compression-checklist.js')
+    for needle in ['evaluateAssetChecklist', 'REQUIRED_REGRESSION_POSES', 'ASSET_COMPRESSION_CHECKLIST']:
+        if needle not in checklist:
+            add_error('shared/compression-checklist.js', f'missing checklist export: {needle}')
+    quant = read('shared/motion-quant.js')
+    for needle in ['quantizeWeightDeltas', 'dequantizeWeightDeltas', 'encodeMotionFrame', 'decodeMotionStream', 'shouldForceKeyframe']:
+        if needle not in quant:
+            add_error('shared/motion-quant.js', f'missing motion-quant export: {needle}')
+
+
+def validate_drum_docs() -> None:
+    overlay = read('shared/drum-overlay.js')
+    for needle in ['deriveObsOverlayState', 'reduceDrumOverlay']:
+        if needle not in overlay:
+            add_error('shared/drum-overlay.js', f'missing drum overlay export: {needle}')
+    hihat = read('docs/tracking/drum-hihat-pedal.md')
+    if 'inferHiHatPedalState' not in hihat:
+        add_error('docs/tracking/drum-hihat-pedal.md', 'hi-hat pedal doc must point to inferHiHatPedalState')
+    kick = read('docs/tracking/drum-kick-pedal.md')
+    if 'inferKickPedalHit' not in kick:
+        add_error('docs/tracking/drum-kick-pedal.md', 'kick pedal doc must point to inferKickPedalHit')
+    schema_doc = read('docs/ml/drum-dataset-schema.md')
+    if 'minamo.drum-dataset.v1' not in schema_doc:
+        add_error('docs/ml/drum-dataset-schema.md', 'drum dataset schema doc must document minamo.drum-dataset.v1')
+    try:
+        clips = json.loads(read('tests/fixtures/drum-benchmark-clips.json'))
+    except (json.JSONDecodeError, SystemExit):
+        return
+    if not isinstance(clips, dict) or 'clips' not in clips:
+        add_error('tests/fixtures/drum-benchmark-clips.json', 'benchmark clips fixture must have a "clips" array')
+        return
+    for name in ('single-snare', 'alternating-hands', 'fast-roll', 'false-positive-hold'):
+        if not any(clip.get('id') == name for clip in clips['clips']):
+            add_error('tests/fixtures/drum-benchmark-clips.json', f'benchmark clips fixture missing clip: {name}')
+
+
+def validate_research_docs() -> None:
+    research_docs = {
+        'docs/research/multi-camera-fusion.md': '#183',
+        'docs/research/phone-camera-companion.md': '#184',
+        'docs/research/imu-stick-integration.md': '#185',
+    }
+    for rel, issue in research_docs.items():
+        text = read(rel)
+        for heading in ('## Goal', '## Acceptance criteria', '## Decision'):
+            if heading not in text:
+                add_error(rel, f'research doc missing required section: {heading}')
+        if issue not in text:
+            add_error(rel, f'research doc should reference tracking issue {issue}')
+
+
+def validate_onnx_backend_registry() -> None:
+    dd = read('docs/design/DD-009-onnx-backend-registry.md')
+    for needle in ['createPoseBackendRegistry', 'setActiveBackend', 'onnx-pose-backends.md']:
+        if needle not in dd:
+            add_error('docs/design/DD-009-onnx-backend-registry.md', f'ONNX backend registry doc missing: {needle}')
+    ml = read('src/core/ml.ts')
+    for needle in ['createPoseBackendRegistry', 'setActiveBackend', 'listBackends']:
+        if needle not in ml:
+            add_error('src/core/ml.ts', f'missing runtime-toggleable backend registry export: {needle}')
+    bench = read('docs/benchmarks/onnx-pose-backends.md')
+    if 'fps' not in bench or 'VRAM' not in bench:
+        add_error('docs/benchmarks/onnx-pose-backends.md', 'ONNX benchmark table must report fps and VRAM')
+
+
+def validate_avatar_pack_cli() -> None:
+    cli = read('scripts/kagami-pack.mjs')
+    for needle in ['planAvatarPack', 'formatSizeTable']:
+        if needle not in cli:
+            add_error('scripts/kagami-pack.mjs', f'kagami-pack CLI missing export: {needle}')
+    package_json = json.loads(read('package.json'))
+    if 'pack:avatar' not in package_json.get('scripts', {}):
+        add_error('package.json', 'missing pack:avatar script for kagami-pack CLI')
+
+
 validate_issue_templates()
 validate_adr_headings()
 validate_local_docs_links()
@@ -1631,6 +1748,11 @@ validate_latency_quality_hud_contracts()
 validate_voice_activity_accent_contracts()
 validate_audio_lipsync_contracts()
 validate_runtime_warning_taxonomy()
+validate_compression_docs()
+validate_drum_docs()
+validate_research_docs()
+validate_onnx_backend_registry()
+validate_avatar_pack_cli()
 
 if errors:
     print('Structure verification failed:')

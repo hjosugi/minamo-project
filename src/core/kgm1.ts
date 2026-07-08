@@ -78,3 +78,49 @@ export function latestFrameByParticipant(envelopes: readonly KGM1RoomEnvelope[])
   }
   return latest;
 }
+
+export interface RoomLayoutSlot {
+  slot: number;
+  participantId: string;
+  lastSeenMs: number;
+  ageMs: number;
+  fade: number; // 1 = fully visible, 0 = faded out after disconnect
+  active: boolean;
+}
+
+export interface RoomLayoutOptions {
+  nowMs?: number;
+  maxSlots?: number;
+  fadeMs?: number;
+}
+
+// Deterministic side-by-side layout for multi-avatar rooms (KGM-043). Slots are
+// assigned by sorted participantId so every viewer renders the same order, and a
+// participant that stops publishing fades out over `fadeMs` before its slot is
+// released.
+export function assignRoomLayoutSlots(
+  latest: Map<string, KGM1RoomEnvelope>,
+  options: RoomLayoutOptions = {},
+): RoomLayoutSlot[] {
+  const fadeMs = options.fadeMs ?? 1500;
+  const maxSlots = options.maxSlots ?? 8;
+  const nowMs = options.nowMs ?? Math.max(0, ...[...latest.values()].map((envelope) => envelope.sentAtMs));
+  const ordered = [...latest.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const slots: RoomLayoutSlot[] = [];
+  for (const [participantId, envelope] of ordered) {
+    if (slots.length >= maxSlots) break;
+    const ageMs = Math.max(0, nowMs - envelope.sentAtMs);
+    const fade = ageMs >= fadeMs ? 0 : 1 - ageMs / fadeMs;
+    if (fade <= 0) continue; // fully faded: release the slot
+    slots.push({
+      slot: slots.length,
+      participantId,
+      lastSeenMs: envelope.sentAtMs,
+      ageMs,
+      fade,
+      active: ageMs < fadeMs / 3,
+    });
+  }
+  return slots;
+}

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Minamo Drum Overlay (OBS)</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+      body { font-family: system-ui, sans-serif; }
+      #stage { position: relative; width: 100vw; height: 100vh; }
+      .zone {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        display: grid;
+        place-items: center;
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        font-size: 13px;
+        transition: box-shadow 40ms linear;
+      }
+      .zone .count { font-variant-numeric: tabular-nums; opacity: 0.85; }
+      #hud {
+        position: absolute; left: 12px; bottom: 10px;
+        color: #fff; font-size: 12px; opacity: 0.7;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="hud"></div>
+    <script type="module">
+      import {
+        createDrumOverlayState,
+        reduceDrumOverlay,
+        deriveObsOverlayState,
+      } from '../shared/drum-overlay.js';
+
+      // Default kit layout in normalized stage coordinates (0..1).
+      const LAYOUT = [
+        { id: 'snare', type: 'snare', label: 'Snare', x: 0.5, y: 0.62, r: 90, hue: 200 },
+        { id: 'hihat', type: 'hihat', label: 'Hi-hat', x: 0.28, y: 0.5, r: 80, hue: 50 },
+        { id: 'ride', type: 'ride', label: 'Ride', x: 0.74, y: 0.44, r: 96, hue: 30 },
+        { id: 'crash', type: 'crash', label: 'Crash', x: 0.22, y: 0.28, r: 88, hue: 350 },
+        { id: 'tom', type: 'tom', label: 'Tom', x: 0.58, y: 0.36, r: 82, hue: 280 },
+        { id: 'kick', type: 'kick', label: 'Kick', x: 0.5, y: 0.86, r: 110, hue: 150 },
+      ];
+
+      const stage = document.getElementById('stage');
+      const hud = document.getElementById('hud');
+      const nodes = new Map();
+      for (const zone of LAYOUT) {
+        const el = document.createElement('div');
+        el.className = 'zone';
+        el.dataset.id = zone.id;
+        el.style.left = `${zone.x * 100}%`;
+        el.style.top = `${zone.y * 100}%`;
+        el.style.width = el.style.height = `${zone.r * 2}px`;
+        el.innerHTML = `<div><div>${zone.label}</div><div class="count" data-count>0</div></div>`;
+        stage.appendChild(el);
+        nodes.set(zone.id, el);
+      }
+
+      const params = new URLSearchParams(location.search);
+      const state = createDrumOverlayState();
+
+      function ingest(event) {
+        reduceDrumOverlay(state, event);
+      }
+
+      // Local mode: tracker/viewer broadcasts hit events on this channel.
+      if ('BroadcastChannel' in globalThis) {
+        const channel = new BroadcastChannel('minamo-drum');
+        channel.addEventListener('message', (message) => {
+          if (message.data && message.data.kind === 'drum-hit') ingest(message.data.event);
+        });
+      }
+
+      // Demo mode animates synthetic hits so the overlay is verifiable standalone.
+      if (params.get('demo') === '1') {
+        let seq = 0;
+        setInterval(() => {
+          const zone = LAYOUT[seq % LAYOUT.length];
+          ingest({ eventId: `demo-${seq}`, zoneId: zone.id, zoneType: zone.type, confidence: 0.6 + Math.random() * 0.4, timeMs: performance.now() });
+          seq += 1;
+        }, 300);
+      }
+
+      function render(nowMs) {
+        const overlay = deriveObsOverlayState(state, nowMs);
+        const byId = new Map(overlay.zones.map((zone) => [zone.zoneId, zone]));
+        for (const zone of LAYOUT) {
+          const el = nodes.get(zone.id);
+          const info = byId.get(zone.id);
+          const flash = info ? info.flash : 0;
+          el.style.background = `hsla(${zone.hue}, 90%, 55%, ${0.12 + flash * 0.6})`;
+          el.style.boxShadow = flash > 0.02 ? `0 0 ${20 + flash * 60}px hsla(${zone.hue}, 95%, 60%, ${flash})` : 'none';
+          if (info) el.querySelector('[data-count]').textContent = String(info.hits);
+        }
+        hud.textContent = `hits: ${overlay.hitCount}${params.get('demo') === '1' ? ' (demo)' : ''}`;
+        requestAnimationFrame(render);
+      }
+      requestAnimationFrame(render);
+    </script>
+  </body>
+</html>

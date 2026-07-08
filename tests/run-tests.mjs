@@ -159,6 +159,37 @@ import {
   serializeDatasetRecords,
   validateDatasetRecord,
 } from '../shared/dataset.js';
+import {
+  ASSET_COMPRESSION_CHECKLIST,
+  REQUIRED_REGRESSION_POSES,
+  evaluateAssetChecklist,
+} from '../shared/compression-checklist.js';
+import {
+  KEYFRAME_INTERVAL_MS,
+  createEncoderState,
+  decodeMotionStream,
+  encodeMotionFrame,
+  quantizeWeightDeltas,
+  dequantizeWeightDeltas,
+  shortestPathQuat,
+  shouldForceKeyframe,
+} from '../shared/motion-quant.js';
+import {
+  DRUM_OVERLAY_SCHEMA,
+  createDrumOverlayState,
+  deriveObsOverlayState,
+  reduceDrumOverlay,
+} from '../shared/drum-overlay.js';
+import {
+  KAGAMI_PACK_SCHEMA,
+  formatSizeTable,
+  planAvatarPack,
+} from '../scripts/kagami-pack.mjs';
+import {
+  buildPhoneTrackerUrl,
+  parsePhoneTrackerUrl,
+  recommendPhoneTransport,
+} from '../shared/pairing.js';
 
 const root = process.cwd();
 const required = [
@@ -1273,4 +1304,148 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(transform.y, -2.5);
 }
 
-console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, and shortcut tests passed.`);
+{
+  // Sample-asset compression checklist (issues #156-#163).
+  const baseline = {
+    fileBytes: 5_000_000,
+    counts: { nodes: 60, morphTargets: 52, materials: 4, textures: 3 },
+    vrm: {
+      version: 'VRM 1.0',
+      humanBones: ['hips', 'spine', 'head'],
+      expressions: ['aa', 'blink', 'happy'],
+      springBoneJoints: 12,
+      springBoneColliders: 4,
+    },
+  };
+  const goodLicense = { source: 'https://example.test/avatar', name: 'CC-BY-4.0', redistribution: true, modification: true, attribution: true };
+  const passing = evaluateAssetChecklist({ baseline, optimized: baseline, regressionPoses: [...REQUIRED_REGRESSION_POSES], license: goodLicense });
+  assert.equal(passing.ok, true);
+  assert.equal(passing.failures.length, 0);
+  assert.ok(ASSET_COMPRESSION_CHECKLIST.length >= 8);
+  assert.equal(REQUIRED_REGRESSION_POSES.length, 13);
+
+  const stripped = { counts: { morphTargets: 0, materials: 0 }, vrm: { version: 'none', humanBones: [], expressions: [], springBoneJoints: 0 } };
+  assert.equal(evaluateAssetChecklist({ baseline: stripped }).ok, false);
+
+  const broken = { counts: { morphTargets: 40, materials: 2 }, vrm: { humanBones: ['hips', 'spine'], expressions: ['aa'], springBoneJoints: 0 } };
+  const brokenResult = evaluateAssetChecklist({ baseline, optimized: broken });
+  assert.equal(brokenResult.ok, false);
+  assert.ok(brokenResult.failures.some((entry) => entry.includes('morph target count dropped')));
+  assert.ok(brokenResult.failures.some((entry) => entry.includes('expressions removed')));
+  assert.ok(brokenResult.failures.some((entry) => entry.includes('material count dropped')));
+
+  assert.ok(evaluateAssetChecklist({ baseline, regressionPoses: ['neutral'] }).failures.some((entry) => entry.includes('missing poses')));
+  assert.ok(evaluateAssetChecklist({ baseline, license: { source: 'x', name: 'proprietary', redistribution: false, modification: false } }).failures.some((entry) => entry.includes('redistribution is not permitted')));
+}
+
+{
+  // Motion delta quantization reference codec (issue #161).
+  assert.equal(KEYFRAME_INTERVAL_MS, 2000);
+  assert.deepEqual(quantizeWeightDeltas([0, 0, 0], [0, 0, 0]), [0, 0, 0]);
+  assert.deepEqual(dequantizeWeightDeltas([0, 0, 0], [0, 0, 0]), [0, 0, 0]);
+
+  const keyWeights = [0.1, 0.5, 0.9];
+  const nextWeights = [0.14, 0.52, 0.83];
+  const reconstructed = dequantizeWeightDeltas(keyWeights, quantizeWeightDeltas(keyWeights, nextWeights));
+  reconstructed.forEach((value, i) => assert.ok(Math.abs(value - nextWeights[i]) <= 1 / 127 + 1e-9));
+
+  assert.deepEqual(shortestPathQuat([0, 0, 0, 1], [0, 0, 0, -1]), [0, 0, 0, 1]);
+
+  const state = createEncoderState();
+  assert.equal(shouldForceKeyframe(state, { tMs: 0 }), true);
+  const frames = [
+    { frameId: 0, tMs: 0, weights: [0, 0], quat: [0, 0, 0, 1], modelId: 'vrm-a' },
+    { frameId: 1, tMs: 33, weights: [0.02, 0.5], quat: [0, 0.03, 0, 0.9995], modelId: 'vrm-a' },
+    { frameId: 2, tMs: 66, weights: [0.04, 0.5], quat: [0, 0.05, 0, 0.9987], modelId: 'vrm-a' },
+  ];
+  const packets = frames.map((frame) => encodeMotionFrame(state, frame));
+  assert.equal(packets[0].type, 'keyframe');
+  assert.equal(packets[1].type, 'delta');
+  const decoded = decodeMotionStream(packets);
+  assert.equal(decoded.frames.length, 3);
+  assert.ok(Math.abs(decoded.frames[2].weights[1] - 0.5) <= 1 / 127 + 1e-9);
+
+  assert.equal(encodeMotionFrame(state, { frameId: 3, tMs: 80, weights: [0.04, 0.5], quat: [0, 0.05, 0, 0.9987], modelId: 'vrm-a' }, { reconnected: true }).type, 'keyframe');
+  assert.equal(encodeMotionFrame(state, { frameId: 4, tMs: 90, weights: [0.04, 0.5], quat: [0, 0.05, 0, 0.9987], modelId: 'vrm-b' }).type, 'keyframe');
+  assert.equal(shouldForceKeyframe(state, { tMs: state.keyframe.tMs + KEYFRAME_INTERVAL_MS, modelId: 'vrm-b' }), true);
+
+  const stale = [
+    { type: 'keyframe', keyframeSeq: 0, frameId: 0, tMs: 0, weights: [0], quat: [0, 0, 0, 1] },
+    { type: 'keyframe', keyframeSeq: 1, frameId: 1, tMs: 10, weights: [0.2], quat: [0, 0, 0, 1] },
+    { type: 'delta', keyframeSeq: 0, frameId: 2, tMs: 20, weightDeltas: [10], quatDelta: [0, 0, 0, 0] },
+  ];
+  const staleDecoded = decodeMotionStream(stale);
+  assert.equal(staleDecoded.frames.length, 2);
+  assert.equal(staleDecoded.dropped, 1);
+}
+
+{
+  // OBS drum overlay reducer (issue #120).
+  const state = createDrumOverlayState();
+  assert.equal(state.schema, DRUM_OVERLAY_SCHEMA);
+  reduceDrumOverlay(state, { eventId: 'a', zoneId: 'snare', zoneType: 'snare', confidence: 0.9, hand: 'Right' }, 0);
+  reduceDrumOverlay(state, { eventId: 'a', zoneId: 'snare', zoneType: 'snare', confidence: 0.9 }, 5); // duplicate ignored
+  reduceDrumOverlay(state, { eventId: 'b', zoneId: 'hihat', zoneType: 'hihat', confidence: 0.5 }, 10);
+  assert.equal(state.hitCount, 2);
+
+  const atHit = deriveObsOverlayState(state, 10);
+  const snareNow = atHit.zones.find((zone) => zone.zoneId === 'snare');
+  assert.ok(snareNow.flash > 0);
+  assert.equal(snareNow.hits, 1);
+  assert.equal(snareNow.lastHand, 'Right');
+
+  const decayed = deriveObsOverlayState(state, 400); // past the 220 ms decay window
+  assert.equal(decayed.zones.find((zone) => zone.zoneId === 'snare').flash, 0);
+  assert.equal(decayed.activeZoneIds.length, 0);
+  assert.equal(decayed.hitCount, 2);
+}
+
+{
+  // kagami-pack avatar asset pack planner (issue #41).
+  const summary = {
+    fileBytes: 8_000_000,
+    counts: { morphTargets: 52, materials: 4 },
+    vrm: { expressions: ['aa', 'blink'], humanBones: ['hips', 'head'], springBoneJoints: 12 },
+  };
+  const meshoptPlan = planAvatarPack(summary, {});
+  assert.equal(meshoptPlan.schema, KAGAMI_PACK_SCHEMA);
+  assert.equal(meshoptPlan.geometry, 'meshopt');
+  assert.ok(meshoptPlan.stages.some((stage) => stage.id === 'geometry' && stage.command.includes('gltfpack')));
+  assert.ok(meshoptPlan.stages.some((stage) => stage.id === 'ktx2'));
+  assert.equal(meshoptPlan.warnings.length, 0);
+
+  const dracoPlan = planAvatarPack(summary, { geometry: 'draco', texture: false });
+  assert.ok(dracoPlan.stages.some((stage) => stage.id === 'geometry' && stage.command.includes('draco')));
+  assert.ok(!dracoPlan.stages.some((stage) => stage.id === 'ktx2'));
+  assert.ok(dracoPlan.warnings.some((warning) => warning.includes('morph-heavy')));
+
+  const broken = planAvatarPack({ fileBytes: 1000, counts: { morphTargets: 0 }, vrm: {} }, {});
+  assert.ok(broken.warnings.some((warning) => warning.includes('no morph targets')));
+
+  const table = formatSizeTable({ fileBytes: 8_000_000, gpuMemoryMb: 120 }, { fileBytes: 2_400_000, gpuMemoryMb: 40 });
+  assert.ok(table.includes('file size'));
+  assert.ok(table.includes('-70.0%'));
+  assert.ok(table.includes('gpu memory'));
+}
+
+{
+  // Phone-as-tracker pairing helpers (issue #51).
+  const url = buildPhoneTrackerUrl({ mode: 'ws', room: 'r1', token: 't1', resolution: '720p', fps: 60, mirror: true });
+  assert.ok(url.startsWith('/tracker/?'));
+  const parsed = parsePhoneTrackerUrl(url);
+  assert.equal(parsed.mode, 'ws');
+  assert.equal(parsed.room, 'r1');
+  assert.equal(parsed.token, 't1');
+  assert.equal(parsed.fps, 60);
+  assert.equal(parsed.mirror, true);
+  assert.equal(parsed.camera, 'user');
+
+  // iOS Safari falls back to WebSocket even with a WebTransport room available.
+  const iosUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+  assert.equal(recommendPhoneTransport(iosUa, true), 'ws');
+  const desktopChrome = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
+  assert.equal(recommendPhoneTransport(desktopChrome, true), 'wt');
+  assert.equal(recommendPhoneTransport(desktopChrome, false), 'ws');
+}
+
+console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, and shortcut tests passed.`);

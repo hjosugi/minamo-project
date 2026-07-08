@@ -33,6 +33,9 @@ webcam — free, low-latency, and local-first.
 - Tauri desktop shell that launches the bundled tracker, viewer, and replay
   tools, with virtual camera backend status surfaced per OS
 - VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
+- Avatar compression tooling — GLB inspection (`npm run inspect:glb`) and the
+  `kagami-pack` planner (`npm run pack:avatar`) — plus a transparent OBS drum
+  overlay at `viewer/drum-overlay.html`
 - A landing hub with a mock tracking visualization demo under [landing/](landing/)
 
 Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (implemented) and

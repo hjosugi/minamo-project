@@ -17,7 +17,8 @@
     "verify": "python3 scripts/verify_structure.py",
     "release:smoke": "node scripts/release-smoke.mjs",
     "typecheck:js": "tsc --noEmit -p tsconfig.browser-js.json",
-    "inspect:glb": "node scripts/inspect-glb.mjs"
+    "inspect:glb": "node scripts/inspect-glb.mjs",
+    "pack:avatar": "node scripts/kagami-pack.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
