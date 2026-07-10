@@ -11,9 +11,9 @@ avatar has been inspected and its rig-critical structure recorded.
 1. Run the dependency-free inspector as a preflight:
 
    ```bash
-   npm run inspect:glb -- avatar.glb
-   npm run inspect:glb -- avatar.glb --json
-   npm run inspect:glb -- avatar.glb --avatar
+   pnpm inspect:glb -- avatar.glb
+   pnpm inspect:glb -- avatar.glb --json
+   pnpm inspect:glb -- avatar.glb --avatar
    ```
 
 2. Record a baseline summary for every avatar before optimization:
@@ -44,7 +44,7 @@ and the checklist evaluator.
 
 ## Test method
 
-- `npm test` exercises `parseGlb`/`summarizeGltf` against a synthetic GLB and
+- `pnpm test` exercises `parseGlb`/`summarizeGltf` against a synthetic GLB and
   asserts the summary fields used by the checklist.
 - The sample-asset checklist (`shared/compression-checklist.js`,
   `evaluateAssetChecklist`) runs the recorded inspection summary through the

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import QRCode from 'qrcode';
 import { encodeFrame, decodeFrame, HAND_TARGET_BYTES } from '../shared/codec.js';
 import {
   E2EE_OVERHEAD_BYTES,
@@ -33,6 +34,10 @@ import {
   parseGlb,
   summarizeGltf,
 } from '../scripts/inspect-glb.mjs';
+import {
+  AVATAR_DECODER_SUPPORT,
+  formatAvatarLoadError,
+} from '../viewer/avatar-loader.js';
 import {
   EXPRESSION_MAPPING_SCHEMA,
   createDefaultVrmExpressionMap,
@@ -91,6 +96,14 @@ import {
   transportFallbackPlan,
   transportSecurityNote,
 } from '../shared/transport.js';
+import {
+  LEGACY_PARTICIPANT_ID,
+  RoomParticipantStore,
+  createParticipantId,
+  decodeRoomFrame,
+  encodeRoomFrame,
+  normalizeParticipantId,
+} from '../shared/room-envelope.js';
 import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
 import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
 import {
@@ -187,8 +200,14 @@ import {
 } from '../scripts/kagami-pack.mjs';
 import {
   buildPhoneTrackerUrl,
+  buildViewerPairingUrl,
+  normalizePairingTtlSeconds,
+  pairingTokenApiUrl,
+  pairingTokenState,
   parsePhoneTrackerUrl,
+  parsePairingRoom,
   recommendPhoneTransport,
+  redactPairingUrl,
 } from '../shared/pairing.js';
 
 const root = process.cwd();
@@ -594,6 +613,49 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.equal(netem.lossOk, true);
   assert.equal(netem.latencyOk, true);
   assert.equal(percentileSample([4, 8, 16, 32, 64], 0.95), 64);
+}
+
+{
+  // Participant envelopes and lifecycle keep multi-source motion isolated (#225).
+  const participantId = createParticipantId('camera', { randomUUID: () => '12345678-1234-1234-1234-123456789abc' });
+  assert.equal(participantId, 'camera-123456781234');
+  assert.equal(normalizeParticipantId('../bad'), LEGACY_PARTICIPANT_ID);
+  const rawFrame = encodeFrame({
+    t: 123,
+    seq: 7,
+    face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights: new Float32Array(NUM_CHANNELS) },
+  });
+  const envelope = encodeRoomFrame('alice', rawFrame);
+  const decodedEnvelope = decodeRoomFrame(envelope);
+  assert.equal(decodedEnvelope.participantId, 'alice');
+  assert.equal(decodedEnvelope.enveloped, true);
+  assert.equal(decodeFrame(decodedEnvelope.frameBytes).seq, 7);
+  assert.equal(decodeRoomFrame(rawFrame).participantId, LEGACY_PARTICIPANT_ID, 'legacy KGM1 remains compatible');
+  assert.equal(decodeRoomFrame(new Uint8Array([0x4d, 0x52, 0x4d, 0x31, 9, 1, 0x61, 0])), null);
+
+  const disposed = [];
+  const store = new RoomParticipantStore({
+    staleAfterMs: 100,
+    fadeMs: 200,
+    disposeAvatar: (avatar, id) => disposed.push(`${id}:${avatar}`),
+  });
+  store.ingest('bob', { seq: 1, direction: 'left' }, 1000);
+  store.ingest('alice', { seq: 4, direction: 'right' }, 1000);
+  store.assignAvatar('bob', 'vrm-b');
+  store.assignAvatar('alice', 'vrm-a');
+  assert.deepEqual(store.snapshot(1050).map((entry) => [entry.participantId, entry.latestFrame.direction]), [
+    ['alice', 'right'],
+    ['bob', 'left'],
+  ], 'opposite motion remains participant-local and slots are deterministic');
+  store.ingest('alice', { seq: 5, direction: 'up' }, 1150);
+  const oneStale = store.snapshot(1200);
+  assert.equal(oneStale.find((entry) => entry.participantId === 'alice').fade, 1);
+  assert.ok(oneStale.find((entry) => entry.participantId === 'bob').fade < 1, 'only the stale source fades');
+  assert.deepEqual(store.prune(1301), ['bob']);
+  assert.deepEqual(disposed, ['bob:vrm-b']);
+  const reconnected = store.ingest('bob', { seq: 0, direction: 'down' }, 1310);
+  assert.equal(reconnected.generation, 2, 'reconnect creates one fresh generation');
+  assert.equal(store.participants.size, 2, 'reconnect does not leave a duplicate participant');
 }
 
 {
@@ -1339,6 +1401,20 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
 }
 
 {
+  // Compressed avatar loader diagnostics (issue #223).
+  assert.equal(AVATAR_DECODER_SUPPORT.ktx2, 'KHR_texture_basisu');
+  assert.equal(AVATAR_DECODER_SUPPORT.meshopt, 'EXT_meshopt_compression');
+  assert.equal(AVATAR_DECODER_SUPPORT.draco, 'KHR_draco_mesh_compression');
+  assert.match(formatAvatarLoadError(new Error('KTX2Loader: transcoder failed')), /KTX2 texture decode failed/);
+  assert.match(formatAvatarLoadError(new Error('MeshoptDecoder rejected stream')), /Meshopt geometry decode failed/);
+  assert.match(formatAvatarLoadError(new Error('DRACOLoader bad data')), /Draco geometry decode failed/);
+  assert.match(formatAvatarLoadError(new Error('Unexpected end of JSON input')), /corrupt or is not a valid VRM\/GLB/);
+  const redacted = formatAvatarLoadError(new Error('fetch https://example.test/avatar.vrm?token=secret failed'));
+  assert.ok(!redacted.includes('secret'));
+  assert.match(redacted, /could not be loaded/);
+}
+
+{
   // Motion delta quantization reference codec (issue #161).
   assert.equal(KEYFRAME_INTERVAL_MS, 2000);
   assert.deepEqual(quantizeWeightDeltas([0, 0, 0], [0, 0, 0]), [0, 0, 0]);
@@ -1430,15 +1506,72 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
 
 {
   // Phone-as-tracker pairing helpers (issue #51).
-  const url = buildPhoneTrackerUrl({ mode: 'ws', room: 'r1', token: 't1', resolution: '720p', fps: 60, mirror: true });
-  assert.ok(url.startsWith('/tracker/?'));
-  const parsed = parsePhoneTrackerUrl(url);
+  const url = buildPhoneTrackerUrl({
+    base: 'https://studio.example/tracker/',
+    mode: 'ws',
+    room: 'r1',
+    token: 't1',
+    wsUrl: 'wss://relay.example/ws',
+    resolution: '720p',
+    fps: 60,
+    mirror: true,
+    camera: 'environment',
+  });
+  assert.ok(url.startsWith('https://studio.example/tracker/?'));
+
+  // Exercise the exact payload passed to the QR encoder, then parse it back.
+  const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+  assert.equal(qr.segments.length, 1);
+  const qrPayload = new TextDecoder().decode(qr.segments[0].data);
+  assert.equal(qrPayload, url);
+  const parsed = parsePhoneTrackerUrl(qrPayload);
   assert.equal(parsed.mode, 'ws');
   assert.equal(parsed.room, 'r1');
   assert.equal(parsed.token, 't1');
+  assert.equal(parsed.wsUrl, 'wss://relay.example/ws');
   assert.equal(parsed.fps, 60);
   assert.equal(parsed.mirror, true);
-  assert.equal(parsed.camera, 'user');
+  assert.equal(parsed.camera, 'environment');
+
+  const viewerUrl = buildViewerPairingUrl({
+    base: 'https://studio.example/viewer/',
+    mode: 'ws',
+    room: 'r1',
+    token: 't1',
+    wsUrl: 'wss://relay.example/ws',
+  });
+  const viewerParams = new URL(viewerUrl).searchParams;
+  assert.equal(viewerParams.get('room'), 'r1');
+  assert.equal(viewerParams.get('token'), 't1');
+  assert.equal(viewerParams.get('wsUrl'), 'wss://relay.example/ws');
+  const redacted = redactPairingUrl(viewerUrl);
+  assert.equal(redacted.includes('t1'), false);
+  assert.equal(new URL(redacted).searchParams.get('token'), 'REDACTED');
+  assert.equal(pairingTokenApiUrl('wss://relay.example/ws?token=do-not-copy'), 'https://relay.example/api/pairing-tokens');
+  assert.deepEqual(pairingTokenState(10_000, 9_000), { state: 'active', expiresAt: 10_000, remainingMs: 1_000 });
+  assert.deepEqual(pairingTokenState(10_000, 10_000), { state: 'expired', expiresAt: 10_000, remainingMs: 0 });
+  assert.equal(normalizePairingTtlSeconds(1), 30);
+  assert.equal(normalizePairingTtlSeconds(99_999), 900);
+  assert.equal(parsePairingRoom('phone-stage_1'), 'phone-stage_1');
+  assert.throws(() => parsePairingRoom('../unsafe'), /Room must be/);
+
+  const pairingHtml = fs.readFileSync(path.join(root, 'desktop/index.html'), 'utf8');
+  for (const id of [
+    'pairingQr',
+    'pairingStatus',
+    'btnGeneratePairing',
+    'btnExpirePairing',
+    'btnCopyTrackerUrl',
+    'btnCopyViewerUrl',
+    'openTrackerPairing',
+    'openViewerPairing',
+  ]) {
+    assert.ok(pairingHtml.includes(`id="${id}"`), `desktop pairing UI is missing #${id}`);
+  }
+  assert.match(pairingHtml, /id="pairingQr"[^>]+role="img"/);
+  assert.match(pairingHtml, /class="pairing-state" aria-live="polite"/);
+  const trackerHtml = fs.readFileSync(path.join(root, 'tracker/index.html'), 'utf8');
+  assert.match(trackerHtml, /id="selCameraFacing"/);
 
   // iOS Safari falls back to WebSocket even with a WebTransport room available.
   const iosUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -1448,4 +1581,4 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(recommendPhoneTransport(desktopChrome, false), 'ws');
 }
 
-console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, and shortcut tests passed.`);
+console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, and shortcut tests passed.`);

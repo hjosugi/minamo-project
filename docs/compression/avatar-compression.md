@@ -44,9 +44,9 @@ Fail the inspection if a tool strips `VRMC_vrm`, `VRM`, morph targets, humanoid 
 Use the built-in inspector for a dependency-free first pass:
 
 ```bash
-npm run inspect:glb -- avatar.glb
-npm run inspect:glb -- avatar.glb --json
-npm run inspect:glb -- avatar.glb --avatar
+pnpm inspect:glb -- avatar.glb
+pnpm inspect:glb -- avatar.glb --json
+pnpm inspect:glb -- avatar.glb --avatar
 ```
 
 `--avatar` exits non-zero when the file is missing VRM metadata, humanoid bone
@@ -182,13 +182,13 @@ hosted-avatar pipeline. It inspects a GLB/VRM, plans the conservative stage
 order, emits the exact encoder commands, and renders the before/after table.
 
 ```bash
-npm run pack:avatar -- avatar.glb            # meshopt + KTX2 plan
-npm run pack:avatar -- avatar.glb --draco    # Draco geometry instead of meshopt
+pnpm pack:avatar -- avatar.glb            # meshopt + KTX2 plan
+pnpm pack:avatar -- avatar.glb --draco    # Draco geometry instead of meshopt
 ```
 
 The planner (`planAvatarPack`) records rig-critical counts and warns before any
 lossy step; the operator runs the emitted `gltf-transform` / `gltfpack` commands,
-then re-inspects with `npm run inspect:glb -- <out> --avatar`. Report size and
+then re-inspects with `pnpm inspect:glb -- <out> --avatar`. Report size and
 GPU memory before/after with `formatSizeTable`:
 
 | metric | before | after | delta |

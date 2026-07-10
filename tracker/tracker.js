@@ -8,6 +8,12 @@ import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS, POSE_POINTS, NUM_POSE_POINTS } f
 import { OneEuroArray, OneEuroQuat } from '../shared/filters.js';
 import { encodeFrame } from '../shared/codec.js';
 import { MinamoTransport } from '../shared/transport.js';
+import { createParticipantId, normalizeParticipantId } from '../shared/room-envelope.js';
+import {
+  buildViewerPairingUrl,
+  parsePhoneTrackerUrl,
+  parsePairingRoom,
+} from '../shared/pairing.js';
 import {
   CALIBRATION_GUIDE_TOTAL_MS,
   DEFAULT_SMOOTHING_SETTINGS,
@@ -121,7 +127,13 @@ const COLOR_POSE = css.getPropertyValue('--pose').trim();
 const COLOR_DIM = css.getPropertyValue('--ink-dim').trim();
 const COLOR_INK = css.getPropertyValue('--ink').trim();
 
-const settings = normalizeTrackerSettings(loadJson(localStorage, TRACKER_STORAGE_KEY, DEFAULT_TRACKER_SETTINGS));
+const phonePairingQuery = parsePhoneTrackerUrl(location.href);
+let transientPairingToken = phonePairingQuery.token || '';
+const settings = normalizeTrackerSettings({
+  ...loadJson(localStorage, TRACKER_STORAGE_KEY, DEFAULT_TRACKER_SETTINGS),
+  ...trackerSettingsFromPairingQuery(phonePairingQuery),
+});
+redactPairingTokenFromAddress(phonePairingQuery);
 let profile = normalizeProfile(loadJson(localStorage, PROFILE_STORAGE_KEY, createCalibrationProfile('default')));
 let handProfile = normalizeHandCalibrationProfile(loadJson(localStorage, HAND_PROFILE_STORAGE_KEY, createHandCalibrationProfile('default')));
 let drumKit = normalizeDrumKitConfig(loadJson(localStorage, DRUM_KIT_STORAGE_KEY, createDefaultDrumKitConfig('default')));
@@ -264,6 +276,10 @@ function normalizeTrackerSettings(raw) {
   base.drummerMode = Boolean(base.drummerMode);
   base.voiceAccents = Boolean(base.voiceAccents);
   base.audioLipsync = Boolean(base.audioLipsync);
+  base.cameraFacing = base.cameraFacing === 'environment' ? 'environment' : 'user';
+  if (!['480p', '720p', '1080p'].includes(base.resolution)) base.resolution = '720p';
+  base.fps = ['30', '60'].includes(String(base.fps)) ? String(base.fps) : '60';
+  base.participantId = normalizeParticipantId(base.participantId, createParticipantId());
   if (!raw?.smoothing?.face) {
     smoothing.face = {
       filterPreset: base.filterPreset || DEFAULT_SMOOTHING_SETTINGS.face.filterPreset,
@@ -273,6 +289,37 @@ function normalizeTrackerSettings(raw) {
   }
   base.smoothing = smoothing;
   return base;
+}
+
+function trackerSettingsFromPairingQuery(query) {
+  const paired = {};
+  if (['local', 'ws', 'wt'].includes(query.mode)) paired.mode = query.mode;
+  if (query.room) {
+    try {
+      paired.room = parsePairingRoom(query.room);
+    } catch {}
+  }
+  if (query.token) paired.token = query.token;
+  if (query.wsUrl) paired.wsUrl = query.wsUrl;
+  if (query.wtUrl) paired.wtUrl = query.wtUrl;
+  if (query.wtHash) paired.wtHash = query.wtHash;
+  if (['480p', '720p', '1080p'].includes(query.resolution)) paired.resolution = query.resolution;
+  if ([30, 60].includes(Number(query.fps))) paired.fps = String(query.fps);
+  if (typeof query.mirror === 'boolean') paired.mirror = query.mirror;
+  if (query.camera === 'user' || query.camera === 'environment') {
+    paired.cameraFacing = query.camera;
+    paired.cameraId = '';
+  }
+  return paired;
+}
+
+function redactPairingTokenFromAddress(query) {
+  if (!query.token || !globalThis.history?.replaceState) return;
+  try {
+    const safe = new URL(location.href);
+    safe.searchParams.delete('token');
+    history.replaceState(history.state, '', safe);
+  } catch {}
 }
 
 async function loadModels() {
@@ -356,6 +403,7 @@ async function startCamera() {
     frameRate: { ideal: fps },
   };
   if (deviceId) videoConstraints.deviceId = { exact: deviceId };
+  else videoConstraints.facingMode = { ideal: settings.cameraFacing };
   const stream = await navigator.mediaDevices.getUserMedia({
     video: videoConstraints,
     audio: false,
@@ -1396,7 +1444,9 @@ async function nudgeBrightnessForLowLight() {
 function applySettingsToUi() {
   $('selMode').value = settings.mode;
   $('inpRoom').value = settings.room;
+  $('inpParticipantId').value = settings.participantId;
   $('inpToken').value = settings.token;
+  $('inpWsUrl').value = settings.wsUrl;
   $('inpWtUrl').value = settings.wtUrl;
   $('inpWtHash').value = settings.wtHash;
   $('chkMirror').checked = Boolean(settings.mirror);
@@ -1407,6 +1457,7 @@ function applySettingsToUi() {
   $('chkFaceLock').checked = Boolean(settings.faceLock);
   $('chkDrummerMode').checked = Boolean(settings.drummerMode);
   $('chkPrivacy').checked = Boolean(settings.privacyLocalOnly);
+  $('selCameraFacing').value = settings.cameraFacing;
   $('selResolution').value = settings.resolution;
   $('selFps').value = settings.fps;
   $('rngHeadLean').value = settings.headLeanRangeCm;
@@ -1427,7 +1478,10 @@ function applySettingsToUi() {
 function readSettingsFromUi() {
   settings.mode = $('selMode').value;
   settings.room = $('inpRoom').value || 'demo';
+  settings.participantId = normalizeParticipantId($('inpParticipantId').value, settings.participantId || createParticipantId());
+  $('inpParticipantId').value = settings.participantId;
   settings.token = $('inpToken').value;
+  settings.wsUrl = $('inpWsUrl').value;
   settings.wtUrl = $('inpWtUrl').value;
   settings.wtHash = $('inpWtHash').value;
   settings.mirror = $('chkMirror').checked;
@@ -1439,6 +1493,7 @@ function readSettingsFromUi() {
   settings.drummerMode = $('chkDrummerMode').checked;
   settings.privacyLocalOnly = $('chkPrivacy').checked;
   settings.cameraId = $('selCamera').value;
+  settings.cameraFacing = $('selCameraFacing').value === 'environment' ? 'environment' : 'user';
   settings.resolution = $('selResolution').value;
   settings.fps = $('selFps').value;
   settings.headLeanRangeCm = normalizeHeadLeanRangeCm($('rngHeadLean').value);
@@ -1450,20 +1505,31 @@ function readSettingsFromUi() {
 
 function persistSettings() {
   readSettingsFromUi();
-  saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
+  const persisted = transientPairingToken && settings.token === transientPairingToken
+    ? { ...settings, token: '' }
+    : settings;
+  saveJson(localStorage, TRACKER_STORAGE_KEY, persisted);
   updateViewerLink();
 }
 
 function updateModeFields() {
+  const ws = $('selMode').value === 'ws';
   const wt = $('selMode').value === 'wt';
+  $('fieldWsUrl').hidden = !ws;
   $('fieldWtUrl').hidden = !wt;
   $('fieldWtHash').hidden = !wt;
 }
 
 function updateViewerLink() {
-  const params = new URLSearchParams({ room: $('inpRoom').value || 'demo' });
-  if ($('inpToken').value) params.set('token', $('inpToken').value);
-  $('lnkViewer').href = `../viewer/?${params.toString()}`;
+  $('lnkViewer').href = buildViewerPairingUrl({
+    base: '../viewer/',
+    mode: $('selMode').value,
+    room: $('inpRoom').value || 'demo',
+    token: $('inpToken').value,
+    wsUrl: $('inpWsUrl').value,
+    wtUrl: $('inpWtUrl').value,
+    wtHash: $('inpWtHash').value,
+  });
 }
 
 function updateChannelControls() {
@@ -1544,6 +1610,7 @@ async function copyDrumObsUrl() {
   url.searchParams.set('mode', settings.mode);
   url.searchParams.set('room', settings.room || 'demo');
   if (settings.token) url.searchParams.set('token', settings.token);
+  if (settings.wsUrl) url.searchParams.set('wsUrl', settings.wsUrl);
   if (settings.wtUrl) url.searchParams.set('wtUrl', settings.wtUrl);
   if (settings.wtHash) url.searchParams.set('wtHash', settings.wtHash);
   url.searchParams.set('bg', 'transparent');
@@ -2047,6 +2114,11 @@ $('chkDrummerMode').addEventListener('change', async (e) => {
   updateDrumKitUi();
 });
 $('selCamera').addEventListener('change', restartCameraIfRunning);
+$('selCameraFacing').addEventListener('change', async () => {
+  $('selCamera').value = '';
+  settings.cameraId = '';
+  await restartCameraIfRunning();
+});
 $('selResolution').addEventListener('change', restartCameraIfRunning);
 $('selFps').addEventListener('change', restartCameraIfRunning);
 $('rngHeadLean').addEventListener('input', persistSettings);
@@ -2092,7 +2164,12 @@ $('selMode').addEventListener('change', () => {
 });
 
 $('inpRoom').addEventListener('input', persistSettings);
-$('inpToken').addEventListener('input', persistSettings);
+$('inpParticipantId').addEventListener('change', persistSettings);
+$('inpToken').addEventListener('input', () => {
+  transientPairingToken = '';
+  persistSettings();
+});
+$('inpWsUrl').addEventListener('input', persistSettings);
 $('inpWtUrl').addEventListener('input', persistSettings);
 $('inpWtHash').addEventListener('input', persistSettings);
 
@@ -2201,6 +2278,8 @@ $('btnConnect').addEventListener('click', async () => {
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'pub',
+      participantId: settings.participantId,
+      wsUrl: $('inpWsUrl').value,
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
       token: $('inpToken').value,

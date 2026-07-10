@@ -10,23 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       - name: Lint source and docs
-        run: npm run lint
+        run: pnpm lint
       - name: Run unit and structure smoke tests
-        run: npm test
+        run: pnpm test
       - name: Verify repository structure
-        run: npm run verify
+        run: pnpm verify
       - name: TypeScript strict gate
-        run: npm run typecheck
+        run: pnpm typecheck
       - name: Browser JavaScript type contract gate
-        run: npm run typecheck:js
+        run: pnpm typecheck:js
       - name: Build production bundle
-        run: npm run build
+        run: pnpm build
 
   rust:
     runs-on: ubuntu-latest
@@ -45,9 +49,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -56,9 +64,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       - name: Build desktop frontend assets
-        run: npm run build
+        run: pnpm build
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo check --manifest-path src-tauri/Cargo.toml
       - run: cargo test --manifest-path src-tauri/Cargo.toml
@@ -67,12 +75,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-        working-directory: relay-node
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: node --check server.mjs
         working-directory: relay-node
-      - run: npm test
+      - run: pnpm test
         working-directory: relay-node

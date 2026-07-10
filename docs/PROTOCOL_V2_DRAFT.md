@@ -83,7 +83,7 @@ Header layout:
 The packet framing is implemented in `shared/kgm1b.js`, the Rust workspace
 crate `crates/kgm1-codec`, and the Python workspace-local package
 `packages/kgm1-codec-py`. JS-generated golden vectors are decoded by Rust and
-Python in `npm test`.
+Python in `pnpm test`.
 
 ### 2.3 KGM2 compact face profile
 

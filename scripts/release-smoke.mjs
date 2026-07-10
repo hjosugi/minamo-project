@@ -2,11 +2,12 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 
 const checks = [
-  ['npm', ['run', 'lint']],
-  ['npm', ['test']],
-  ['npm', ['run', 'verify']],
-  ['npm', ['run', 'typecheck:js']],
-  ['npm', ['run', 'build']],
+  ['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']],
+  ['pnpm', ['lint']],
+  ['pnpm', ['test']],
+  ['pnpm', ['verify']],
+  ['pnpm', ['typecheck:js']],
+  ['pnpm', ['build']],
 ];
 
 if (fs.existsSync('relay-rs/Cargo.toml')) {
@@ -28,7 +29,7 @@ if (fs.existsSync('src-tauri/Cargo.toml')) {
 
 if (fs.existsSync('relay-node/server.mjs')) {
   checks.push(['node', ['--check', 'relay-node/server.mjs']]);
-  checks.push(['npm', ['test', '--prefix', 'relay-node']]);
+  checks.push(['pnpm', ['--dir', 'relay-node', 'test']]);
 }
 
 for (const [cmd, args] of checks) {

@@ -6,7 +6,7 @@ whether a VRM model was loaded.
 
 Before opening a pull request:
 
-- Run `npm run lint`, `npm test`, `npm run verify`, and `npm run build`.
+- Run `pnpm lint`, `pnpm test`, `pnpm verify`, and `pnpm build`.
 - If relay code changed, run `cargo fmt`, `cargo clippy`, and `cargo build`
   under `relay-rs/`.
 - Keep camera/video data local. Do not attach private face recordings unless

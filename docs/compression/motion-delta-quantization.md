@@ -35,7 +35,7 @@ The reference codec lives in [`shared/motion-quant.js`](../../shared/motion-quan
 
 ## Test method
 
-- `npm test` covers the reference codec: neutral round-trip has no visible
+- `pnpm test` covers the reference codec: neutral round-trip has no visible
   drift, gaze error stays under 3° after delta decode, a reconnect keyframe
   restores full state in one frame, and stale deltas after a keyframe are
   dropped.

@@ -16,7 +16,7 @@
     "types/browser-js.d.ts",
     "shared/*.js",
     "tracker/tracker.js",
-    "viewer/viewer.js",
+    "viewer/*.js",
     "replay/replay.js"
   ]
 }

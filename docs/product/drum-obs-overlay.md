@@ -28,7 +28,7 @@ The render logic is `shared/drum-overlay.js`:
 
 ## Testing
 
-- `npm test` covers the reducer: hits raise the right zone's flash, flashes
+- `pnpm test` covers the reducer: hits raise the right zone's flash, flashes
   decay to 0 after the decay window, duplicate events do not double-count, and
   the hit counter tracks total hits.
 - Manual: load the overlay in OBS with `?demo=1` and confirm transparent

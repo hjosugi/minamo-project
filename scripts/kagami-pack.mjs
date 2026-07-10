@@ -6,7 +6,7 @@
 // run, and renders the before/after size table required by the issue. It never
 // mutates the asset itself, so it is safe to run anywhere; the heavy encoders
 // (gltf-transform, gltfpack) are invoked by the operator using the emitted
-// commands and then re-inspected with `npm run inspect:glb -- <out> --avatar`.
+// commands and then re-inspected with `pnpm inspect:glb -- <out> --avatar`.
 
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -18,7 +18,7 @@ export function planAvatarPack(summary, options = {}) {
   const geometry = options.geometry === 'draco' ? 'draco' : 'meshopt';
   const texture = options.texture !== false;
   const stages = [
-    { id: 'inspect', tool: 'kagami-pack', command: 'npm run inspect:glb -- <in> --avatar', note: 'record baseline summary' },
+    { id: 'inspect', tool: 'kagami-pack', command: 'pnpm inspect:glb -- <in> --avatar', note: 'record baseline summary' },
     { id: 'dedup', tool: 'gltf-transform', command: 'gltf-transform dedup <in> <out>' },
     { id: 'prune', tool: 'gltf-transform', command: 'gltf-transform prune <in> <out>' },
   ];
@@ -30,7 +30,7 @@ export function planAvatarPack(summary, options = {}) {
       ? { id: 'geometry', tool: 'gltf-transform', command: 'gltf-transform draco <in> <out>' }
       : { id: 'geometry', tool: 'gltfpack', command: 'gltfpack -i <in> -o <out> -cc' },
   );
-  stages.push({ id: 'verify', tool: 'kagami-pack', command: 'npm run inspect:glb -- <out> --avatar', note: 'must exit 0 and preserve rig-critical counts' });
+  stages.push({ id: 'verify', tool: 'kagami-pack', command: 'pnpm inspect:glb -- <out> --avatar', note: 'must exit 0 and preserve rig-critical counts' });
 
   const rigCritical = {
     morphTargets: Number(summary?.counts?.morphTargets ?? 0),
@@ -55,7 +55,7 @@ export function planAvatarPack(summary, options = {}) {
     rigCritical,
     stages,
     warnings,
-    verifyAfter: 'npm run inspect:glb -- <out> --avatar',
+    verifyAfter: 'pnpm inspect:glb -- <out> --avatar',
   };
 }
 

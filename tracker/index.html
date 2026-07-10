@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
   <title>Minamo Tracker</title>
   <link rel="stylesheet" href="../assets/minamo.css" />
 </head>
@@ -39,6 +40,13 @@
           <span>camera</span>
           <select id="selCamera">
             <option value="">default camera</option>
+          </select>
+        </div>
+        <div class="field">
+          <span>camera preference</span>
+          <select id="selCameraFacing">
+            <option value="user">front</option>
+            <option value="environment">back</option>
           </select>
         </div>
         <div class="field">
@@ -269,8 +277,16 @@
           <input type="text" id="inpRoom" value="demo" />
         </div>
         <div class="field">
+          <span>participant id</span>
+          <input type="text" id="inpParticipantId" maxlength="64" autocomplete="off" />
+        </div>
+        <div class="field">
           <span>room token</span>
           <input type="password" id="inpToken" autocomplete="off" />
+        </div>
+        <div class="field wide" id="fieldWsUrl" hidden>
+          <span>websocket relay url</span>
+          <input type="url" id="inpWsUrl" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://relay.example/ws" />
         </div>
         <div class="field" id="fieldWtUrl" hidden>
           <span>wt url</span>

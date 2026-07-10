@@ -44,5 +44,5 @@ event time; the onset timestamp does. This matches
   ([../benchmarks/drum-benchmark-metrics.md](../benchmarks/drum-benchmark-metrics.md),
   fixture `tests/fixtures/drum-benchmark-clips.json`).
 - Metrics: onset-to-openness latency, false chick rate during open playing.
-- `npm test` covers `inferHiHatPedalState` selecting bright-band onsets and
+- `pnpm test` covers `inferHiHatPedalState` selecting bright-band onsets and
   rejecting low-frequency energy.

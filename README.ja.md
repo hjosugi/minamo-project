@@ -50,7 +50,8 @@
 ### 2. WebSocketリレー(別マシンのビューアへ)
 
 ```sh
-cd relay-node && npm install && npm start   # http://localhost:8787 で配信+中継
+pnpm install --frozen-lockfile
+pnpm --dir relay-node start                 # http://localhost:8787 で配信+中継
 ```
 
 tracker / viewer 双方で mode: ws、同じ room 名で Connect。

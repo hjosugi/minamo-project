@@ -11,3 +11,6 @@ __pycache__/
 target/
 .tmp-issue-bodies/
 src-tauri/gen/
+# Local PR verification may contain tokens, private certificates, or raw media.
+# Commit only deliberately redacted copies under docs/verification/.
+evidence/pr-220/

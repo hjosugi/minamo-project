@@ -10,7 +10,7 @@
     "desktop:build": "tauri build",
     "desktop:check": "cargo check --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && vite build && node scripts/copy-pages-static.mjs",
+    "build": "pnpm typecheck && vite build && node scripts/copy-pages-static.mjs",
     "lint": "node scripts/lint.mjs",
     "preview": "vite preview",
     "test": "node tests/run-tests.mjs && vitest run",
@@ -24,6 +24,7 @@
     "@mediapipe/tasks-vision": "^0.10.35",
     "@pixiv/three-vrm": "^3.5.4",
     "ag-psd": "^31.0.2",
+    "qrcode": "1.5.4",
     "three": "^0.185.1"
   },
   "devDependencies": {

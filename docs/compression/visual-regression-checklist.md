@@ -36,6 +36,6 @@ This is the acceptance gate referenced by the texture and geometry stages in
 - The pose list is encoded in the sample-asset checklist
   (`shared/compression-checklist.js`) so `evaluateAssetChecklist` fails when a
   required pose is missing from an asset's regression record.
-- `npm test` covers the checklist evaluator.
+- `pnpm test` covers the checklist evaluator.
 - Manual: complete the pose grid and attach the pass/fail record to the release
   notes for any bundled sample asset.

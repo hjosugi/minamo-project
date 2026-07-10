@@ -38,5 +38,5 @@ visible, consistent with [DD-003](../design/DD-003-audio-lipsync.md).
 - Kick-only impulse clips and kick+snare patterns in the benchmark set
   ([../benchmarks/drum-benchmark-metrics.md](../benchmarks/drum-benchmark-metrics.md)).
 - Metrics: kick timing error, false kick rate under loud snare playing.
-- `npm test` covers `inferKickPedalHit` emitting a `kick` event for a
+- `pnpm test` covers `inferKickPedalHit` emitting a `kick` event for a
   low-frequency onset and rejecting bright-band onsets.

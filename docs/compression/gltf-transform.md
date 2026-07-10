@@ -25,7 +25,7 @@ See [avatar-compression.md](avatar-compression.md) for the full pipeline.
 3. Re-run the repo inspector after each pass and diff the summary:
 
    ```bash
-   npm run inspect:glb -- avatar.pruned.glb --avatar
+   pnpm inspect:glb -- avatar.pruned.glb --avatar
    ```
 
 4. Only after the pruned file still loads in the viewer, move on to texture
@@ -45,7 +45,7 @@ See [avatar-compression.md](avatar-compression.md) for the full pipeline.
 
 ## Test method
 
-- `npm test` asserts the inspector summary fields the guide depends on
+- `pnpm test` asserts the inspector summary fields the guide depends on
   (morph target count, humanoid names, expression names).
 - The sample-asset checklist (`evaluateAssetChecklist`) gates each stage against
   the baseline summary and fails on any rig-critical regression.

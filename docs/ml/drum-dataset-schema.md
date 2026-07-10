@@ -41,6 +41,6 @@ Each label is one of:
 
 ## Testing
 
-- `npm test` covers `createDrumDatasetAnnotation` producing the
+- `pnpm test` covers `createDrumDatasetAnnotation` producing the
   `minamo.drum-dataset.v1` schema with local-only consent.
 - The JSON Schema file is validated as part of the structure check.

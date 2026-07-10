@@ -8,7 +8,7 @@ and VRAM. It is the texture stage of the pipeline in
 
 ## Steps
 
-1. Inspect texture inventory first (`npm run inspect:glb -- avatar.glb`) and
+1. Inspect texture inventory first (`pnpm inspect:glb -- avatar.glb`) and
    note texture count, dimensions, and material references.
 2. Compress large albedo and normal maps to KTX2 (UASTC for normal/detail,
    ETC1S for large albedo where quality allows).
@@ -35,6 +35,6 @@ and VRAM. It is the texture stage of the pipeline in
   gradients preserved, normal maps free of shimmer, alpha edges clean in
   transparent mode, material references intact, mobile transcode target loads
   without fallback stalls.
-- `npm test` covers the checklist evaluator gates for texture regressions.
+- `pnpm test` covers the checklist evaluator gates for texture regressions.
 - Manual: side-by-side viewer comparison at neutral, blink, and mouth-open
   poses ([visual-regression-checklist.md](visual-regression-checklist.md)).

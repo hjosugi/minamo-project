@@ -32,13 +32,15 @@ Advanced but kept open (remaining criteria need hardware/manual verification):
   (`createPoseBackendRegistry`/`setActiveBackend` in `src/core/ml.ts`), DD-009,
   and the fps/VRAM benchmark table. Open until an ONNX model is integrated and
   benchmarked on a real WebGPU device.
-- #41 asset pipeline: `kagami-pack` planner CLI (`npm run pack:avatar`) with the
+- #41 asset pipeline: `kagami-pack` planner CLI (`pnpm pack:avatar`) with the
   before/after size table. Open until the packed VRM is verified identical in the
   viewer with a real gltfpack/gltf-transform toolchain.
 - #43 multi-avatar rooms: `assignRoomLayoutSlots` deterministic layout + fade-out.
   Open until two live trackers are verified in one viewer.
-- #51 phone-as-tracker: `shared/pairing.js` QR-URL builder + iOS Safari ws
-  fallback. Open until QR pairing is timed on a real phone.
+- #51 phone-as-tracker: `shared/pairing.js` URL contract, desktop QR/copy UI,
+  relay-issued short-lived tokens, query application, and iOS Safari ws
+  fallback are implemented under #226. Open until secure negotiation (#227)
+  and real-phone timing (#228) are verified.
 - #38 Inochi2D and #50 Tauri virtual camera stay open per their existing design
   docs; both need runtime/hardware verification (KGM-050 is held open by the
   structure check by design).
@@ -65,10 +67,10 @@ Advanced but kept open (remaining criteria need hardware/manual verification):
 Passed locally:
 
 ```sh
-npm run lint
-npm test
-npm run verify
-npm run build
+pnpm lint
+pnpm test
+pnpm verify
+pnpm build
 cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
 cargo clippy --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
 cargo build --manifest-path relay-rs/Cargo.toml

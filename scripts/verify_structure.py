@@ -279,7 +279,7 @@ def validate_documented_package_scripts() -> None:
             return package_script_cache[cwd]
         package_path = cwd / 'package.json'
         if not package_path.exists():
-            add_error(source, f'documented npm command runs in {cwd.relative_to(ROOT)} but no package.json exists there')
+            add_error(source, f'documented package command runs in {cwd.relative_to(ROOT)} but no package.json exists there')
             package_script_cache[cwd] = None
             return None
         scripts = set(json.loads(package_path.read_text(encoding='utf-8')).get('scripts', {}))
@@ -378,21 +378,33 @@ def validate_foundation_contracts() -> None:
     relay_rs = read('relay-rs/src/main.rs')
     tracker = read('tracker/tracker.js')
 
-    for needle in ['npm run lint', 'npm test', 'npm run verify', 'npm run typecheck:js', 'npm run build']:
+    package = json.loads(read('package.json'))
+    if package.get('packageManager') != 'pnpm@11.0.0':
+        add_error('package.json', 'packageManager must pin pnpm@11.0.0')
+    if not (ROOT / 'pnpm-lock.yaml').exists():
+        add_error('pnpm-lock.yaml', 'pnpm lockfile is required')
+    if not (ROOT / 'pnpm-workspace.yaml').exists():
+        add_error('pnpm-workspace.yaml', 'pnpm workspace must include relay-node')
+
+    for needle in ['pnpm lint', 'pnpm test', 'pnpm verify', 'pnpm typecheck:js', 'pnpm build']:
         if needle not in ci:
             add_error('.github/workflows/ci.yml', f'CI missing JavaScript gate: {needle}')
+    if 'pnpm install --frozen-lockfile' not in ci:
+        add_error('.github/workflows/ci.yml', 'CI must install the frozen pnpm lockfile')
     if 'cargo test --manifest-path relay-rs/Cargo.toml' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must run relay-rs tests')
-    if 'npm test' not in ci or 'working-directory: relay-node' not in ci:
+    if 'pnpm test' not in ci or 'working-directory: relay-node' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must run relay-node tests')
     if relay_node_package.get('scripts', {}).get('test') != 'node --test server.node-test.mjs':
         add_error('relay-node/package.json', 'relay-node must expose node:test script')
-    if "['npm', ['test', '--prefix', 'relay-node']]" not in release_smoke:
+    if "['pnpm', ['--dir', 'relay-node', 'test']]" not in release_smoke:
         add_error('scripts/release-smoke.mjs', 'release smoke must run relay-node tests')
+    if "['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']]" not in release_smoke:
+        add_error('scripts/release-smoke.mjs', 'release smoke must validate the frozen pnpm lockfile')
     if "['cargo', ['test', '--manifest-path', 'relay-rs/Cargo.toml']]" not in release_smoke:
         add_error('scripts/release-smoke.mjs', 'release smoke must run relay-rs tests')
 
-    for export_name in ['constantTimeEqual', 'originAllowed', 'isKgm1Json', 'leaveRoom']:
+    for export_name in ['constantTimeEqual', 'originAllowed', 'isKgm1Json', 'leaveRoom', 'parseParticipantId']:
         if f'export function {export_name}' not in relay_node:
             add_error('relay-node/server.mjs', f'missing testable export {export_name}')
         if export_name not in relay_node_test:
@@ -608,7 +620,8 @@ def validate_head_position_contracts() -> None:
         'target.pos',
         'current.pos.lerp(target.pos',
         'avatarLeanOffset',
-        'vrm.scene.position.set(lean.x, lean.y, lean.z)',
+        'vrm.scene.position.set(lean.x + primarySlotX, lean.y, lean.z)',
+        'model.scene.position.set(lean.x + runtime.slotX, lean.y, lean.z)',
     ]:
         if needle not in viewer:
             add_error('viewer/viewer.js', f'missing viewer head lean contract: {needle}')
@@ -1201,9 +1214,13 @@ def validate_layered_avatar_contracts() -> None:
     ]:
         if needle not in viewer:
             add_error('viewer/viewer.js', f'missing layered avatar viewer contract: {needle}')
-    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .psd, .png set, or .jsonl']:
+    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .glb, .psd, .png set, or .jsonl']:
         if needle not in viewer_html:
             add_error('viewer/index.html', f'missing layered avatar UI contract: {needle}')
+    avatar_loader = read('viewer/avatar-loader.js')
+    for needle in ['KTX2Loader', 'detectSupport(renderer)', 'setKTX2Loader', 'MeshoptDecoder', 'setMeshoptDecoder', 'DRACOLoader', 'setDRACOLoader']:
+        if needle not in avatar_loader:
+            add_error('viewer/avatar-loader.js', f'compressed avatar decoder wiring missing {needle}')
     for needle in ['minamo.layered-avatar.v1', 'parallaxPx', 'eyesClosed', 'mouthOpen', 'depth']:
         if needle not in schema:
             add_error('docs/product/layered-avatar.schema.json', f'missing layered avatar schema contract: {needle}')

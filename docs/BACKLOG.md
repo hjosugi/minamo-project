@@ -46,7 +46,7 @@ The codec roundtrip test already exists as an ad-hoc script; move it into a
 proper test runner (`node:test`).
 
 Acceptance criteria:
-- [ ] `npm test` runs codec and filter tests locally and in CI
+- [ ] `pnpm test` runs codec and filter tests locally and in CI
 - [ ] CI fails on lint errors
 - [ ] Roundtrip test covers FACE, FACE+POSE, and empty-blocks frames
 

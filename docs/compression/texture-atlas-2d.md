@@ -33,7 +33,7 @@ of [avatar-compression.md](avatar-compression.md). See also
 
 - The layered-avatar manifest is schema-validated
   ([../product/layered-avatar.schema.json](../product/layered-avatar.schema.json))
-  and covered by `npm test`.
+  and covered by `pnpm test`.
 - The sample-asset checklist (`evaluateAssetChecklist`) verifies parameter-name
   stability and alpha-edge acceptance for the 2D area.
 - Manual: rebuild the atlas and confirm every preset still maps to the same

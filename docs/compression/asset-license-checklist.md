@@ -35,6 +35,6 @@ published until its license clears this checklist. See the license section of
 - The license fields are part of the sample-asset checklist
   (`shared/compression-checklist.js`); `evaluateAssetChecklist` fails an asset
   whose record is missing redistribution or modification permission.
-- `npm test` covers the license gate in the checklist evaluator.
+- `pnpm test` covers the license gate in the checklist evaluator.
 - Manual: confirm the license record exists and is attached to the release
   before publishing any bundled asset.

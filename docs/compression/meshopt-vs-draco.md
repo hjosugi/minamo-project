@@ -36,7 +36,7 @@ default choice and how to override it per asset.
 - The checklist evaluator (`evaluateAssetChecklist`) fails the geometry stage if
   morph target count, expression names, or spring bone counts regress against
   the baseline inspection.
-- `npm test` exercises the evaluator gates.
+- `pnpm test` exercises the evaluator gates.
 - Manual: run the visual regression pass
   ([visual-regression-checklist.md](visual-regression-checklist.md)) on the
   compressed file and record the decision table above.
