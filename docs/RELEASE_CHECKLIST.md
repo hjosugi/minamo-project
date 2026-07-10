@@ -12,12 +12,12 @@
 ## Automated Checks
 
 ```sh
-npm run lint
-npm test
-npm run verify
-npm run typecheck:js
-npm run build
-npm run release:smoke
+pnpm lint
+pnpm test
+pnpm verify
+pnpm typecheck:js
+pnpm build
+pnpm release:smoke
 cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
 cargo clippy --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
 cargo build --manifest-path relay-rs/Cargo.toml --release
@@ -25,7 +25,8 @@ cargo test --manifest-path crates/kgm1-codec/Cargo.toml
 cd relay-node && node --check server.mjs
 ```
 
-`npm run release:smoke` runs the automated release checks above where the
+`pnpm release:smoke` first validates `pnpm-lock.yaml` with a frozen install, then
+runs the automated release checks above where the
 required toolchains are available. It does not replace the manual browser,
 camera, relay-token, WebTransport, or OBS smoke tests.
 

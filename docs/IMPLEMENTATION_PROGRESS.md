@@ -9,6 +9,42 @@ Status: this is not a closure document. Issues stay open until their own
 acceptance criteria are implemented and verified. This file records repository
 evidence that can be used while completing the remaining work.
 
+## 2026-07-08 pass (v0.1.4)
+
+Closed with verifiable deliverables (docs + code + tests, all gates green):
+
+- Compression docs #156-#163: eight focused per-stage guides under
+  `docs/compression/`, plus `shared/compression-checklist.js`
+  (`evaluateAssetChecklist` sample-asset gate) and `shared/motion-quant.js`
+  (motion delta quantization reference codec) with round-trip and
+  rig-preservation tests.
+- Drum #118-#123: hi-hat/kick pedal inference design docs, OBS drum overlay
+  (`shared/drum-overlay.js` + `viewer/drum-overlay.html`), benchmark clips
+  fixture (`tests/fixtures/drum-benchmark-clips.json`) with a fast-roll stress
+  test, and the YOLO stick/drum training schema (`docs/ml/drum-dataset-schema.md`
+  + `docs/product/drum-dataset.schema.json`).
+- Research #183-#185: multi-camera fusion, phone camera companion, and IMU stick
+  evaluations under `docs/research/`.
+
+Advanced but kept open (remaining criteria need hardware/manual verification):
+
+- #23 full-body ONNX: runtime-toggleable backend registry
+  (`createPoseBackendRegistry`/`setActiveBackend` in `src/core/ml.ts`), DD-009,
+  and the fps/VRAM benchmark table. Open until an ONNX model is integrated and
+  benchmarked on a real WebGPU device.
+- #41 asset pipeline: `kagami-pack` planner CLI (`pnpm pack:avatar`) with the
+  before/after size table. Open until the packed VRM is verified identical in the
+  viewer with a real gltfpack/gltf-transform toolchain.
+- #43 multi-avatar rooms: `assignRoomLayoutSlots` deterministic layout + fade-out.
+  Open until two live trackers are verified in one viewer.
+- #51 phone-as-tracker: `shared/pairing.js` URL contract, desktop QR/copy UI,
+  relay-issued short-lived tokens, query application, and iOS Safari ws
+  fallback are implemented under #226. Open until secure negotiation (#227)
+  and real-phone timing (#228) are verified.
+- #38 Inochi2D and #50 Tauri virtual camera stay open per their existing design
+  docs; both need runtime/hardware verification (KGM-050 is held open by the
+  structure check by design).
+
 ## Implementation Evidence
 
 - Runtime/app: `shared/runtime.js`, `shared/codec.js`, `shared/kgm1b.js`,
@@ -31,10 +67,10 @@ evidence that can be used while completing the remaining work.
 Passed locally:
 
 ```sh
-npm run lint
-npm test
-npm run verify
-npm run build
+pnpm lint
+pnpm test
+pnpm verify
+pnpm build
 cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
 cargo clippy --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
 cargo build --manifest-path relay-rs/Cargo.toml

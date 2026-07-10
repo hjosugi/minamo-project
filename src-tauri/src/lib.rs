@@ -1,4 +1,5 @@
 use serde::Serialize;
+#[cfg(not(test))]
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Serialize)]
@@ -26,7 +27,7 @@ struct VirtualCameraStatus {
     state: &'static str,
 }
 
-#[tauri::command]
+#[cfg_attr(not(test), tauri::command)]
 fn desktop_status() -> DesktopStatus {
     DesktopStatus {
         runtime: "tauri desktop",
@@ -51,11 +52,12 @@ fn desktop_status() -> DesktopStatus {
     }
 }
 
-#[tauri::command]
+#[cfg_attr(not(test), tauri::command)]
 fn virtual_camera_status() -> VirtualCameraStatus {
     detect_virtual_camera_status()
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn open_tracker(app: AppHandle) -> Result<(), String> {
     open_app_window(
@@ -68,6 +70,7 @@ async fn open_tracker(app: AppHandle) -> Result<(), String> {
     )
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn open_viewer(app: AppHandle) -> Result<(), String> {
     open_app_window(
@@ -80,6 +83,7 @@ async fn open_viewer(app: AppHandle) -> Result<(), String> {
     )
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn open_replay(app: AppHandle) -> Result<(), String> {
     open_app_window(
@@ -92,6 +96,7 @@ async fn open_replay(app: AppHandle) -> Result<(), String> {
     )
 }
 
+#[cfg(not(test))]
 fn open_app_window(
     app: &AppHandle,
     label: &'static str,
@@ -205,6 +210,7 @@ fn first_linux_video_device() -> Option<String> {
     None
 }
 
+#[cfg(not(test))]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![

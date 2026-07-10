@@ -57,6 +57,32 @@ REQUIRED = [
     'shared/expression-mapping.js',
     'shared/layered-avatar.js',
     'shared/recording.js',
+    'shared/compression-checklist.js',
+    'shared/motion-quant.js',
+    'shared/drum-overlay.js',
+    'shared/pairing.js',
+    'docs/compression/avatar-compression.md',
+    'docs/compression/glb-inspection.md',
+    'docs/compression/gltf-transform.md',
+    'docs/compression/ktx2-textures.md',
+    'docs/compression/meshopt-vs-draco.md',
+    'docs/compression/texture-atlas-2d.md',
+    'docs/compression/motion-delta-quantization.md',
+    'docs/compression/visual-regression-checklist.md',
+    'docs/compression/asset-license-checklist.md',
+    'viewer/drum-overlay.html',
+    'docs/tracking/drum-hihat-pedal.md',
+    'docs/tracking/drum-kick-pedal.md',
+    'docs/product/drum-obs-overlay.md',
+    'docs/ml/drum-dataset-schema.md',
+    'docs/product/drum-dataset.schema.json',
+    'tests/fixtures/drum-benchmark-clips.json',
+    'docs/research/multi-camera-fusion.md',
+    'docs/research/phone-camera-companion.md',
+    'docs/research/imu-stick-integration.md',
+    'docs/design/DD-009-onnx-backend-registry.md',
+    'docs/benchmarks/onnx-pose-backends.md',
+    'scripts/kagami-pack.mjs',
     'tests/fixtures/kgm1-synthetic.jsonl',
     'tests/fixtures/kgm1-synthetic.kgm',
     'tests/fixtures/hand-golden-clip.json',
@@ -253,7 +279,7 @@ def validate_documented_package_scripts() -> None:
             return package_script_cache[cwd]
         package_path = cwd / 'package.json'
         if not package_path.exists():
-            add_error(source, f'documented npm command runs in {cwd.relative_to(ROOT)} but no package.json exists there')
+            add_error(source, f'documented package command runs in {cwd.relative_to(ROOT)} but no package.json exists there')
             package_script_cache[cwd] = None
             return None
         scripts = set(json.loads(package_path.read_text(encoding='utf-8')).get('scripts', {}))
@@ -352,21 +378,33 @@ def validate_foundation_contracts() -> None:
     relay_rs = read('relay-rs/src/main.rs')
     tracker = read('tracker/tracker.js')
 
-    for needle in ['npm run lint', 'npm test', 'npm run verify', 'npm run typecheck:js', 'npm run build']:
+    package = json.loads(read('package.json'))
+    if package.get('packageManager') != 'pnpm@11.0.0':
+        add_error('package.json', 'packageManager must pin pnpm@11.0.0')
+    if not (ROOT / 'pnpm-lock.yaml').exists():
+        add_error('pnpm-lock.yaml', 'pnpm lockfile is required')
+    if not (ROOT / 'pnpm-workspace.yaml').exists():
+        add_error('pnpm-workspace.yaml', 'pnpm workspace must include relay-node')
+
+    for needle in ['pnpm lint', 'pnpm test', 'pnpm verify', 'pnpm typecheck:js', 'pnpm build']:
         if needle not in ci:
             add_error('.github/workflows/ci.yml', f'CI missing JavaScript gate: {needle}')
+    if 'pnpm install --frozen-lockfile' not in ci:
+        add_error('.github/workflows/ci.yml', 'CI must install the frozen pnpm lockfile')
     if 'cargo test --manifest-path relay-rs/Cargo.toml' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must run relay-rs tests')
-    if 'npm test' not in ci or 'working-directory: relay-node' not in ci:
+    if 'pnpm test' not in ci or 'working-directory: relay-node' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must run relay-node tests')
     if relay_node_package.get('scripts', {}).get('test') != 'node --test server.node-test.mjs':
         add_error('relay-node/package.json', 'relay-node must expose node:test script')
-    if "['npm', ['test', '--prefix', 'relay-node']]" not in release_smoke:
+    if "['pnpm', ['--dir', 'relay-node', 'test']]" not in release_smoke:
         add_error('scripts/release-smoke.mjs', 'release smoke must run relay-node tests')
+    if "['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']]" not in release_smoke:
+        add_error('scripts/release-smoke.mjs', 'release smoke must validate the frozen pnpm lockfile')
     if "['cargo', ['test', '--manifest-path', 'relay-rs/Cargo.toml']]" not in release_smoke:
         add_error('scripts/release-smoke.mjs', 'release smoke must run relay-rs tests')
 
-    for export_name in ['constantTimeEqual', 'originAllowed', 'isKgm1Json', 'leaveRoom']:
+    for export_name in ['constantTimeEqual', 'originAllowed', 'isKgm1Json', 'leaveRoom', 'parseParticipantId']:
         if f'export function {export_name}' not in relay_node:
             add_error('relay-node/server.mjs', f'missing testable export {export_name}')
         if export_name not in relay_node_test:
@@ -582,7 +620,8 @@ def validate_head_position_contracts() -> None:
         'target.pos',
         'current.pos.lerp(target.pos',
         'avatarLeanOffset',
-        'vrm.scene.position.set(lean.x, lean.y, lean.z)',
+        'vrm.scene.position.set(lean.x + primarySlotX, lean.y, lean.z)',
+        'model.scene.position.set(lean.x + runtime.slotX, lean.y, lean.z)',
     ]:
         if needle not in viewer:
             add_error('viewer/viewer.js', f'missing viewer head lean contract: {needle}')
@@ -1175,9 +1214,13 @@ def validate_layered_avatar_contracts() -> None:
     ]:
         if needle not in viewer:
             add_error('viewer/viewer.js', f'missing layered avatar viewer contract: {needle}')
-    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .psd, .png set, or .jsonl']:
+    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .glb, .psd, .png set, or .jsonl']:
         if needle not in viewer_html:
             add_error('viewer/index.html', f'missing layered avatar UI contract: {needle}')
+    avatar_loader = read('viewer/avatar-loader.js')
+    for needle in ['KTX2Loader', 'detectSupport(renderer)', 'setKTX2Loader', 'MeshoptDecoder', 'setMeshoptDecoder', 'DRACOLoader', 'setDRACOLoader']:
+        if needle not in avatar_loader:
+            add_error('viewer/avatar-loader.js', f'compressed avatar decoder wiring missing {needle}')
     for needle in ['minamo.layered-avatar.v1', 'parallaxPx', 'eyesClosed', 'mouthOpen', 'depth']:
         if needle not in schema:
             add_error('docs/product/layered-avatar.schema.json', f'missing layered avatar schema contract: {needle}')
@@ -1597,6 +1640,97 @@ def validate_runtime_warning_taxonomy() -> None:
             add_error('shared/runtime.js', f'WARNING_TAXONOMY missing public code {code}')
 
 
+def validate_compression_docs() -> None:
+    focused_docs = [
+        'docs/compression/glb-inspection.md',
+        'docs/compression/gltf-transform.md',
+        'docs/compression/ktx2-textures.md',
+        'docs/compression/meshopt-vs-draco.md',
+        'docs/compression/texture-atlas-2d.md',
+        'docs/compression/motion-delta-quantization.md',
+        'docs/compression/visual-regression-checklist.md',
+        'docs/compression/asset-license-checklist.md',
+    ]
+    for rel in focused_docs:
+        text = read(rel)
+        for heading in ('## Steps', '## Rig-breaking risks', '## Test method'):
+            if heading not in text:
+                add_error(rel, f'compression doc missing required section: {heading}')
+    checklist = read('shared/compression-checklist.js')
+    for needle in ['evaluateAssetChecklist', 'REQUIRED_REGRESSION_POSES', 'ASSET_COMPRESSION_CHECKLIST']:
+        if needle not in checklist:
+            add_error('shared/compression-checklist.js', f'missing checklist export: {needle}')
+    quant = read('shared/motion-quant.js')
+    for needle in ['quantizeWeightDeltas', 'dequantizeWeightDeltas', 'encodeMotionFrame', 'decodeMotionStream', 'shouldForceKeyframe']:
+        if needle not in quant:
+            add_error('shared/motion-quant.js', f'missing motion-quant export: {needle}')
+
+
+def validate_drum_docs() -> None:
+    overlay = read('shared/drum-overlay.js')
+    for needle in ['deriveObsOverlayState', 'reduceDrumOverlay']:
+        if needle not in overlay:
+            add_error('shared/drum-overlay.js', f'missing drum overlay export: {needle}')
+    hihat = read('docs/tracking/drum-hihat-pedal.md')
+    if 'inferHiHatPedalState' not in hihat:
+        add_error('docs/tracking/drum-hihat-pedal.md', 'hi-hat pedal doc must point to inferHiHatPedalState')
+    kick = read('docs/tracking/drum-kick-pedal.md')
+    if 'inferKickPedalHit' not in kick:
+        add_error('docs/tracking/drum-kick-pedal.md', 'kick pedal doc must point to inferKickPedalHit')
+    schema_doc = read('docs/ml/drum-dataset-schema.md')
+    if 'minamo.drum-dataset.v1' not in schema_doc:
+        add_error('docs/ml/drum-dataset-schema.md', 'drum dataset schema doc must document minamo.drum-dataset.v1')
+    try:
+        clips = json.loads(read('tests/fixtures/drum-benchmark-clips.json'))
+    except (json.JSONDecodeError, SystemExit):
+        return
+    if not isinstance(clips, dict) or 'clips' not in clips:
+        add_error('tests/fixtures/drum-benchmark-clips.json', 'benchmark clips fixture must have a "clips" array')
+        return
+    for name in ('single-snare', 'alternating-hands', 'fast-roll', 'false-positive-hold'):
+        if not any(clip.get('id') == name for clip in clips['clips']):
+            add_error('tests/fixtures/drum-benchmark-clips.json', f'benchmark clips fixture missing clip: {name}')
+
+
+def validate_research_docs() -> None:
+    research_docs = {
+        'docs/research/multi-camera-fusion.md': '#183',
+        'docs/research/phone-camera-companion.md': '#184',
+        'docs/research/imu-stick-integration.md': '#185',
+    }
+    for rel, issue in research_docs.items():
+        text = read(rel)
+        for heading in ('## Goal', '## Acceptance criteria', '## Decision'):
+            if heading not in text:
+                add_error(rel, f'research doc missing required section: {heading}')
+        if issue not in text:
+            add_error(rel, f'research doc should reference tracking issue {issue}')
+
+
+def validate_onnx_backend_registry() -> None:
+    dd = read('docs/design/DD-009-onnx-backend-registry.md')
+    for needle in ['createPoseBackendRegistry', 'setActiveBackend', 'onnx-pose-backends.md']:
+        if needle not in dd:
+            add_error('docs/design/DD-009-onnx-backend-registry.md', f'ONNX backend registry doc missing: {needle}')
+    ml = read('src/core/ml.ts')
+    for needle in ['createPoseBackendRegistry', 'setActiveBackend', 'listBackends']:
+        if needle not in ml:
+            add_error('src/core/ml.ts', f'missing runtime-toggleable backend registry export: {needle}')
+    bench = read('docs/benchmarks/onnx-pose-backends.md')
+    if 'fps' not in bench or 'VRAM' not in bench:
+        add_error('docs/benchmarks/onnx-pose-backends.md', 'ONNX benchmark table must report fps and VRAM')
+
+
+def validate_avatar_pack_cli() -> None:
+    cli = read('scripts/kagami-pack.mjs')
+    for needle in ['planAvatarPack', 'formatSizeTable']:
+        if needle not in cli:
+            add_error('scripts/kagami-pack.mjs', f'kagami-pack CLI missing export: {needle}')
+    package_json = json.loads(read('package.json'))
+    if 'pack:avatar' not in package_json.get('scripts', {}):
+        add_error('package.json', 'missing pack:avatar script for kagami-pack CLI')
+
+
 validate_issue_templates()
 validate_adr_headings()
 validate_local_docs_links()
@@ -1631,6 +1765,11 @@ validate_latency_quality_hud_contracts()
 validate_voice_activity_accent_contracts()
 validate_audio_lipsync_contracts()
 validate_runtime_warning_taxonomy()
+validate_compression_docs()
+validate_drum_docs()
+validate_research_docs()
+validate_onnx_backend_registry()
+validate_avatar_pack_cli()
 
 if errors:
     print('Structure verification failed:')

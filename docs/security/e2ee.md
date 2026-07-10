@@ -36,7 +36,7 @@ motion. Tests assert that a wrong key rejects with this clear error.
 
 ## Verification
 
-`npm test` covers:
+`pnpm test` covers:
 
 - ciphertext does not contain the plaintext KGM1 frame
 - decrypting with the correct key returns the original frame bytes

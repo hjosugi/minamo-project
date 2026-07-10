@@ -33,6 +33,9 @@ webcam — free, low-latency, and local-first.
 - Tauri desktop shell that launches the bundled tracker, viewer, and replay
   tools, with virtual camera backend status surfaced per OS
 - VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
+- Avatar compression tooling — GLB inspection (`pnpm inspect:glb`) and the
+  `kagami-pack` planner (`pnpm pack:avatar`) — plus a transparent OBS drum
+  overlay at `viewer/drum-overlay.html`
 - A landing hub with a mock tracking visualization demo under [landing/](landing/)
 
 Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (implemented) and
@@ -71,7 +74,8 @@ URLs when local assets are absent.
 ### 2. WebSocket relay (viewer on another machine)
 
 ```sh
-cd relay-node && npm install && npm start   # serves the site + relays on :8787
+pnpm install --frozen-lockfile
+pnpm --dir relay-node start                 # serves the site + relays on :8787
 ```
 
 Set mode: ws on both tracker and viewer, use the same room name, Connect.
@@ -94,11 +98,14 @@ LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).
 ### 4. Desktop shell
 
 ```sh
-npm run desktop:check
-npm run desktop:dev
+pnpm desktop:check
+pnpm desktop:dev
 ```
 
 Desktop packaging details: [docs/product/desktop-app.md](docs/product/desktop-app.md).
+The desktop **Pair a tracker** panel issues a five-minute room token through
+`relay-node`, renders a scannable phone URL, and provides independent tracker
+and viewer copy controls. See [docs/product/phone-tracker.md](docs/product/phone-tracker.md).
 
 ### 5. OBS Browser Source
 

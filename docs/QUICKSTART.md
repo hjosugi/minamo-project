@@ -13,17 +13,17 @@ Serve the repository root with any local HTTP server:
 Then open:
 
 - http://localhost:8000/tracker/ — the real webcam tracker (52ch face + head pose)
-- http://localhost:8000/viewer/ — the VRM viewer (drop a `.vrm` to swap avatars,
+- http://localhost:8000/viewer/ — the VRM viewer (drop a `.vrm`/`.glb` to swap avatars,
   or a tracker `.jsonl` recording to replay motion)
 - http://localhost:8000/replay/ — local JSONL replay publisher for viewer testing
 - http://localhost:8000/landing/ — the landing hub; **Start demo** overlays mock
   face/hand/drum tracking on your webcam (falls back to mock-only without one)
 
-## 1. Developing with npm / pnpm
+## 1. Developing with pnpm
 
 ```bash
 corepack enable pnpm
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev        # vite dev server for the landing hub + TypeScript core
 pnpm test       # structure smoke tests
 ```
@@ -37,9 +37,14 @@ python3 scripts/verify_structure.py
 ## 3. Relays (remote viewers)
 
 ```bash
-cd relay-node && npm install && npm start   # WebSocket relay + static site on :8787
+pnpm --dir relay-node start                 # WebSocket relay + static site on :8787
 cd relay-rs && cargo run --release          # WebTransport datagram relay (Rust)
 ```
+
+For phone capture, open the desktop **Pair a tracker** panel, replace the
+tracker/relay host with an HTTPS/WSS address reachable from the phone, and scan
+the generated short-lived QR. The viewer URL remains independently copyable.
+See [product/phone-tracker.md](product/phone-tracker.md).
 
 See [README.md](../README.md) for the full connect walkthrough.
 

@@ -32,6 +32,21 @@ artifacts.
 - Exported files avoid raw camera frames unless the feature explicitly records
   them.
 
+## Phone Pairing Tokens
+
+- `relay-node` binds generated pairing tokens to one room, limits their TTL to
+  30–900 seconds, and rejects expired, revoked, unknown, or wrong-room tokens.
+- Regeneration revokes the prior token; the issuance and QR fallback endpoints
+  use `Cache-Control: no-store` and honor `MINAMO_ALLOWED_ORIGINS`.
+- Tracker/viewer pages remove QR tokens from the address bar after parsing and
+  do not persist those transient tokens to local storage. Relay logs never
+  include token or QR payload values.
+- QR images and copied URLs are credentials. Evidence screenshots and
+  diagnostics must redact them before publication.
+- Public phone pairing still requires HTTPS/WSS and a configured origin allow
+  list. Secure transport negotiation and downgrade handling remain tracked by
+  #227; the token UI is not a substitute for TLS.
+
 ## Supply Chain
 
 - Third-party model and WASM assets have pinned versions and SHA/SRI metadata

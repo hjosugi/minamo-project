@@ -13,18 +13,18 @@
 ブラウザで開きます。
 
 - http://localhost:8000/tracker/ — 実webcamトラッカー(表情52ch + 頭部姿勢)
-- http://localhost:8000/viewer/ — VRMビューア(`.vrm` をドロップで差し替え、
+- http://localhost:8000/viewer/ — VRMビューア(`.vrm` / `.glb` をドロップで差し替え、
   trackerの`.jsonl`記録をドロップでモーション再生)
 - http://localhost:8000/replay/ — viewer検証用のローカルJSONLリプレイ送信ページ
 - http://localhost:8000/landing/ — ランディングハブ。**Start demo** を押すと、
   Webcamが使える環境では映像の上にモックの顔・手・ドラムトラッキングが重なります。
   Webcamが使えない場合もモックアニメーションだけで動作します。
 
-## 1. npm / pnpmで開発する場合
+## 1. pnpmで開発する場合
 
 ```bash
 corepack enable pnpm
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev        # ランディングハブ + TypeScriptコアのvite開発サーバー
 pnpm test       # 構造スモークテスト
 ```
@@ -38,7 +38,7 @@ python3 scripts/verify_structure.py
 ## 3. リレー(リモートビューア向け)
 
 ```bash
-cd relay-node && npm install && npm start   # WebSocket中継 + 静的配信 (:8787)
+pnpm --dir relay-node start                 # WebSocket中継 + 静的配信 (:8787)
 cd relay-rs && cargo run --release          # WebTransportデータグラム中継 (Rust)
 ```
 

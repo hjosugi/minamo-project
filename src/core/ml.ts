@@ -399,6 +399,70 @@ export function privacyPreservingDatasetRecord(landmarks: Landmark[], label: str
   return JSON.stringify(createPrivacyPreservingDatasetRecord({ label, landmarks }));
 }
 
+// Runtime-toggleable pose backend registry (KGM-023). MediaPipe stays the
+// default backend; ONNX backends register alongside it and can be swapped at
+// runtime behind the same `detect(video, t) -> keypoints` interface. Backends
+// are instantiated lazily on first activation so registering a heavy ONNX
+// session does not load it until the user selects it.
+export type PoseBackendFactory<Keypoint = Landmark> = () => PoseBackend<Keypoint>;
+
+export interface PoseBackendDescriptor<Keypoint = Landmark> {
+  name: string;
+  create: PoseBackendFactory<Keypoint>;
+  spec?: OnnxModelSpec;
+  isDefault?: boolean;
+}
+
+export interface PoseBackendRegistry<Keypoint = Landmark> {
+  listBackends(): string[];
+  has(name: string): boolean;
+  setActiveBackend(name: string): PoseBackend<Keypoint>;
+  activeBackendName(): string | null;
+  getActiveBackend(): PoseBackend<Keypoint> | null;
+  detect(input: HTMLVideoElement | ImageBitmap, timeMs: number): Promise<Keypoint[]>;
+}
+
+export function createPoseBackendRegistry<Keypoint = Landmark>(
+  descriptors: readonly PoseBackendDescriptor<Keypoint>[] = [],
+): PoseBackendRegistry<Keypoint> {
+  const factories = new Map<string, PoseBackendDescriptor<Keypoint>>();
+  const instances = new Map<string, PoseBackend<Keypoint>>();
+  let activeName: string | null = null;
+
+  const registry: PoseBackendRegistry<Keypoint> = {
+    listBackends: () => [...factories.keys()],
+    has: (name) => factories.has(name),
+    activeBackendName: () => activeName,
+    getActiveBackend: () => (activeName ? instances.get(activeName) ?? null : null),
+    setActiveBackend(name) {
+      const descriptor = factories.get(name);
+      if (!descriptor) throw new Error(`Unknown pose backend: ${name}`);
+      let instance = instances.get(name);
+      if (!instance) {
+        instance = descriptor.create();
+        instances.set(name, instance);
+      }
+      activeName = name;
+      return instance;
+    },
+    async detect(input, timeMs) {
+      const backend = registry.getActiveBackend();
+      if (!backend) throw new Error('No active pose backend; call setActiveBackend first');
+      return backend.detect(input, timeMs);
+    },
+  };
+
+  for (const descriptor of descriptors) {
+    if (factories.has(descriptor.name)) throw new Error(`Duplicate pose backend: ${descriptor.name}`);
+    factories.set(descriptor.name, descriptor);
+  }
+
+  const preferredDefault = descriptors.find((descriptor) => descriptor.isDefault) ?? descriptors[0];
+  if (preferredDefault) registry.setActiveBackend(preferredDefault.name);
+
+  return registry;
+}
+
 function providerAvailable(provider: MlExecutionProvider, capabilities: MlRuntimeCapabilities): boolean {
   if (provider === 'webgpu') return capabilities.webgpu;
   if (provider === 'webgl') return capabilities.webgl;

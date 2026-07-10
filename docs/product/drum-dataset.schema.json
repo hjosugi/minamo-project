@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hjosugi.github.io/minamo-project/docs/product/drum-dataset.schema.json",
+  "title": "Minamo drum dataset annotation",
+  "description": "Per-frame stick/drum labels for training a YOLO-family detector (issue #122).",
+  "type": "object",
+  "required": ["schema", "frameId", "labels", "consent"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "minamo.drum-dataset.v1" },
+    "frameId": { "type": "string", "minLength": 1 },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "id", "points"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "enum": ["stick", "drumZone", "hit"] },
+          "id": { "type": "string", "minLength": 1 },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" }
+              }
+            }
+          },
+          "zoneType": { "enum": ["snare", "hihat", "ride", "crash", "tom", "kick"] },
+          "hand": { "enum": ["Left", "Right"] },
+          "timeMs": { "type": "number" }
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "required": ["localOnly", "license"],
+      "additionalProperties": false,
+      "properties": {
+        "localOnly": { "type": "boolean" },
+        "license": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

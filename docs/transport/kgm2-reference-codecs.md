@@ -39,13 +39,13 @@ The packet fixture appends payload `cafebabe`.
 Run:
 
 ```sh
-npm test
+pnpm test
 cargo test --manifest-path crates/kgm1-codec/Cargo.toml
 python3 scripts/kgm1b_codec.py decode-packet 4b474d3101000700080706050403020115cd071de3aade17ea16b04c020000002100030204000000cafebabe
 PYTHONPATH=packages/kgm1-codec-py python3 -m kgm1_codec decode-header 4b474d3101000700080706050403020115cd071de3aade17ea16b04c020000002100030204000000
 ```
 
-`npm test` additionally verifies:
+`pnpm test` additionally verifies:
 
 - smallest-three quaternion max angular error below 0.5 degrees over
   1,000,000 random rotations

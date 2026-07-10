@@ -20,4 +20,4 @@ number, and include the related issue in `## References`.
 - `## Alternatives considered`
 - `## References`
 
-`npm run verify` checks these sections and the status value.
+`pnpm verify` checks these sections and the status value.

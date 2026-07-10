@@ -4,11 +4,12 @@
 // the render loop eases toward them, so network jitter never reaches bones.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { VRMUtils } from '@pixiv/three-vrm';
+
+import { createVrmLoader, formatAvatarLoadError } from './avatar-loader.js';
 
 import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
 import { decodeFrame } from '../shared/codec.js';
@@ -21,6 +22,7 @@ import {
   serializeExpressionMap,
 } from '../shared/expression-mapping.js';
 import { parseKgmRecording } from '../shared/kgm-recording.js';
+import { RoomParticipantStore, normalizeParticipantId } from '../shared/room-envelope.js';
 import {
   createLayeredAvatarManifest,
   classifyLayerName,
@@ -46,6 +48,7 @@ const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
 const params = new URLSearchParams(location.search);
+let transientPairingToken = params.get('token') || '';
 const drumOverlayRoot = $('drumOverlay');
 const drumOverlayKit = $('drumOverlayKit');
 const drumOverlayHands = $('drumOverlayHands');
@@ -87,6 +90,7 @@ const SCENE_PRESETS = Object.freeze({
 
 const settings = loadJson(localStorage, VIEWER_STORAGE_KEY, DEFAULT_VIEWER_SETTINGS);
 applyQuerySettings(settings, params);
+redactTokenFromAddress(params);
 document.body.classList.toggle('hud-hidden', params.get('hud') === '0' || params.get('preset') === 'obs');
 
 // ---------------------------------------------------------------- scene
@@ -96,6 +100,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 container.appendChild(renderer.domElement);
+const avatarLoaderRuntime = createVrmLoader(renderer);
+window.addEventListener('beforeunload', () => avatarLoaderRuntime.dispose(), { once: true });
 
 const scene = new THREE.Scene();
 scene.background = settings.transparent ? null : new THREE.Color(settings.backgroundColor);
@@ -157,6 +163,10 @@ const current = {
   pos: new THREE.Vector3(0, 0, 0.4),
   weights: new Float32Array(NUM_CHANNELS),
 };
+let primaryParticipantId = null;
+let primarySlotX = 0;
+let primaryAvatarScale = 1;
+let primaryFade = 1;
 const refQuatInv = new THREE.Quaternion(); // calibration: "Center" pose
 let hasRef = false;
 
@@ -172,6 +182,13 @@ const BONE_DOWN = new THREE.Vector3(0, -1, 0);
 let vrm = null;
 let bot = buildBot();
 scene.add(bot.group);
+const additionalParticipantRuntimes = new Map();
+const roomParticipants = new RoomParticipantStore({
+  staleAfterMs: 1000,
+  fadeMs: 1500,
+  maxParticipants: 8,
+  disposeAvatar: (runtime) => disposeParticipantRuntime(runtime),
+});
 let expressionMap = createDefaultVrmExpressionMap();
 let availableExpressionNames = [];
 let perfectSyncState = detectPerfectSyncExpressions([]);
@@ -244,32 +261,37 @@ function buildBot() {
 }
 
 function applyBot(dt) {
-  const w = current.weights;
-  const lean = avatarLeanOffset();
-  bot.group.position.set(lean.x, 1.15 + lean.y, lean.z);
-  bot.head.quaternion.copy(current.quat);
+  applyBotRuntime({ bot, target, current, slotX: primarySlotX, scale: primaryAvatarScale }, dt);
+}
+
+function applyBotRuntime(runtime, dt) {
+  const w = runtime.current.weights;
+  const lean = avatarLeanOffsetFor(runtime.current, tmpPos);
+  runtime.bot.group.position.set(lean.x + runtime.slotX, 1.15 + lean.y, lean.z);
+  runtime.bot.group.scale.setScalar(runtime.scale);
+  runtime.bot.head.quaternion.copy(runtime.current.quat);
 
   const blinkL = w[C.eyeBlinkLeft];
   const blinkR = w[C.eyeBlinkRight];
-  bot.eyeL.lid.scale.y = 0.05 + blinkL * 1.6;
-  bot.eyeL.lid.position.y = 0.028 - blinkL * 0.028;
-  bot.eyeR.lid.scale.y = 0.05 + blinkR * 1.6;
-  bot.eyeR.lid.position.y = 0.028 - blinkR * 0.028;
+  runtime.bot.eyeL.lid.scale.y = 0.05 + blinkL * 1.6;
+  runtime.bot.eyeL.lid.position.y = 0.028 - blinkL * 0.028;
+  runtime.bot.eyeR.lid.scale.y = 0.05 + blinkR * 1.6;
+  runtime.bot.eyeR.lid.position.y = 0.028 - blinkR * 0.028;
 
   const gx = gazeX(w) * 0.016;
   const gy = gazeY(w) * 0.012;
-  bot.eyeL.pupil.position.set(gx, gy, 0.02);
-  bot.eyeR.pupil.position.set(gx, gy, 0.02);
+  runtime.bot.eyeL.pupil.position.set(gx, gy, 0.02);
+  runtime.bot.eyeR.pupil.position.set(gx, gy, 0.02);
 
   const browLift = w[C.browInnerUp] * 0.02 - (w[C.browDownLeft] + w[C.browDownRight]) * 0.008;
-  bot.browL.position.y = 0.075 + browLift;
-  bot.browR.position.y = 0.075 + browLift;
+  runtime.bot.browL.position.y = 0.075 + browLift;
+  runtime.bot.browR.position.y = 0.075 + browLift;
 
-  bot.jaw.rotation.x = w[C.jawOpen] * 0.55;
+  runtime.bot.jaw.rotation.x = w[C.jawOpen] * 0.55;
 
   // subtle body sway from experimental pose points
-  if (target.posePoints) {
-    const p = target.posePoints;
+  if (runtime.target.posePoints) {
+    const p = runtime.target.posePoints;
     // points: 0 nose, 1 lShoulder, 2 rShoulder (x, y, z each)
     const dx = p[2 * 3 + 0] - p[1 * 3 + 0];
     const dy = p[2 * 3 + 1] - p[1 * 3 + 1];
@@ -277,7 +299,7 @@ function applyBot(dt) {
     const roll = Math.atan2(dy, Math.abs(dx) || 1e-4) * 0.8;
     const yaw = Math.atan2(dz, dx) * 0.5;
     tmpQ.setFromEuler(new THREE.Euler(0, yaw, roll));
-    bot.group.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 8));
+    runtime.bot.group.quaternion.slerp(tmpQ, 1 - Math.exp(-dt * 8));
   }
 }
 
@@ -384,15 +406,7 @@ function layerVisible(slot, state) {
 // ---------------------------------------------------------------- vrm
 
 async function loadVrmFromUrl(url, label) {
-  const loader = new GLTFLoader();
-  loader.register((parser) => new VRMLoaderPlugin(parser));
-  const gltf = await loader.loadAsync(url);
-  const next = gltf.userData.vrm;
-  if (!next) throw new Error('not a VRM file');
-
-  try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch {}
-  try { VRMUtils.combineSkeletons(gltf.scene); } catch {}
-  try { VRMUtils.rotateVRM0(next); } catch {}
+  const next = await prepareVrmFromUrl(url);
 
   if (vrm) {
     scene.remove(vrm.scene);
@@ -406,6 +420,202 @@ async function loadVrmFromUrl(url, label) {
   configureExpressionMapping(label);
   bot.group.visible = false;
   $('statAvatar').textContent = label;
+  refreshParticipantSelector();
+}
+
+async function prepareVrmFromUrl(url) {
+  const gltf = await avatarLoaderRuntime.loader.loadAsync(url);
+  const next = gltf.userData.vrm;
+  if (!next) throw new Error('not a VRM file');
+
+  try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch {}
+  try { VRMUtils.combineSkeletons(gltf.scene); } catch {}
+  try { VRMUtils.rotateVRM0(next); } catch {}
+
+  return next;
+}
+
+let primaryRuntimeHandle = null;
+
+function ensureParticipantRuntime(participantId) {
+  const id = normalizeParticipantId(participantId);
+  if (primaryParticipantId === null) primaryParticipantId = id;
+  if (id === primaryParticipantId) {
+    if (!primaryRuntimeHandle) {
+      primaryRuntimeHandle = { primary: true, participantId: id };
+      roomParticipants.assignAvatar(id, primaryRuntimeHandle);
+      bot.group.visible = !vrm && !layeredAvatar.active;
+    }
+    refreshParticipantSelector();
+    return primaryRuntimeHandle;
+  }
+  let runtime = additionalParticipantRuntimes.get(id);
+  if (runtime) return runtime;
+
+  const participantBot = buildBot();
+  scene.add(participantBot.group);
+  const participantLookAt = new THREE.Object3D();
+  camera.add(participantLookAt);
+  runtime = {
+    primary: false,
+    participantId: id,
+    target: createParticipantMotionState(),
+    current: createParticipantMotionState(),
+    refQuatInv: new THREE.Quaternion(),
+    hasRef: false,
+    orderGate: new FrameOrderGate(),
+    bot: participantBot,
+    vrm: null,
+    expressionMap: createDefaultVrmExpressionMap(),
+    lookAtTarget: participantLookAt,
+    slotX: 0,
+    scale: 1,
+    fade: 1,
+  };
+  additionalParticipantRuntimes.set(id, runtime);
+  roomParticipants.assignAvatar(id, runtime);
+  refreshParticipantSelector();
+  return runtime;
+}
+
+function createParticipantMotionState() {
+  return {
+    quat: new THREE.Quaternion(),
+    pos: new THREE.Vector3(0, 0, 0.4),
+    weights: new Float32Array(NUM_CHANNELS),
+    posePoints: null,
+    hands: null,
+    fresh: false,
+  };
+}
+
+function disposeParticipantRuntime(runtime) {
+  if (!runtime) return;
+  if (runtime.primary) {
+    if (vrm) {
+      scene.remove(vrm.scene);
+      try { VRMUtils.deepDispose(vrm.scene); } catch {}
+      vrm = null;
+    }
+    bot.group.visible = false;
+    primaryFade = 0;
+    hasRef = false;
+    resetOrderGate();
+    primaryRuntimeHandle = null;
+    refreshParticipantSelector();
+    return;
+  }
+  additionalParticipantRuntimes.delete(runtime.participantId);
+  scene.remove(runtime.bot.group);
+  disposeObjectMaterials(runtime.bot.group);
+  if (runtime.vrm) {
+    scene.remove(runtime.vrm.scene);
+    try { VRMUtils.deepDispose(runtime.vrm.scene); } catch {}
+  }
+  camera.remove(runtime.lookAtTarget);
+  refreshParticipantSelector();
+}
+
+function disposeObjectMaterials(root) {
+  root.traverse?.((node) => {
+    node.geometry?.dispose?.();
+    const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+    for (const material of materials) material.dispose?.();
+  });
+}
+
+async function loadVrmForParticipant(participantId, url, label) {
+  const runtime = ensureParticipantRuntime(participantId);
+  if (runtime.primary) return loadVrmFromUrl(url, label);
+  const next = await prepareVrmFromUrl(url);
+  if (runtime.vrm) {
+    scene.remove(runtime.vrm.scene);
+    try { VRMUtils.deepDispose(runtime.vrm.scene); } catch {}
+  }
+  runtime.vrm = next;
+  runtime.avatarLabel = label;
+  scene.add(next.scene);
+  if (next.lookAt) next.lookAt.target = runtime.lookAtTarget;
+  runtime.expressionMap = createDefaultVrmExpressionMap(listVrmExpressionNames(next));
+  runtime.bot.group.visible = false;
+  refreshParticipantSelector();
+}
+
+function applyAdditionalParticipant(runtime, dt) {
+  const easing = 1 - Math.exp(-dt * runtime.orderGate.easingPerSecond());
+  runtime.current.quat.slerp(runtime.target.quat, easing);
+  runtime.current.pos.lerp(runtime.target.pos, easing);
+  for (let i = 0; i < NUM_CHANNELS; i++) {
+    runtime.current.weights[i] += (runtime.target.weights[i] - runtime.current.weights[i]) * easing;
+  }
+  if (runtime.vrm) applyAdditionalVrm(runtime, dt);
+  else applyBotRuntime(runtime, dt);
+  setObjectOpacity(runtime.vrm?.scene || runtime.bot.group, runtime.fade);
+}
+
+function applyAdditionalVrm(runtime, dt) {
+  const model = runtime.vrm;
+  const motion = runtime.current;
+  const lean = avatarLeanOffsetFor(motion, tmpPos);
+  model.scene.position.set(lean.x + runtime.slotX, lean.y, lean.z);
+  model.scene.scale.setScalar(runtime.scale);
+  const humanoid = model.humanoid;
+  const head = humanoid.getNormalizedBoneNode('head');
+  const neck = humanoid.getNormalizedBoneNode('neck');
+  if (head) head.quaternion.copy(IDENT).slerp(motion.quat, 0.65);
+  if (neck) neck.quaternion.copy(IDENT).slerp(motion.quat, 0.35);
+  for (const targetExpression of evaluateExpressionMap(runtime.expressionMap, motion.weights)) {
+    const manager = model.expressionManager;
+    if (manager && manager.getExpressionTrackName(targetExpression.out) !== null) {
+      manager.setValue(targetExpression.out, targetExpression.value);
+    }
+  }
+  runtime.lookAtTarget.position.set(gazeX(motion.weights) * 0.6, gazeY(motion.weights) * 0.4, 0);
+  if (runtime.target.posePoints) applyVrmUpperBodyPose(humanoid, runtime.target.posePoints, dt);
+  if (runtime.target.hands) applyVrmHands(humanoid, runtime.target.hands);
+  model.update(dt);
+}
+
+function setObjectOpacity(root, opacity) {
+  if (!root) return;
+  const value = Math.max(0, Math.min(1, opacity));
+  root.visible = value > 0;
+  root.traverse?.((node) => {
+    const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+    for (const material of materials) {
+      if (material.userData.minamoBaseOpacity === undefined) {
+        material.userData.minamoBaseOpacity = material.opacity;
+        material.userData.minamoBaseTransparent = material.transparent;
+      }
+      material.opacity = material.userData.minamoBaseOpacity * value;
+      material.transparent = material.userData.minamoBaseTransparent || value < 0.999;
+      material.needsUpdate = true;
+    }
+  });
+}
+
+function refreshParticipantSelector() {
+  const select = $('selAvatarParticipant');
+  if (!select) return;
+  const selected = select.value;
+  const ids = [...roomParticipants.participants.keys()].sort((a, b) => a.localeCompare(b));
+  const options = ids.map((id) => {
+    const option = document.createElement('option');
+    option.value = id;
+    const runtime = id === primaryParticipantId ? primaryRuntimeHandle : additionalParticipantRuntimes.get(id);
+    const avatarLabel = runtime?.primary ? (vrm ? $('statAvatar').textContent : 'built-in bot') : runtime?.avatarLabel || 'built-in bot';
+    option.textContent = `${id} — ${avatarLabel}`;
+    return option;
+  });
+  if (!options.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'first participant';
+    options.push(option);
+  }
+  select.replaceChildren(...options);
+  select.value = ids.includes(selected) ? selected : ids[0] || '';
+  $('statParticipants').textContent = String(ids.length);
 }
 
 const expr = (name, v) => {
@@ -487,7 +697,8 @@ function applyVrm(dt) {
   const w = current.weights;
   const h = vrm.humanoid;
   const lean = avatarLeanOffset();
-  vrm.scene.position.set(lean.x, lean.y, lean.z);
+  vrm.scene.position.set(lean.x + primarySlotX, lean.y, lean.z);
+  vrm.scene.scale.setScalar(primaryAvatarScale);
 
   // Distribute head rotation across head and neck for a natural look.
   const head = h.getNormalizedBoneNode('head');
@@ -510,10 +721,14 @@ function applyVrm(dt) {
 }
 
 function avatarLeanOffset() {
-  return tmpPos.set(
-    current.pos.x * 0.5,
-    current.pos.y * 0.35,
-    (0.4 - current.pos.z) * 0.9
+  return avatarLeanOffsetFor(current, tmpPos);
+}
+
+function avatarLeanOffsetFor(motion, out) {
+  return out.set(
+    motion.pos.x * 0.5,
+    motion.pos.y * 0.35,
+    (0.4 - motion.pos.z) * 0.9
   );
 }
 
@@ -645,9 +860,34 @@ function applyIncomingFrame(frame) {
   return true;
 }
 
-transport.addEventListener('frame', (/** @type {any} */ ev) => {
-  const frame = decodeFrame(ev.detail);
-  applyIncomingFrame(frame);
+function applyIncomingParticipantFrame(runtime, frame) {
+  if (!frame?.face) return false;
+  const accepted = runtime.orderGate.accept(frame);
+  if (!accepted.ok) return false;
+  const q = frame.face.quat;
+  tmpQ.set(q[0], q[1], q[2], q[3]);
+  if (!runtime.hasRef) {
+    runtime.refQuatInv.copy(tmpQ).invert();
+    runtime.hasRef = true;
+  }
+  runtime.target.quat.copy(runtime.refQuatInv).multiply(tmpQ);
+  runtime.target.pos.set(frame.face.pos[0], frame.face.pos[1], frame.face.pos[2]);
+  runtime.target.weights.set(frame.face.weights);
+  runtime.target.posePoints = frame.pose ? frame.pose.points : null;
+  runtime.target.hands = frame.hands;
+  runtime.target.fresh = true;
+  recvFrames++;
+  return true;
+}
+
+transport.addEventListener('participant-frame', (/** @type {any} */ ev) => {
+  const frame = decodeFrame(ev.detail.bytes);
+  if (!frame) return;
+  const participantId = normalizeParticipantId(ev.detail.participantId);
+  roomParticipants.ingest(participantId, frame, ev.detail.receivedAtMs);
+  const runtime = ensureParticipantRuntime(participantId);
+  if (runtime.primary) applyIncomingFrame(frame);
+  else applyIncomingParticipantFrame(runtime, frame);
 });
 
 transport.addEventListener('status', (/** @type {any} */ ev) => {
@@ -658,9 +898,33 @@ transport.addEventListener('status', (/** @type {any} */ ev) => {
 // ---------------------------------------------------------------- render loop
 
 const clock = new THREE.Clock();
+function updateRoomParticipantLayout(nowMs) {
+  const snapshots = roomParticipants.snapshot(nowMs);
+  const count = snapshots.length;
+  const scale = count > 1 ? Math.max(0.58, 0.9 - (count - 2) * 0.06) : 1;
+  const spacing = count > 4 ? 0.58 : 0.78;
+  for (const participant of snapshots) {
+    const slotX = (participant.slot - (count - 1) / 2) * spacing;
+    const runtime = participant.avatar;
+    if (!runtime) continue;
+    if (runtime.primary) {
+      primarySlotX = slotX;
+      primaryAvatarScale = scale;
+      primaryFade = participant.fade;
+    } else {
+      runtime.slotX = slotX;
+      runtime.scale = scale;
+      runtime.fade = participant.fade;
+    }
+  }
+  roomParticipants.prune(nowMs);
+}
+
 function render() {
   const dt = Math.min(clock.getDelta(), 0.1);
   const k = 1 - Math.exp(-dt * orderGate.easingPerSecond()); // adapts to inbound source fps
+  const now = performance.now();
+  updateRoomParticipantLayout(now);
 
   current.quat.slerp(target.quat, k);
   current.pos.lerp(target.pos, k);
@@ -671,12 +935,13 @@ function render() {
   if (layeredAvatar.active) applyLayeredAvatar();
   else if (vrm) applyVrm(dt);
   else applyBot(dt);
+  if (!layeredAvatar.active) setObjectOpacity(vrm?.scene || bot.group, primaryFade);
+  for (const runtime of additionalParticipantRuntimes.values()) applyAdditionalParticipant(runtime, dt);
   if (settings.drumOverlay) updateDrumOverlay();
 
   if (settings.bloom && !settings.transparent) composer.render();
   else renderer.render(scene, camera);
 
-  const now = performance.now();
   if (now - lastStats > 500) {
     const dts = (now - lastStats) / 1000;
     const transportStats = transport.getStats();
@@ -732,6 +997,7 @@ function applySettingsToUi() {
   $('selMode').value = settings.mode;
   $('inpRoom').value = settings.room;
   $('inpToken').value = settings.token;
+  $('inpWsUrl').value = settings.wsUrl;
   $('inpWtUrl').value = settings.wtUrl;
   $('inpWtHash').value = settings.wtHash;
   $('selScenePreset').value = settings.scenePreset;
@@ -750,6 +1016,7 @@ function readSettingsFromUi() {
   settings.mode = $('selMode').value;
   settings.room = $('inpRoom').value || 'demo';
   settings.token = $('inpToken').value;
+  settings.wsUrl = $('inpWsUrl').value;
   settings.wtUrl = $('inpWtUrl').value;
   settings.wtHash = $('inpWtHash').value;
   settings.scenePreset = $('selScenePreset').value;
@@ -763,11 +1030,17 @@ function readSettingsFromUi() {
 }
 
 function persistSettings() {
-  saveJson(localStorage, VIEWER_STORAGE_KEY, readSettingsFromUi());
+  const current = readSettingsFromUi();
+  const persisted = transientPairingToken && current.token === transientPairingToken
+    ? { ...current, token: '' }
+    : current;
+  saveJson(localStorage, VIEWER_STORAGE_KEY, persisted);
 }
 
 function updateModeFields() {
+  const ws = $('selMode').value === 'ws';
   const wt = $('selMode').value === 'wt';
+  $('fieldWsUrl').hidden = !ws;
   $('fieldWtUrl').hidden = !wt;
   $('fieldWtHash').hidden = !wt;
 }
@@ -831,6 +1104,8 @@ function serializeViewerSceneUrl() {
   url.searchParams.set('room', settings.room || 'demo');
   if (settings.token) url.searchParams.set('token', settings.token);
   else url.searchParams.delete('token');
+  if (settings.wsUrl) url.searchParams.set('wsUrl', settings.wsUrl);
+  else url.searchParams.delete('wsUrl');
   if (settings.wtUrl) url.searchParams.set('wtUrl', settings.wtUrl);
   if (settings.wtHash) url.searchParams.set('wtHash', settings.wtHash);
   url.searchParams.set('scene', settings.scenePreset);
@@ -861,7 +1136,11 @@ $('selMode').addEventListener('change', () => {
   persistSettings();
 });
 $('inpRoom').addEventListener('input', persistSettings);
-$('inpToken').addEventListener('input', persistSettings);
+$('inpToken').addEventListener('input', () => {
+  transientPairingToken = '';
+  persistSettings();
+});
+$('inpWsUrl').addEventListener('input', persistSettings);
 $('inpWtUrl').addEventListener('input', persistSettings);
 $('inpWtHash').addEventListener('input', persistSettings);
 $('selScenePreset').addEventListener('change', () => {
@@ -929,6 +1208,7 @@ $('btnConnect').addEventListener('click', async () => {
       mode: $('selMode').value,
       room: $('inpRoom').value || 'demo',
       role: 'sub',
+      wsUrl: $('inpWsUrl').value,
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
       token: $('inpToken').value,
@@ -940,7 +1220,10 @@ $('btnConnect').addEventListener('click', async () => {
 });
 
 $('btnCenter').addEventListener('click', () => {
-  hasRef = false; // next incoming frame becomes the neutral pose
+  const selected = $('selAvatarParticipant').value;
+  const runtime = selected && selected !== primaryParticipantId ? additionalParticipantRuntimes.get(selected) : null;
+  if (runtime) runtime.hasRef = false;
+  else hasRef = false; // next incoming frame becomes the neutral pose
 });
 
 $('btnLoadVrm').addEventListener('click', () => $('fileVrm').click());
@@ -957,12 +1240,13 @@ $('rngLayerParallax').addEventListener('input', () => {
   layeredAvatar.parallaxPx = Number($('rngLayerParallax').value) || 0;
 });
 
-async function loadVrmFile(file) {
+async function loadVrmFile(file, participantId = $('selAvatarParticipant')?.value || primaryParticipantId) {
   const url = URL.createObjectURL(file);
   try {
-    await loadVrmFromUrl(url, file.name);
+    if (participantId) await loadVrmForParticipant(participantId, url, file.name);
+    else await loadVrmFromUrl(url, file.name);
   } catch (err) {
-    chip.textContent = `vrm error: ${err.message}`;
+    chip.textContent = formatAvatarLoadError(err);
     chip.dataset.state = 'error';
   } finally {
     URL.revokeObjectURL(url);
@@ -1057,7 +1341,7 @@ document.addEventListener('drop', async (e) => {
   const file = e.dataTransfer.files[0];
   if (!file) return;
   const files = Array.from(e.dataTransfer.files);
-  if (file.name.toLowerCase().endsWith('.vrm')) await loadVrmFile(file);
+  if (/\.(?:vrm|glb)$/i.test(file.name)) await loadVrmFile(file);
   else if (files.some((entry) => entry.name.toLowerCase().endsWith('.psd')) || files.some((entry) => entry.name.toLowerCase().endsWith('.png'))) await loadLayeredFiles(files);
   else if (isMotionJsonlFile(file) || isKgmRecordingFile(file)) await loadReplayFile(file);
 });
@@ -1065,7 +1349,7 @@ document.addEventListener('drop', async (e) => {
 // ?vrm=<url> loads a model directly (must be CORS-accessible)
 if (params.get('vrm')) {
   loadVrmFromUrl(params.get('vrm'), params.get('vrm').split('/').pop()).catch((e) => {
-    chip.textContent = `vrm error: ${e.message}`;
+    chip.textContent = formatAvatarLoadError(e);
     chip.dataset.state = 'error';
   });
 }
@@ -1073,11 +1357,13 @@ if (params.get('vrm')) {
 // auto-connect local mode when opened from the tracker link
 applySettingsToUi();
 refreshExpressionMapEditor();
+refreshParticipantSelector();
 if (params.get('room')) {
   transport.connectAuto({
     mode: settings.mode,
     room: settings.room,
     role: 'sub',
+    wsUrl: settings.wsUrl,
     wtUrl: settings.wtUrl,
     certHashHex: settings.wtHash,
     token: settings.token,
@@ -1095,6 +1381,7 @@ function applyQuerySettings(targetSettings, query) {
   if (['local', 'ws', 'wt'].includes(mode)) targetSettings.mode = mode;
   if (query.get('room')) targetSettings.room = query.get('room');
   if (query.get('token')) targetSettings.token = query.get('token');
+  if (query.get('wsUrl')) targetSettings.wsUrl = query.get('wsUrl');
   if (query.get('wtUrl')) targetSettings.wtUrl = query.get('wtUrl');
   if (query.get('wtHash')) targetSettings.wtHash = query.get('wtHash');
   if (query.get('arms') === '0') targetSettings.armSolver = false;
@@ -1112,6 +1399,15 @@ function applyQuerySettings(targetSettings, query) {
   if (bloom !== null) targetSettings.bloom = bloom;
   const vignetteParam = parseBoolParam(query.get('vignette'));
   if (vignetteParam !== null) targetSettings.vignette = vignetteParam;
+}
+
+function redactTokenFromAddress(query) {
+  if (!query.has('token') || !globalThis.history?.replaceState) return;
+  try {
+    const safe = new URL(location.href);
+    safe.searchParams.delete('token');
+    history.replaceState(history.state, '', safe);
+  } catch {}
 }
 
 function applyLockedCamera() {

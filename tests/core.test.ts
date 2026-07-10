@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   ConfidenceDecay,
@@ -22,6 +23,7 @@ import {
   createModelExportManifest,
   createPrivacyPreservingDatasetRecord,
   createQuantizedModelExportPlan,
+  createPoseBackendRegistry,
   createSyntheticHandLandmarks,
   createYoloStickDetectorBaselinePlan,
   deriveFingerChain,
@@ -39,6 +41,7 @@ import {
   inferHiHatPedalState,
   inferKickPedalHit,
   HAND_LANDMARK_COUNT,
+  assignRoomLayoutSlots,
   latestFrameByParticipant,
   mouthFlickerScore,
   privacyPreservingDatasetRecord,
@@ -477,5 +480,111 @@ describe('stability layer', () => {
     const flipped = shortestPathQuat(previous, { x: 0, y: 0, z: 0, w: -1 });
     expect(flipped.w).toBe(1);
     expect(slerpQuat(previous, { x: 0, y: 0, z: 0, w: -1 }, 0.5).w).toBeGreaterThan(0.99);
+  });
+});
+
+const drumBenchmarkClips = JSON.parse(
+  readFileSync(new URL('./fixtures/drum-benchmark-clips.json', import.meta.url), 'utf8'),
+);
+
+describe('drum benchmark clips (issues #121, #123)', () => {
+  const findClip = (id: string) => drumBenchmarkClips.clips.find((clip: { id: string }) => clip.id === id);
+  const toHits = (times: number[], zoneId: string) =>
+    times.map((ms, index) => ({
+      eventId: `${zoneId}-${index}`,
+      timeNs: Math.round(ms * 1_000_000),
+      zoneId,
+      zoneType: zoneId,
+      position: { x: 0, y: 0, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      speed: 0,
+      confidence: 1,
+      audioAligned: false,
+    }));
+  const score = (clip: { expectedHitTimesMs: number[]; detectedHitTimesMs: number[]; zoneId: string }) =>
+    scoreDrumBenchmark(
+      clip.expectedHitTimesMs,
+      toHits(clip.detectedHitTimesMs, clip.zoneId),
+      drumBenchmarkClips.toleranceMs,
+      drumBenchmarkClips.minimumSeparationMs,
+    );
+
+  it('scores a clean single-snare clip at full recall and precision', () => {
+    const result = score(findClip('single-snare'));
+    expect(result.recall).toBe(1);
+    expect(result.precision).toBe(1);
+    expect(result.falseDoubleHits).toBe(0);
+  });
+
+  it('passes the fast-roll stress test with no false double hits', () => {
+    const result = score(findClip('fast-roll'));
+    expect(result.recall).toBeGreaterThanOrEqual(0.9);
+    expect(result.falseDoubleHits).toBe(0);
+  });
+
+  it('detects no hits for the false-positive hold clip', () => {
+    const result = score(findClip('false-positive-hold'));
+    expect(result.detected).toBe(0);
+  });
+});
+
+describe('pose backend registry (issue #23)', () => {
+  const makeBackend = (name: string, value: number) => ({
+    name,
+    detect: async () => [{ x: value, y: value, z: value }],
+  });
+
+  it('registers backends, defaults to the marked backend, and toggles at runtime', async () => {
+    let mediapipeCreated = 0;
+    let onnxCreated = 0;
+    const registry = createPoseBackendRegistry([
+      { name: 'mediapipe', isDefault: true, create: () => { mediapipeCreated += 1; return makeBackend('mediapipe', 1); } },
+      { name: 'onnx-yolo-pose', create: () => { onnxCreated += 1; return makeBackend('onnx-yolo-pose', 2); } },
+    ]);
+
+    expect(registry.listBackends()).toEqual(['mediapipe', 'onnx-yolo-pose']);
+    expect(registry.activeBackendName()).toBe('mediapipe');
+    expect(mediapipeCreated).toBe(1);
+    expect(onnxCreated).toBe(0); // lazy: not instantiated until selected
+
+    expect((await registry.detect({} as HTMLVideoElement, 0))[0].x).toBe(1);
+
+    registry.setActiveBackend('onnx-yolo-pose');
+    expect(registry.activeBackendName()).toBe('onnx-yolo-pose');
+    expect(onnxCreated).toBe(1);
+    expect((await registry.detect({} as HTMLVideoElement, 0))[0].x).toBe(2);
+
+    registry.setActiveBackend('mediapipe'); // reuses the existing instance
+    expect(mediapipeCreated).toBe(1);
+    expect(() => registry.setActiveBackend('missing')).toThrow(/Unknown pose backend/);
+  });
+});
+
+describe('multi-avatar room layout (issue #43)', () => {
+  const frame = () => createEmptyFrame(0, 0);
+  const envelope = (participantId: string, sentAtMs: number) => wrapKGM1FrameForRoom('room-a', participantId, frame(), sentAtMs);
+
+  it('assigns deterministic slots by participant id and fades out stale publishers', () => {
+    const latest = latestFrameByParticipant([
+      envelope('bob', 1000),
+      envelope('alice', 990),
+      envelope('carol', 100), // stale: should fade out
+    ]);
+    const slots = assignRoomLayoutSlots(latest, { nowMs: 1000, fadeMs: 800 });
+    expect(slots.map((slot) => slot.participantId)).toEqual(['alice', 'bob']); // sorted, carol faded (age 900 > 800)
+    expect(slots[0].slot).toBe(0);
+    expect(slots[1].slot).toBe(1);
+    expect(slots[0].active).toBe(true);
+
+    const withCarol = assignRoomLayoutSlots(latest, { nowMs: 1000, fadeMs: 5000 });
+    const carol = withCarol.find((slot) => slot.participantId === 'carol');
+    expect(carol).toBeDefined();
+    expect(carol!.fade).toBeGreaterThan(0);
+    expect(carol!.fade).toBeLessThan(1);
+  });
+
+  it('respects the max slot count', () => {
+    const latest = latestFrameByParticipant(['a', 'b', 'c', 'd'].map((id) => envelope(id, 1000)));
+    expect(assignRoomLayoutSlots(latest, { nowMs: 1000, maxSlots: 2 }).length).toBe(2);
   });
 });

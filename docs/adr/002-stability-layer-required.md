@@ -20,7 +20,7 @@ All ML outputs must pass quality gates, smoothing, anatomy constraints, and rig 
 
 ## Validation
 
-- Automated checks: `npm test`, `npm run verify`
+- Automated checks: `pnpm test`, `pnpm verify`
 - Manual checks: avatar motion smoke tests include no broken fingers, no face
   flicker, and no stale frame regression.
 - Benchmark or latency evidence: see `docs/benchmarks/quality-gates.md`.

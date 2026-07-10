@@ -5,6 +5,8 @@
 //           lowest latency. A dropped pose frame should be dropped, not
 //           retransmitted late — that is why datagrams fit tracking data.
 
+import { decodeRoomFrame, encodeRoomFrame, normalizeParticipantId } from './room-envelope.js';
+
 export const TRANSPORT_FALLBACKS = {
   wt: ['wt', 'ws', 'local'],
   ws: ['ws', 'local'],
@@ -22,6 +24,7 @@ export class MinamoTransport extends EventTarget {
     this.requestedMode = null;
     this.room = null;
     this.role = null;
+    this.participantId = null;
     this.token = '';
     this.wsEncoding = 'binary';
     this.bytesOut = 0;
@@ -44,12 +47,22 @@ export class MinamoTransport extends EventTarget {
 
   _frame(bytes) {
     this.bytesIn += bytes.byteLength;
-    const latencyMs = extractKgm1LatencyMs(bytes, performanceNow(), this.clockOffsetMs);
+    const decoded = decodeRoomFrame(bytes);
+    if (!decoded) return;
+    const latencyMs = extractKgm1LatencyMs(decoded.frameBytes, performanceNow(), this.clockOffsetMs);
     if (latencyMs !== null) {
       this.lastLatencyMs = latencyMs;
       this.dispatchEvent(new CustomEvent('latency', { detail: { latencyMs } }));
     }
-    this.dispatchEvent(new CustomEvent('frame', { detail: bytes }));
+    this.dispatchEvent(new CustomEvent('participant-frame', {
+      detail: {
+        participantId: decoded.participantId,
+        bytes: decoded.frameBytes,
+        enveloped: decoded.enveloped,
+        receivedAtMs: performanceNow(),
+      },
+    }));
+    this.dispatchEvent(new CustomEvent('frame', { detail: decoded.frameBytes }));
   }
 
   getStats() {
@@ -65,7 +78,7 @@ export class MinamoTransport extends EventTarget {
   }
 
   /**
-   * @param {{ mode: string, room: string, role: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string }} options
+   * @param {{ mode: string, room: string, role: string, participantId?: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string }} options
    * @param {{ timeoutMs?: number, capabilities?: { local?: boolean, ws?: boolean, wt?: boolean } }} autoOptions
    */
   async connectAuto(options, autoOptions = {}) {
@@ -96,15 +109,16 @@ export class MinamoTransport extends EventTarget {
   }
 
   /**
-   * @param {{ mode: string, requestedMode?: string, room: string, role: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string }} options
+   * @param {{ mode: string, requestedMode?: string, room: string, role: string, participantId?: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string }} options
    */
-  async connect({ mode, requestedMode, room, role, wsUrl, wtUrl, certHashHex, token = '', wsEncoding = 'binary' }) {
+  async connect({ mode, requestedMode, room, role, participantId = '', wsUrl, wtUrl, certHashHex, token = '', wsEncoding = 'binary' }) {
     await this.close();
     mode = normalizeMode(mode);
     this.requestedMode = normalizeMode(requestedMode || mode);
     this.mode = mode;
     this.room = room;
     this.role = role;
+    this.participantId = role === 'pub' ? normalizeParticipantId(participantId) : null;
     this.token = token;
     this.wsEncoding = wsEncoding === 'json' || mode === 'ws-json' ? 'json' : 'binary';
 
@@ -121,6 +135,7 @@ export class MinamoTransport extends EventTarget {
       const url = new URL(wsUrl || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
       url.searchParams.set('room', room);
       url.searchParams.set('role', role);
+      if (this.participantId) url.searchParams.set('participant', this.participantId);
       if (token) url.searchParams.set('token', token);
       const ws = new WebSocket(url);
       ws.binaryType = 'arraybuffer';
@@ -194,24 +209,25 @@ export class MinamoTransport extends EventTarget {
 
   /** @param {ArrayBuffer} buf */
   send(buf) {
-    this.bytesOut += buf.byteLength;
+    const packet = this.role === 'pub' && this.participantId ? encodeRoomFrame(this.participantId, buf) : buf;
+    this.bytesOut += packet.byteLength;
     if (this.mode === 'local' && this._bc) {
-      this._bc.postMessage(buf);
+      this._bc.postMessage(packet);
     } else if (this.mode === 'ws' && this._ws && this._ws.readyState === WebSocket.OPEN) {
       if (this._ws.bufferedAmount > WS_BACKPRESSURE_LIMIT_BYTES) {
         this.droppedOut++;
         return false;
       }
-      this._ws.send(buf);
+      this._ws.send(packet);
     } else if (this.mode === 'ws-json' && this._ws && this._ws.readyState === WebSocket.OPEN) {
       if (this._ws.bufferedAmount > WS_BACKPRESSURE_LIMIT_BYTES) {
         this.droppedOut++;
         return false;
       }
-      this._ws.send(JSON.stringify({ type: 'kgm1', payload: bytesToBase64(new Uint8Array(buf)) }));
+      this._ws.send(JSON.stringify({ type: 'kgm1', payload: bytesToBase64(new Uint8Array(packet)) }));
     } else if (this.mode === 'wt' && this._wtWriter) {
       if (this._wtNewestDatagram) this.droppedOut++;
-      this._wtNewestDatagram = new Uint8Array(buf);
+      this._wtNewestDatagram = new Uint8Array(packet);
       this._flushNewestDatagram();
     }
     return true;
@@ -237,6 +253,7 @@ export class MinamoTransport extends EventTarget {
     this._wtNewestDatagram = null;
     this._wtWriteInFlight = false;
     this.mode = null;
+    this.participantId = null;
   }
 }
 

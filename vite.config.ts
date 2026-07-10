@@ -17,6 +17,7 @@ export default defineConfig({
       input: {
         avatarMapping: page('diagnostics/avatar-mapping.html'),
         desktop: page('desktop/index.html'),
+        drumOverlay: page('viewer/drum-overlay.html'),
         handStability: page('diagnostics/no-broken-finger.html'),
         index: page('index.html'),
         landing: page('landing/index.html'),

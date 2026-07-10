@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
     <title>Minamo Studio</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -93,6 +94,105 @@
             <a class="secondary-link" href="../docs/product/desktop-app.md">Desktop guide</a>
           </div>
         </div>
+
+        <section class="pairing-panel" aria-labelledby="pairingHeading">
+          <div class="pairing-heading">
+            <div class="section-heading">
+              <span class="eyebrow">Phone capture</span>
+              <h2 id="pairingHeading">Pair a tracker</h2>
+            </div>
+            <div class="pairing-state" aria-live="polite">
+              <strong id="pairingCountdown">not generated</strong>
+              <span id="pairingStatus">Set a phone-accessible tracker URL, then generate a QR.</span>
+            </div>
+          </div>
+
+          <form id="pairingForm" class="pairing-layout">
+            <div class="pairing-config">
+              <label class="pairing-field">
+                <span>Room</span>
+                <input id="pairingRoom" name="room" type="text" value="phone-stage" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" autocomplete="off" required />
+              </label>
+              <label class="pairing-field pairing-field-wide">
+                <span>Phone tracker URL</span>
+                <input id="pairingTrackerBase" name="trackerBase" type="url" inputmode="url" autocomplete="off" spellcheck="false" required />
+              </label>
+              <label class="pairing-field pairing-field-wide">
+                <span>WebSocket relay URL</span>
+                <input id="pairingRelayUrl" name="relayUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" required />
+              </label>
+              <label class="pairing-field">
+                <span>Phone camera</span>
+                <select id="pairingCamera" name="camera">
+                  <option value="user">Front</option>
+                  <option value="environment">Back</option>
+                </select>
+              </label>
+              <label class="pairing-field">
+                <span>Resolution</span>
+                <select id="pairingResolution" name="resolution">
+                  <option value="720p">720p</option>
+                  <option value="1080p">1080p</option>
+                  <option value="480p">480p</option>
+                </select>
+              </label>
+              <label class="pairing-field">
+                <span>Frame rate</span>
+                <select id="pairingFps" name="fps">
+                  <option value="60">60 fps</option>
+                  <option value="30">30 fps</option>
+                </select>
+              </label>
+              <label class="pairing-field">
+                <span>Token lifetime</span>
+                <select id="pairingTtl" name="ttl">
+                  <option value="300">5 minutes</option>
+                  <option value="120">2 minutes</option>
+                  <option value="600">10 minutes</option>
+                </select>
+              </label>
+              <label class="pairing-check">
+                <input id="pairingMirror" name="mirror" type="checkbox" checked />
+                <span>Mirror preview</span>
+              </label>
+              <div class="pairing-actions pairing-field-wide">
+                <button id="btnGeneratePairing" class="primary-button" type="submit" aria-keyshortcuts="Control+Enter Meta+Enter">Generate QR</button>
+                <button id="btnExpirePairing" class="secondary-button" type="button" disabled>Expire now</button>
+              </div>
+              <p class="pairing-help pairing-field-wide">Enter submits the form; Ctrl/⌘+Enter regenerates from anywhere in this panel. Pairing sends motion data only—camera video stays on the phone.</p>
+            </div>
+
+            <div class="qr-card">
+              <div id="pairingQrShell" class="qr-shell" data-state="empty">
+                <canvas id="pairingQr" width="300" height="300" role="img" aria-label="Phone tracker pairing QR not generated">
+                  Use the accessible tracker link beside this QR if scanning is unavailable.
+                </canvas>
+                <p id="pairingQrEmpty">Generate a short-lived pairing QR</p>
+              </div>
+              <p class="qr-warning">The QR contains a secret token. Do not share an unredacted screenshot.</p>
+            </div>
+
+            <div class="pairing-links" aria-label="Pairing links">
+              <div class="pairing-link-card">
+                <span class="meter-label">Phone tracker</span>
+                <code id="trackerUrlPreview">not generated</code>
+                <div class="pairing-link-actions">
+                  <a id="openTrackerPairing" class="secondary-link" aria-disabled="true">Open tracker</a>
+                  <button id="btnCopyTrackerUrl" class="secondary-button" type="button" disabled>Copy tracker URL</button>
+                </div>
+              </div>
+              <div class="pairing-link-card">
+                <span class="meter-label">Viewer</span>
+                <code id="viewerUrlPreview">not generated</code>
+                <div class="pairing-link-actions">
+                  <a id="openViewerPairing" class="secondary-link" aria-disabled="true">Open viewer</a>
+                  <button id="btnCopyViewerUrl" class="secondary-button" type="button" disabled>Copy viewer URL</button>
+                </div>
+              </div>
+              <p class="pairing-help">Visible link text is token-redacted. Copy actions include the live token and remain disabled after expiry.</p>
+            </div>
+          </form>
+        </section>
       </section>
     </main>
 

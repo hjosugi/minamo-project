@@ -6,9 +6,9 @@ replay tools.
 ## Commands
 
 ```sh
-npm run desktop:check
-npm run desktop:dev
-npm run desktop:build
+pnpm desktop:check
+pnpm desktop:dev
+pnpm desktop:build
 ```
 
 ## Bundled Pages

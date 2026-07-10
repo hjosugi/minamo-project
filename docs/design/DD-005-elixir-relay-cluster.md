@@ -70,7 +70,7 @@ the work is syscalls and scheduling).
 
 `services/erlang-router/load-test.mjs` models the room-agent topology with
 3 nodes, 5,000 subscribers, one publisher, newest-only local subscriber
-mailboxes, and node-loss isolation. It is run from `npm test` and fails if
+mailboxes, and node-loss isolation. It is run from `pnpm test` and fails if
 p99 fan-out latency is >= 30 ms or if a failed node affects non-local
 subscribers.
 

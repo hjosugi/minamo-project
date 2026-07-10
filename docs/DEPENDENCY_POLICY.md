@@ -19,14 +19,14 @@ privacy, latency, and reproducibility.
 JavaScript dependencies:
 
 ```sh
-npm install
-npm run lint
-npm test
-npm run verify
-npm run build
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm test
+pnpm verify
+pnpm build
 ```
 
-`npm run verify` checks that the MediaPipe Tasks Vision version is consistent
+`pnpm verify` checks that the MediaPipe Tasks Vision version is consistent
 between `package.json`, `tracker/tracker.js`, and `scripts/fetch-models.sh`.
 It also rejects MediaPipe model URLs that do not include a pinned model version
 segment.
@@ -44,9 +44,10 @@ cargo test --manifest-path crates/kgm1-codec/Cargo.toml
 Relay-node dependencies:
 
 ```sh
+pnpm install --frozen-lockfile
 cd relay-node
-npm install
 node --check server.mjs
+pnpm test
 ```
 
 ## Risk Notes
@@ -59,6 +60,15 @@ node --check server.mjs
   checksum/SRI where practical.
 - If a dependency changes browser support, update `QUICKSTART.md` or
   `DEV_HTTPS.md`.
+
+### Pinned QR renderer
+
+- `qrcode` `1.5.4` (MIT, <https://github.com/soldair/node-qrcode>) renders the
+  #226 pairing payload locally. The Vite desktop plus QR chunks are about 35 kB
+  before gzip with the pairing UI included.
+- The directly served relay page falls back to a same-relay, `no-store` SVG
+  renderer. Neither path calls a third-party QR service or uploads camera
+  media; the relay does not log QR payloads or room tokens.
 
 ## Rollback
 

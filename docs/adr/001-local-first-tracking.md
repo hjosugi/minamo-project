@@ -21,7 +21,7 @@ Raw camera frames and raw audio are processed locally by default. Remote collabo
 
 ## Validation
 
-- Automated checks: `npm test`, `npm run verify`
+- Automated checks: `pnpm test`, `pnpm verify`
 - Manual checks: tracker startup copy states that video stays in-browser.
 - Security/privacy review: see `docs/SECURITY_REVIEW.md`.
 
