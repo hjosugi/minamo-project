@@ -19,5 +19,5 @@ must stay open while required evidence is pending, blocked, or failed.
 | #233 | macOS virtual camera | `virtual-camera/macos/` | PENDING | — |
 | #234 | drum benchmark runner | `drum/runner/` | PENDING | — |
 | #235 | real drum and OBS | `drum/hardware/` | PENDING | — |
-| #236 | research review | `research-review/` | PENDING | — |
-| #237 | lockfile/templates | `release/` | PENDING | [template-only sample](sample/RESULT.md) |
+| #236 | research review | `research-review/` | PASS | [#183](research-review/183.md), [#184](research-review/184.md), [#185](research-review/185.md) |
+| #237 | lockfile/templates | `release/` | PASS | [clean release run](runs/2026-07-10T133213Z/RESULT.md), [template-only sample](sample/RESULT.md) |

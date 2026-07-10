@@ -6,7 +6,7 @@
 - Operator: `repository template review`
 - Approving reviewer: `repository maintainer review required`
 - Date (UTC): `2026-07-10`
-- Commit SHA: `PENDING — record after the implementation commit` (template baseline only)
+- Commit SHA: `c6f7eac931503540a268152ddff120ac2f9a732f` (template baseline only)
 - Lockfile SHA-256: `N/A — this sample validates fields, not a dependency run`
 - Environment record: `N/A — no product or hardware behavior was tested`
 - Command log: `N/A — no verification command is claimed by this sample`
