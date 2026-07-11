@@ -25,6 +25,8 @@
   WebTransportデータグラム(最低遅延, Rust)
 - ビューアはVRM(three-vrm)、実験的なInochi2D `.inp/.inx` WASM描画、
   レイヤーPNG/PSDに対応。アバターが無くても内蔵ボットで即動作
+- Tauriデスクトップ版はOS標準のファイル選択から
+  `.inp`/`.inx`/`.vrm`/`.glb` を選ぶだけでビューアへ即読み込み
 - [landing/](landing/) にランディングページハブとモックトラッキングデモ
 
 詳細: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)(実装済み)/
@@ -65,6 +67,18 @@ cd relay-rs && cargo run --release
 起動ログの `cert sha-256` を tracker / viewer の cert 欄に貼り、mode: wt で
 Connect。証明書は自己署名(14日制限)なので再起動で再生成する。
 relay-rs のCI整備はKGM-009。
+
+### 4. ネイティブデスクトップ
+
+```sh
+pnpm desktop:check
+pnpm desktop:dev
+```
+
+起動した画面で **Open Avatar** を押し、`.inp`、`.inx`、`.vrm`、または
+`.glb` を選択すると、Viewerが開いてそのまま読み込みます。配布用ビルドは
+`pnpm desktop:build` で作成できます。詳細は
+[docs/product/desktop-app.md](docs/product/desktop-app.md) を参照してください。
 
 詳しい手順: [docs/QUICKSTART.md](docs/QUICKSTART.md)
 ([日本語版](docs/QUICKSTART.ja.md))。

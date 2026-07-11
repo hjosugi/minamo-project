@@ -110,6 +110,27 @@ function bindLaunchButtons() {
   });
 }
 
+function bindNativeAvatarButton() {
+  const button = $('btnOpenAvatar');
+  if (!button) return;
+  button.addEventListener('click', async () => {
+    if (!invoke) {
+      window.open('../viewer/', '_blank', 'noopener,noreferrer');
+      return;
+    }
+    button.disabled = true;
+    setText('renderMeter', 'selecting…');
+    try {
+      const info = await command('pick_native_avatar');
+      setText('renderMeter', info?.name || 'ready');
+    } catch (error) {
+      setText('renderMeter', error instanceof Error ? error.message : String(error));
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 function drawSignal() {
   const canvas = $('signalCanvas');
   const ctx = canvas?.getContext('2d');
@@ -593,6 +614,7 @@ function capitalize(value) {
 
 $('refreshStatus')?.addEventListener('click', refreshStatus);
 bindLaunchButtons();
+bindNativeAvatarButton();
 drawSignal();
 refreshStatus();
 initializePhonePairing();

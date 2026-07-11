@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Minamo Studio",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "identifier": "app.minamo.studio",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -30,6 +30,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "icon": ["icons/icon.png"],
     "category": "Video",
     "shortDescription": "Local-first avatar tracking studio",
     "longDescription": "Minamo Studio packages the tracker, viewer, and replay tools as a desktop application.",
