@@ -1434,10 +1434,12 @@ def validate_desktop_contracts() -> None:
     release_smoke = read('scripts/release-smoke.mjs')
     vite = read('vite.config.ts')
     tauri_config = json.loads(read('src-tauri/tauri.conf.json'))
+    tauri_capability = json.loads(read('src-tauri/capabilities/default.json'))
     tauri_cargo = read('src-tauri/Cargo.toml')
     tauri_lib = read('src-tauri/src/lib.rs')
     desktop_html = read('desktop/index.html')
     desktop_js = read('desktop/desktop.js')
+    viewer_js = read('viewer/viewer.js')
     desktop_doc = read('docs/product/desktop-app.md')
 
     scripts = package.get('scripts', {})
@@ -1468,9 +1470,13 @@ def validate_desktop_contracts() -> None:
         add_error('src-tauri/tauri.conf.json', 'Tauri productName must be Minamo Studio')
     if tauri_config.get('build', {}).get('frontendDist') != '../dist':
         add_error('src-tauri/tauri.conf.json', 'Tauri must package the existing Vite dist output')
+    if 'icons/icon.png' not in tauri_config.get('bundle', {}).get('icon', []):
+        add_error('src-tauri/tauri.conf.json', 'Linux bundles must select the square application icon explicitly')
     app_config = tauri_config.get('app', {})
     if app_config.get('withGlobalTauri') is not True:
         add_error('src-tauri/tauri.conf.json', 'desktop renderer must have Tauri invoke access')
+    if 'viewer' not in tauri_capability.get('windows', []):
+        add_error('src-tauri/capabilities/default.json', 'viewer must have IPC access for the native avatar bridge')
     windows = app_config.get('windows', [])
     if not windows or windows[0].get('url') != 'desktop/index.html':
         add_error('src-tauri/tauri.conf.json', 'main desktop window must open desktop/index.html')
@@ -1484,6 +1490,18 @@ def validate_desktop_contracts() -> None:
             add_error('src-tauri/src/lib.rs', f'missing Tauri command {command}')
         if command not in desktop_html and command.startswith('open_'):
             add_error('desktop/index.html', f'desktop UI must invoke {command}')
+    for command in ['pick_native_avatar', 'native_avatar_info', 'read_native_avatar']:
+        if command not in tauri_lib:
+            add_error('src-tauri/src/lib.rs', f'missing native avatar command {command}')
+    for needle in ['tauri-plugin-dialog = "2.7.1"', 'MAX_NATIVE_AVATAR_BYTES', 'tauri::ipc::Response']:
+        if needle not in tauri_cargo and needle not in tauri_lib:
+            add_error('src-tauri', f'missing native avatar boundary contract: {needle}')
+    for needle in ['btnOpenAvatar', 'pick_native_avatar']:
+        if needle not in desktop_html and needle not in desktop_js:
+            add_error('desktop', f'missing one-click native avatar control: {needle}')
+    for needle in ['native-avatar-selected', 'native_avatar_info', 'read_native_avatar', 'initializeNativeAvatarBridge']:
+        if needle not in viewer_js:
+            add_error('viewer/viewer.js', f'missing native avatar bridge contract: {needle}')
     for route in ['tracker/index.html', 'viewer/index.html', 'replay/index.html']:
         if route not in tauri_lib:
             add_error('src-tauri/src/lib.rs', f'desktop app must expose bundled page route {route}')

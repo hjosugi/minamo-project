@@ -31,7 +31,8 @@ webcam — free, low-latency, and local-first.
 - Three delivery tiers: BroadcastChannel (no server) / WebSocket (compatible) /
   WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
 - Tauri desktop shell that launches the bundled tracker, viewer, and replay
-  tools, with virtual camera backend status surfaced per OS
+  tools, loads `.inp`/`.inx`/`.vrm`/`.glb` avatars from the native OS picker,
+  and surfaces virtual camera backend status per OS
 - VRM viewer (three-vrm), experimental offline Inochi2D `.inp/.inx` WASM
   rendering, layered PNG/PSD, and a built-in bot fallback
 - Avatar compression tooling — GLB inspection (`pnpm inspect:glb`) and the
@@ -103,6 +104,8 @@ pnpm desktop:check
 pnpm desktop:dev
 ```
 
+In the native control surface, click **Open Avatar** and choose an
+`.inp`, `.inx`, `.vrm`, or `.glb`; the Viewer opens and loads it immediately.
 Desktop packaging details: [docs/product/desktop-app.md](docs/product/desktop-app.md).
 The desktop **Pair a tracker** panel issues a five-minute room token through
 `relay-node`, renders a scannable phone URL, and provides independent tracker

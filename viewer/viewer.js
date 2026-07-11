@@ -52,10 +52,15 @@ import {
 
 /** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
+const tauriGlobal = /** @type {any} */ (window).__TAURI__;
+const tauriInvoke = tauriGlobal?.core?.invoke;
+const tauriListen = tauriGlobal?.event?.listen;
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
 const params = new URLSearchParams(location.search);
 let transientPairingToken = params.get('token') || '';
+let nativeAvatarRequestedRevision = 0;
+let nativeAvatarUnlisten = null;
 const drumOverlayRoot = $('drumOverlay');
 const drumOverlayKit = $('drumOverlayKit');
 const drumOverlayHands = $('drumOverlayHands');
@@ -1402,6 +1407,51 @@ async function loadVrmFile(file, participantId = $('selAvatarParticipant')?.valu
   }
 }
 
+function normalizeNativeAvatarInfo(value) {
+  if (!value || typeof value !== 'object') return null;
+  const name = String(value.name || '');
+  const format = String(value.format || '').toLowerCase();
+  const byteLength = Number(value.byteLength);
+  const revision = Number(value.revision);
+  if (!name || !['inp', 'inx', 'vrm', 'glb'].includes(format)) return null;
+  if (!Number.isSafeInteger(byteLength) || byteLength <= 0 || byteLength > 256 * 1024 * 1024) return null;
+  if (!Number.isSafeInteger(revision) || revision <= 0) return null;
+  return { name, format, byteLength, revision };
+}
+
+async function loadNativeAvatar(value) {
+  const info = normalizeNativeAvatarInfo(value);
+  if (!info || !tauriInvoke || info.revision <= nativeAvatarRequestedRevision) return;
+  nativeAvatarRequestedRevision = info.revision;
+  chip.textContent = `loading native avatar: ${info.name}`;
+  chip.dataset.state = 'idle';
+  try {
+    const bytes = await tauriInvoke('read_native_avatar', { revision: info.revision });
+    if (info.revision !== nativeAvatarRequestedRevision) return;
+    const file = new File([bytes], info.name, { type: 'application/octet-stream' });
+    if (info.format === 'inp' || info.format === 'inx') await loadInochi2DFile(file);
+    else await loadVrmFile(file);
+  } catch (error) {
+    if (info.revision !== nativeAvatarRequestedRevision) return;
+    chip.textContent = `native avatar error: ${error instanceof Error ? error.message : String(error)}`;
+    chip.dataset.state = 'error';
+  }
+}
+
+async function initializeNativeAvatarBridge() {
+  if (!tauriInvoke || !tauriListen) return;
+  try {
+    nativeAvatarUnlisten = await tauriListen('native-avatar-selected', (event) => {
+      loadNativeAvatar(event.payload);
+    });
+    window.addEventListener('beforeunload', () => nativeAvatarUnlisten?.(), { once: true });
+    await loadNativeAvatar(await tauriInvoke('native_avatar_info'));
+  } catch (error) {
+    chip.textContent = `native bridge error: ${error instanceof Error ? error.message : String(error)}`;
+    chip.dataset.state = 'error';
+  }
+}
+
 function isMotionJsonlFile(file) {
   const name = file.name.toLowerCase();
   return name.endsWith('.jsonl') || name.endsWith('.ndjson');
@@ -1522,6 +1572,7 @@ if (params.get('inochi')) {
 applySettingsToUi();
 refreshExpressionMapEditor();
 refreshParticipantSelector();
+initializeNativeAvatarBridge();
 if (params.get('room')) {
   const mode = settings.mode;
   transport.connectAuto({

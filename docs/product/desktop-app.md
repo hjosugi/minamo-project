@@ -11,6 +11,27 @@ pnpm desktop:dev
 pnpm desktop:build
 ```
 
+`pnpm desktop:dev` opens the native control surface. Select **Open Avatar**,
+choose an Inochi2D `.inp`/`.inx` or VRM `.vrm`/`.glb` file in the OS file
+picker, and Minamo opens the Viewer and loads it immediately. A packaged build
+is written under `src-tauri/target/release/bundle/` by default.
+
+## Native Avatar Loading
+
+The desktop shell keeps the selected canonical file path inside Rust and sends
+only the name, format, byte length, and a process-local revision to the webview.
+The Viewer requests the matching revision through a raw binary IPC response and
+loads it from memory through the same reviewed avatar loaders used by file drop.
+
+- The size limit is 256 MiB; empty, unsupported, and non-regular files fail
+  before loading.
+- Selection state lasts only for the current app process and is not persisted.
+- The webview cannot submit an arbitrary path, and no broad filesystem or asset
+  protocol scope is granted. Only the `main` and `viewer` windows receive the
+  core IPC capability.
+- Browser preview remains supported; use the Viewer file controls or drag and
+  drop when the Tauri runtime is not attached.
+
 ## Bundled Pages
 
 - `desktop/` opens the control surface.
