@@ -171,6 +171,7 @@
         <button id="btnConnect" class="primary">Connect</button>
         <button id="btnCenter">Center</button>
         <button id="btnLoadVrm">Open VRM / GLB</button>
+        <button id="btnLoadInochi">Open INP / INX</button>
         <label class="field" style="min-width: 160px;">
           <span>avatar participant</span>
           <select id="selAvatarParticipant">
@@ -189,6 +190,7 @@
           <input id="rngLayerParallax" type="range" min="0" max="48" step="1" value="18" />
         </label>
         <input type="file" id="fileVrm" accept=".vrm,.glb,model/gltf-binary" hidden />
+        <input type="file" id="fileInochi" accept=".inp,.inx,application/octet-stream" hidden />
         <input type="file" id="fileLayeredAvatar" accept=".png,.psd" multiple hidden />
       </div>
       <div class="stats">
@@ -212,11 +214,11 @@
           <input type="file" id="fileExpressionMap" accept=".json,application/json" hidden />
         </div>
       </details>
-      <p class="note">Drop a VRM/GLB, PSD, layered PNG set, or tracker JSONL recording.</p>
+      <p class="note">Drop a VRM/GLB, INP/INX, PSD, layered PNG set, or tracker JSONL recording.</p>
     </div>
   </div>
 
-  <div class="dropveil">drop .vrm, .glb, .psd, .png set, or .jsonl</div>
+  <div class="dropveil">drop .vrm, .glb, .inp, .inx, .psd, .png set, or .jsonl</div>
 
   <script type="importmap">
   {

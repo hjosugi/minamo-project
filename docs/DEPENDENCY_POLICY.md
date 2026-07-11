@@ -78,6 +78,18 @@ pnpm test
   `allowBuilds` map in `pnpm-workspace.yaml`; changes to that allow-list require
   supply-chain review.
 
+### Inox2D browser renderer
+
+- `third_party/inochi2d-wasm/Cargo.toml` pins both official Inox2D git crates
+  to `df8413e6b0c525dbb880b4dca2bdf0a5d4b9aaba` (BSD-2-Clause).
+- `viewer/vendor/inochi2d/minamo_inochi2d_bg.wasm` is generated with
+  `wasm-bindgen 0.2.126`; SHA-256:
+  `e5545620cc98944b71200d0205628abcc1f2cb3ce5873fa5cfc61c6876f95667`.
+- The generated JS SHA-256 is
+  `59922217e5db606c8d77916987909d63d24e0de3a0acb59e07fbbb3120edd2ce`.
+  Runtime updates must rebuild both artifacts, update these hashes, preserve
+  `LICENSE.inox2d`, and repeat the real browser smoke procedure.
+
 ## Rollback
 
 - Keep each dependency update in its own commit unless it is inseparable from

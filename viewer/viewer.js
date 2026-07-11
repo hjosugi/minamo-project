@@ -15,12 +15,19 @@ import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js'
 import { decodeFrame } from '../shared/codec.js';
 import {
   createDefaultVrmExpressionMap,
+  createDefaultInochiExpressionMap,
   createPerfectSyncExpressionMap,
   detectPerfectSyncExpressions,
   evaluateExpressionMap,
+  findMappedParameter,
   parseExpressionMap,
   serializeExpressionMap,
 } from '../shared/expression-mapping.js';
+import {
+  Inochi2DRuntime,
+  formatInochi2DError,
+  isInochi2DFile,
+} from './inochi2d-runtime.js';
 import { parseKgmRecording } from '../shared/kgm-recording.js';
 import { RoomParticipantStore, normalizeParticipantId } from '../shared/room-envelope.js';
 import {
@@ -101,7 +108,10 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 container.appendChild(renderer.domElement);
 const avatarLoaderRuntime = createVrmLoader(renderer);
-window.addEventListener('beforeunload', () => avatarLoaderRuntime.dispose(), { once: true });
+window.addEventListener('beforeunload', () => {
+  avatarLoaderRuntime.dispose();
+  disposeInochiAvatar();
+}, { once: true });
 
 const scene = new THREE.Scene();
 scene.background = settings.transparent ? null : new THREE.Color(settings.backgroundColor);
@@ -180,6 +190,8 @@ const tmpEuler = new THREE.Euler();
 const BONE_DOWN = new THREE.Vector3(0, -1, 0);
 
 let vrm = null;
+let inochi = null;
+let inochiComposite = null;
 let bot = buildBot();
 scene.add(bot.group);
 const additionalParticipantRuntimes = new Map();
@@ -315,6 +327,7 @@ function disableLayeredAvatar() {
 }
 
 function setLayeredAvatarLayers(entries, label) {
+  disposeInochiAvatar();
   disableLayeredAvatar();
   layeredAvatar.manifest = createLayeredAvatarManifest(entries.map((entry) => entry.name));
   layeredAvatar.layers = entries.map((entry) => {
@@ -408,6 +421,7 @@ function layerVisible(slot, state) {
 async function loadVrmFromUrl(url, label) {
   const next = await prepareVrmFromUrl(url);
 
+  disposeInochiAvatar();
   if (vrm) {
     scene.remove(vrm.scene);
     try { VRMUtils.deepDispose(vrm.scene); } catch {}
@@ -421,6 +435,114 @@ async function loadVrmFromUrl(url, label) {
   bot.group.visible = false;
   $('statAvatar').textContent = label;
   refreshParticipantSelector();
+}
+
+// ---------------------------------------------------------------- Inochi2D
+
+async function loadInochi2DFile(file) {
+  const nextRuntime = new Inochi2DRuntime();
+  try {
+    await nextRuntime.load(await file.arrayBuffer());
+    const texture = new THREE.CanvasTexture(nextRuntime.canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.55, 1.55), material);
+    mesh.position.set(primarySlotX, 1.28, 0.12);
+
+    disposeInochiAvatar();
+    if (vrm) {
+      scene.remove(vrm.scene);
+      try { VRMUtils.deepDispose(vrm.scene); } catch {}
+      vrm = null;
+    }
+    disableLayeredAvatar();
+    inochi = {
+      runtime: nextRuntime,
+      texture,
+      mesh,
+      headVec2: findInochiMetadata(nextRuntime, ['head yaw pitch', 'head yaw-pitch']),
+      headYaw: findInochiMetadata(nextRuntime, ['head yaw', 'yaw']),
+      headPitch: findInochiMetadata(nextRuntime, ['head pitch', 'pitch']),
+      headRoll: findInochiMetadata(nextRuntime, ['head roll', 'roll']),
+    };
+    inochiComposite = mesh;
+    scene.add(mesh);
+    bot.group.visible = false;
+    configureInochiExpressionMapping(file.name, nextRuntime.listParams());
+    const modelName = nextRuntime.metadata?.name || file.name;
+    $('statAvatar').textContent = `${modelName} (Inochi2D)`;
+    chip.textContent = `Inochi2D loaded: ${modelName}`;
+    chip.dataset.state = 'open';
+    refreshParticipantSelector();
+  } catch (error) {
+    nextRuntime.dispose();
+    chip.textContent = formatInochi2DError(error);
+    chip.dataset.state = 'error';
+  }
+}
+
+function configureInochiExpressionMapping(label, parameterNames) {
+  availableExpressionNames = [...parameterNames];
+  perfectSyncState = detectPerfectSyncExpressions([]);
+  expressionMap = createDefaultInochiExpressionMap(parameterNames);
+  expressionMap.name = `${label} Inochi2D map`;
+  refreshExpressionMapEditor();
+}
+
+function findInochiMetadata(runtime, aliases) {
+  const name = findMappedParameter(runtime.listParams(), aliases);
+  return name ? runtime.listParameterMetadata().find((parameter) => parameter.name === name) || null : null;
+}
+
+function applyInochi2D(dt) {
+  const runtime = inochi.runtime;
+  for (const targetParameter of evaluateExpressionMap(expressionMap, current.weights)) {
+    runtime.setParam(targetParameter.out, targetParameter.value);
+  }
+  tmpEuler.setFromQuaternion(current.quat, 'XYZ');
+  if (inochi.headVec2?.isVec2) {
+    runtime.setParam(inochi.headVec2.name, [
+      parameterValue(inochi.headVec2, tmpEuler.y / 0.65, 0),
+      parameterValue(inochi.headVec2, -tmpEuler.x / 0.5, 1),
+    ]);
+  } else {
+    if (inochi.headYaw) runtime.setParam(inochi.headYaw.name, parameterValue(inochi.headYaw, tmpEuler.y / 0.65));
+    if (inochi.headPitch) runtime.setParam(inochi.headPitch.name, parameterValue(inochi.headPitch, -tmpEuler.x / 0.5));
+  }
+  if (inochi.headRoll) runtime.setParam(inochi.headRoll.name, parameterValue(inochi.headRoll, tmpEuler.z / 0.5));
+  runtime.update(dt);
+  runtime.render(inochi.texture);
+
+  const lean = avatarLeanOffset();
+  inochi.mesh.position.set(lean.x + primarySlotX, 1.28 + lean.y, 0.12 + lean.z);
+  inochi.mesh.scale.setScalar(primaryAvatarScale);
+}
+
+function parameterValue(parameter, normalized, axis = 0) {
+  const value = Math.max(-1, Math.min(1, Number(normalized) || 0));
+  const center = parameter.defaults?.[axis] ?? 0;
+  const edge = value < 0 ? parameter.min?.[axis] ?? -1 : parameter.max?.[axis] ?? 1;
+  return center + Math.abs(value) * (edge - center);
+}
+
+function disposeInochiAvatar() {
+  if (inochiComposite) {
+    scene.remove(inochiComposite);
+    inochiComposite.geometry?.dispose?.();
+    inochiComposite.material?.map?.dispose?.();
+    inochiComposite.material?.dispose?.();
+  }
+  inochi?.runtime?.dispose?.();
+  inochi = null;
+  inochiComposite = null;
 }
 
 async function prepareVrmFromUrl(url) {
@@ -444,7 +566,7 @@ function ensureParticipantRuntime(participantId) {
     if (!primaryRuntimeHandle) {
       primaryRuntimeHandle = { primary: true, participantId: id };
       roomParticipants.assignAvatar(id, primaryRuntimeHandle);
-      bot.group.visible = !vrm && !layeredAvatar.active;
+      bot.group.visible = !vrm && !inochi && !layeredAvatar.active;
     }
     refreshParticipantSelector();
     return primaryRuntimeHandle;
@@ -492,6 +614,7 @@ function createParticipantMotionState() {
 function disposeParticipantRuntime(runtime) {
   if (!runtime) return;
   if (runtime.primary) {
+    disposeInochiAvatar();
     if (vrm) {
       scene.remove(vrm.scene);
       try { VRMUtils.deepDispose(vrm.scene); } catch {}
@@ -652,7 +775,9 @@ function configureExpressionMapping(label = 'avatar') {
 
 function refreshExpressionMapEditor() {
   $('txtExpressionMap').value = serializeExpressionMap(expressionMap);
-  $('statMapping').textContent = perfectSyncState.active
+  $('statMapping').textContent = inochi
+    ? `Inochi2D ${expressionMap.targets.length}/${availableExpressionNames.length} parameters`
+    : perfectSyncState.active
     ? `Perfect Sync ${perfectSyncState.matched.length}/52`
     : `fallback ${expressionMap.targets.length} targets`;
 }
@@ -932,10 +1057,21 @@ function render() {
     current.weights[i] += (target.weights[i] - current.weights[i]) * k;
   }
 
-  if (layeredAvatar.active) applyLayeredAvatar();
+  if (inochi) {
+    try {
+      applyInochi2D(dt);
+    } catch (error) {
+      chip.textContent = formatInochi2DError(error);
+      chip.dataset.state = 'error';
+      disposeInochiAvatar();
+      bot.group.visible = true;
+      $('statAvatar').textContent = 'built-in bot (Inochi2D error)';
+      applyBot(dt);
+    }
+  } else if (layeredAvatar.active) applyLayeredAvatar();
   else if (vrm) applyVrm(dt);
   else applyBot(dt);
-  if (!layeredAvatar.active) setObjectOpacity(vrm?.scene || bot.group, primaryFade);
+  if (!layeredAvatar.active) setObjectOpacity(inochi?.mesh || vrm?.scene || bot.group, primaryFade);
   for (const runtime of additionalParticipantRuntimes.values()) applyAdditionalParticipant(runtime, dt);
   if (settings.drumOverlay) updateDrumOverlay();
 
@@ -1178,7 +1314,9 @@ $('btnApplyMapping').addEventListener('click', applyExpressionMapFromEditor);
 $('btnExportMapping').addEventListener('click', exportExpressionMap);
 $('btnImportMapping').addEventListener('click', () => $('fileExpressionMap').click());
 $('btnResetMapping').addEventListener('click', () => {
-  expressionMap = perfectSyncState.active
+  expressionMap = inochi
+    ? createDefaultInochiExpressionMap(availableExpressionNames)
+    : perfectSyncState.active
     ? createPerfectSyncExpressionMap(availableExpressionNames)
     : createDefaultVrmExpressionMap(availableExpressionNames);
   refreshExpressionMapEditor();
@@ -1235,6 +1373,12 @@ $('btnLoadVrm').addEventListener('click', () => $('fileVrm').click());
 $('fileVrm').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (file) await loadVrmFile(file);
+});
+$('btnLoadInochi').addEventListener('click', () => $('fileInochi').click());
+$('fileInochi').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (file) await loadInochi2DFile(file);
+  e.target.value = '';
 });
 $('btnLoadLayered').addEventListener('click', () => $('fileLayeredAvatar').click());
 $('fileLayeredAvatar').addEventListener('change', async (e) => {
@@ -1347,6 +1491,7 @@ document.addEventListener('drop', async (e) => {
   if (!file) return;
   const files = Array.from(e.dataTransfer.files);
   if (/\.(?:vrm|glb)$/i.test(file.name)) await loadVrmFile(file);
+  else if (isInochi2DFile(file.name)) await loadInochi2DFile(file);
   else if (files.some((entry) => entry.name.toLowerCase().endsWith('.psd')) || files.some((entry) => entry.name.toLowerCase().endsWith('.png'))) await loadLayeredFiles(files);
   else if (isMotionJsonlFile(file) || isKgmRecordingFile(file)) await loadReplayFile(file);
 });
@@ -1357,6 +1502,20 @@ if (params.get('vrm')) {
     chip.textContent = formatAvatarLoadError(e);
     chip.dataset.state = 'error';
   });
+}
+
+// ?inochi=<url> loads a CORS-accessible .inp/.inx through the same file path.
+if (params.get('inochi')) {
+  fetch(params.get('inochi'))
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.blob();
+    })
+    .then((blob) => loadInochi2DFile(new File([blob], params.get('inochi').split('/').pop() || 'avatar.inp')))
+    .catch((error) => {
+      chip.textContent = formatInochi2DError(error);
+      chip.dataset.state = 'error';
+    });
 }
 
 // auto-connect local mode when opened from the tracker link

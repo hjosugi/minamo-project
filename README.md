@@ -32,7 +32,8 @@ webcam — free, low-latency, and local-first.
   WebTransport datagrams (lowest latency, Rust relay), with optional room tokens
 - Tauri desktop shell that launches the bundled tracker, viewer, and replay
   tools, with virtual camera backend status surfaced per OS
-- VRM viewer (three-vrm) with a built-in bot fallback; 2D (Inochi2D) is designed
+- VRM viewer (three-vrm), experimental offline Inochi2D `.inp/.inx` WASM
+  rendering, layered PNG/PSD, and a built-in bot fallback
 - Avatar compression tooling — GLB inspection (`pnpm inspect:glb`) and the
   `kagami-pack` planner (`pnpm pack:avatar`) — plus a transparent OBS drum
   overlay at `viewer/drum-overlay.html`
@@ -54,7 +55,7 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
 1. Open http://localhost:8000/tracker/ and press **Start tracking**
 2. Keep mode: local and press **Connect**
 3. "Open viewer in another tab" — it works via BroadcastChannel in the same browser
-4. Drop a `.vrm` file onto the viewer to swap in your own avatar. For recorded
+4. Drop a `.vrm`, `.inp`, or `.inx` file onto the viewer to swap in your own avatar. For recorded
    motion, drop a tracker `.jsonl` onto the viewer or open `/replay/` and publish
    it to the same local room.
 
