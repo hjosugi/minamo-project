@@ -394,8 +394,8 @@ def validate_foundation_contracts() -> None:
     if not (ROOT / 'pnpm-workspace.yaml').exists():
         add_error('pnpm-workspace.yaml', 'pnpm workspace must include relay-node')
     workspace = read('pnpm-workspace.yaml')
-    if 'onlyBuiltDependencies:\n  - esbuild' not in workspace:
-        add_error('pnpm-workspace.yaml', 'esbuild must be the explicitly reviewed install-script dependency')
+    if 'allowBuilds:\n  esbuild: true' not in workspace:
+        add_error('pnpm-workspace.yaml', 'esbuild must be the explicitly reviewed pnpm 11 install-script dependency')
 
     for needle in ['pnpm lint', 'pnpm test', 'pnpm verify', 'pnpm typecheck:js', 'pnpm build']:
         if needle not in ci:

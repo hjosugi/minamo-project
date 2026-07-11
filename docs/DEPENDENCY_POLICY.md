@@ -74,8 +74,9 @@ pnpm test
 
 - `tsx` runs the local-only drum benchmark CLI directly from the TypeScript
   core so scoring logic is not duplicated. Its lockfile dependency `esbuild`
-  is the only package allowed to run an install script in
-  `pnpm-workspace.yaml`; changes to that allow-list require supply-chain review.
+  is the only package allowed to run an install script through pnpm 11's
+  `allowBuilds` map in `pnpm-workspace.yaml`; changes to that allow-list require
+  supply-chain review.
 
 ## Rollback
 
