@@ -248,7 +248,7 @@ def validate_adr_headings() -> None:
         '## References',
     }
     for path in sorted((ROOT / 'docs' / 'adr').glob('*.md')):
-        if path.name == 'README.md':
+        if path.name == 'README.md' or path.name.endswith('.ja.md'):
             continue
         text = path.read_text(encoding='utf-8')
         headings = {line.strip() for line in text.splitlines() if line.startswith('## ')}
