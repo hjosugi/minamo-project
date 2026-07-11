@@ -1513,7 +1513,7 @@ function persistSettings() {
 }
 
 function updateModeFields() {
-  const ws = $('selMode').value === 'ws';
+  const ws = $('selMode').value === 'ws' || $('selMode').value === 'wt';
   const wt = $('selMode').value === 'wt';
   $('fieldWsUrl').hidden = !ws;
   $('fieldWtUrl').hidden = !wt;
@@ -2274,8 +2274,9 @@ $('btnResetTracking').addEventListener('click', resetTrackingRuntime);
 $('btnConnect').addEventListener('click', async () => {
   try {
     persistSettings();
+    const mode = $('selMode').value;
     const result = await state.transport.connectAuto({
-      mode: $('selMode').value,
+      mode,
       room: $('inpRoom').value || 'demo',
       role: 'pub',
       participantId: settings.participantId,
@@ -2283,8 +2284,13 @@ $('btnConnect').addEventListener('click', async () => {
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
       token: $('inpToken').value,
+    }, {
+      secureOnly: location.protocol === 'https:' && mode !== 'local',
+      allowLocalFallback: mode === 'local',
+      pageProtocol: location.protocol,
     });
-    chip.textContent = `tracking + ${result.mode}:${$('inpRoom').value}`;
+    const fallback = result.attempts.length ? ` after ${result.attempts.map((attempt) => attempt.mode).join(' → ')}` : '';
+    chip.textContent = `tracking + ${result.mode}:${$('inpRoom').value}${fallback}`;
     chip.dataset.state = 'open';
     $('btnConnect').disabled = true;
     $('btnDisconnect').disabled = false;

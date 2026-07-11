@@ -2,8 +2,8 @@
 //
 // The desktop viewer/landing page shows a QR code that opens the browser
 // tracker on a phone. These helpers build and parse that URL per the contract
-// in docs/product/phone-tracker.md, and pick a safe default transport for
-// browsers (iOS Safari) that lack a stable WebTransport path.
+// in docs/product/phone-tracker.md. Transport choice is capability-based: a
+// configured WebTransport endpoint is tried only when the runtime exposes it.
 
 export const PHONE_TRACKER_DEFAULT_BASE = '/tracker/';
 export const PAIRING_TOKEN_DEFAULT_TTL_SECONDS = 5 * 60;
@@ -110,14 +110,19 @@ export function redactPairingUrl(value, replacement = 'REDACTED') {
   }
 }
 
-// iOS Safari has no stable WebTransport path, so pair over WebSocket there even
-// when a WebTransport room is available. Returns 'ws' or 'wt'.
-export function recommendPhoneTransport(userAgent = '', hasWebTransportRoom = false) {
-  const ua = String(userAgent);
-  const isIos = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
-  const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|Edg/i.test(ua);
-  if (isIos || isSafari) return 'ws';
-  return hasWebTransportRoom ? 'wt' : 'ws';
+// Returns 'wt' only from runtime capability plus a configured HTTPS endpoint.
+// User-agent sniffing is intentionally excluded so new Safari/WebKit releases
+// can use WebTransport without waiting for an allow-list update.
+export function recommendPhoneTransport({
+  webTransportAvailable = typeof globalThis.WebTransport !== 'undefined',
+  wtUrl = '',
+} = {}) {
+  if (!webTransportAvailable || !wtUrl) return 'ws';
+  try {
+    return new URL(String(wtUrl)).protocol === 'https:' ? 'wt' : 'ws';
+  } catch {
+    return 'ws';
+  }
 }
 
 function appendQuery(base, params) {

@@ -1,0 +1,47 @@
+{
+  "schema": "minamo.drum-benchmark-manifest.v1",
+  "outputDir": ".generated/report",
+  "toleranceMs": 35,
+  "minimumSeparationMs": 35,
+  "clips": [
+    {
+      "id": "runner-validation",
+      "media": "drum-benchmark-runner.mp4",
+      "sha256": "b7b93a057b45f63f08658498e66d77aead7848421f938286190a6af158223d36",
+      "durationMs": 2000,
+      "video": { "fps": 30, "width": 320, "height": 180 },
+      "audio": { "codec": "aac", "sampleRate": 48000, "channels": 1 },
+      "consent": {
+        "localOnly": true,
+        "license": "0BSD generated fixture",
+        "reportMetadataAllowed": true
+      },
+      "annotations": [
+        { "timeMs": 500, "zoneId": "snare", "hand": "Right" },
+        { "timeMs": 1000, "zoneId": "snare", "hand": "Left" },
+        { "timeMs": 1500, "zoneId": "snare", "hand": "Right" }
+      ],
+      "detectedEvents": ".generated/runner-validation.detected.json",
+      "pipeline": {
+        "name": "deterministic-runner-adapter",
+        "version": "1",
+        "command": [
+          "node",
+          "drum-benchmark-detector.mjs",
+          "--output",
+          "{detected}",
+          "--clip",
+          "{clipId}"
+        ]
+      },
+      "pass": {
+        "precision": 1,
+        "recall": 1,
+        "falseDoubleHits": 0,
+        "p95TimingErrorMs": 5,
+        "zoneAccuracy": 1,
+        "handAssignmentAccuracy": 1
+      }
+    }
+  ]
+}

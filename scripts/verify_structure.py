@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import re
 import sys
@@ -77,6 +78,11 @@ REQUIRED = [
     'docs/ml/drum-dataset-schema.md',
     'docs/product/drum-dataset.schema.json',
     'tests/fixtures/drum-benchmark-clips.json',
+    'tests/fixtures/drum-benchmark-detector.mjs',
+    'tests/fixtures/drum-benchmark-runner.manifest.json',
+    'tests/fixtures/drum-benchmark-runner.mp4',
+    'scripts/drum-benchmark.ts',
+    'docs/benchmarks/drum-benchmark-runner.md',
     'docs/research/multi-camera-fusion.md',
     'docs/research/phone-camera-companion.md',
     'docs/research/imu-stick-integration.md',
@@ -381,10 +387,15 @@ def validate_foundation_contracts() -> None:
     package = json.loads(read('package.json'))
     if package.get('packageManager') != 'pnpm@11.0.0':
         add_error('package.json', 'packageManager must pin pnpm@11.0.0')
+    if package.get('scripts', {}).get('benchmark:drum') != 'tsx scripts/drum-benchmark.ts':
+        add_error('package.json', 'benchmark:drum must run the TypeScript drum benchmark runner')
     if not (ROOT / 'pnpm-lock.yaml').exists():
         add_error('pnpm-lock.yaml', 'pnpm lockfile is required')
     if not (ROOT / 'pnpm-workspace.yaml').exists():
         add_error('pnpm-workspace.yaml', 'pnpm workspace must include relay-node')
+    workspace = read('pnpm-workspace.yaml')
+    if 'allowBuilds:\n  esbuild: true' not in workspace:
+        add_error('pnpm-workspace.yaml', 'esbuild must be the explicitly reviewed pnpm 11 install-script dependency')
 
     for needle in ['pnpm lint', 'pnpm test', 'pnpm verify', 'pnpm typecheck:js', 'pnpm build']:
         if needle not in ci:
@@ -892,7 +903,7 @@ def validate_protocol_v2_contracts() -> None:
     for needle in [
         '1_000_000',
         'smallest-three quaternion max angular error',
-        'usPerQuat < 1',
+        'medianUsPerQuat < 1',
         'KGM2 delta/keyframe average reduction',
         'delta with missing base keyframe is rejected',
         'idle-face delta frame',
@@ -1690,6 +1701,44 @@ def validate_drum_docs() -> None:
     for name in ('single-snare', 'alternating-hands', 'fast-roll', 'false-positive-hold'):
         if not any(clip.get('id') == name for clip in clips['clips']):
             add_error('tests/fixtures/drum-benchmark-clips.json', f'benchmark clips fixture missing clip: {name}')
+    runner = read('scripts/drum-benchmark.ts')
+    for needle in [
+        'minamo.drum-benchmark-manifest.v1',
+        'minamo.drum-detected-events.v1',
+        'scoreDrumBenchmarkEvents',
+        "execFileSync('ffprobe'",
+        "spawnSync(executable, args, { cwd",
+        'Raw video/audio is not embedded in this report.',
+    ]:
+        if needle not in runner:
+            add_error('scripts/drum-benchmark.ts', f'drum runner missing privacy/reproducibility contract: {needle}')
+    try:
+        runner_manifest = json.loads(read('tests/fixtures/drum-benchmark-runner.manifest.json'))
+        media = ROOT / 'tests/fixtures/drum-benchmark-runner.mp4'
+        actual_hash = hashlib.sha256(media.read_bytes()).hexdigest()
+        expected_hash = runner_manifest['clips'][0]['sha256']
+        if actual_hash != expected_hash:
+            add_error('tests/fixtures/drum-benchmark-runner.manifest.json', 'runner fixture SHA-256 does not match its media')
+    except (json.JSONDecodeError, KeyError, IndexError, SystemExit):
+        add_error('tests/fixtures/drum-benchmark-runner.manifest.json', 'runner fixture manifest is invalid')
+
+
+def validate_secure_phone_transport() -> None:
+    transport = read('shared/transport.js')
+    pairing = read('shared/pairing.js')
+    desktop = read('desktop/desktop.js')
+    https_doc = read('docs/DEV_HTTPS.md')
+    for needle in ['secureOnly', 'allowLocalFallback', 'validateTransportEndpoint', 'wss:// WebSocket fallback', 'sanitizeTransportError']:
+        if needle not in transport:
+            add_error('shared/transport.js', f'secure phone fallback contract missing: {needle}')
+    if 'userAgent' in pairing or 'iPhone|iPad|iPod' in pairing:
+        add_error('shared/pairing.js', 'phone transport selection must use runtime capabilities instead of UA sniffing')
+    for needle in ['pairingPreferWt', 'pairingWtUrl', 'pairingWtHash', "mode: preferWt ? 'wt' : 'ws'"]:
+        if needle not in desktop:
+            add_error('desktop/desktop.js', f'desktop secure pairing control missing: {needle}')
+    for needle in ['reverse_proxy 127.0.0.1:8787', 'wss://minamo.local/ws', 'Safari 26.4']:
+        if needle not in https_doc:
+            add_error('docs/DEV_HTTPS.md', f'HTTPS/WSS documentation missing: {needle}')
 
 
 def validate_research_docs() -> None:
@@ -1767,6 +1816,7 @@ validate_audio_lipsync_contracts()
 validate_runtime_warning_taxonomy()
 validate_compression_docs()
 validate_drum_docs()
+validate_secure_phone_transport()
 validate_research_docs()
 validate_onnx_backend_registry()
 validate_avatar_pack_cli()

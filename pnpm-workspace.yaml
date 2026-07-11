@@ -1,3 +1,6 @@
 packages:
   - .
   - relay-node
+
+allowBuilds:
+  esbuild: true

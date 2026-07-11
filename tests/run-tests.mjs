@@ -95,6 +95,7 @@ import {
   computeTransportLatencyMs,
   transportFallbackPlan,
   transportSecurityNote,
+  validateTransportEndpoint,
 } from '../shared/transport.js';
 import {
   LEGACY_PARTICIPANT_ID,
@@ -487,14 +488,22 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const perfQuats = [];
   const randomForPerf = deterministicRandom(0xfeed5eed);
   for (let i = 0; i < 200_000; i++) perfQuats.push(randomQuat(randomForPerf));
-  const t0 = performance.now();
-  for (const quat of perfQuats) {
-    const packed = packSmallestThreeQuat(quat);
-    packedSink ^= packed;
-    if (unpackSmallestThreeQuat(packed)[3] > 2) packedSink ^= 1;
-  }
-  const usPerQuat = (performance.now() - t0) * 1000 / perfQuats.length;
-  assert.ok(usPerQuat < 1, `smallest-three JS encode+decode ${usPerQuat.toFixed(3)} us/quat; sink=${packedSink}`);
+  const measureSmallestThree = () => {
+    const t0 = performance.now();
+    for (const quat of perfQuats) {
+      const packed = packSmallestThreeQuat(quat);
+      packedSink ^= packed;
+      if (unpackSmallestThreeQuat(packed)[3] > 2) packedSink ^= 1;
+    }
+    return (performance.now() - t0) * 1000 / perfQuats.length;
+  };
+  measureSmallestThree(); // Let the runtime optimize the hot path before measuring.
+  const timings = Array.from({ length: 5 }, measureSmallestThree).sort((a, b) => a - b);
+  const medianUsPerQuat = timings[Math.floor(timings.length / 2)];
+  assert.ok(
+    medianUsPerQuat < 1,
+    `smallest-three JS encode+decode median ${medianUsPerQuat.toFixed(3)} us/quat; sink=${packedSink}`,
+  );
 
   const encoder = new Kgm2FaceEncoder({ keyframeInterval: 30 });
   const decoder = new Kgm2FaceDecoder();
@@ -582,6 +591,31 @@ function kgm2FaceFrame(seq, overrides = {}) {
   assert.deepEqual(transportFallbackPlan('local', { local: true, ws: true, wt: true }), ['local'], 'local loopback mode is never upgraded away');
   assert.deepEqual(transportFallbackPlan('wt', { local: true, ws: true, wt: false }), ['ws', 'local'], 'WebTransport falls back to WebSocket then local');
   assert.deepEqual(transportFallbackPlan('ws-json', { local: true, ws: true, wt: false }), ['ws-json', 'ws', 'local'], 'WebSocket JSON fallback is explicit');
+  assert.deepEqual(
+    transportFallbackPlan('wt', { local: true, ws: true, wt: true }, {
+      secureOnly: true,
+      allowLocalFallback: false,
+      pageProtocol: 'https:',
+      wtUrl: 'https://relay.example:4433',
+      wsUrl: 'wss://relay.example/ws',
+    }),
+    ['wt', 'ws'],
+    'secure phone pairing prefers runtime WebTransport and falls back only to WSS',
+  );
+  assert.deepEqual(
+    transportFallbackPlan('wt', { local: true, ws: true, wt: false }, {
+      secureOnly: true,
+      allowLocalFallback: false,
+      pageProtocol: 'https:',
+      wtUrl: 'https://relay.example:4433',
+      wsUrl: 'ws://relay.example/ws',
+    }),
+    [],
+    'HTTPS pairing rejects plain WS and never silently falls back to local',
+  );
+  assert.equal(validateTransportEndpoint('ws', 'wss://relay.example/ws', { secureOnly: true }), 'wss://relay.example/ws');
+  assert.throws(() => validateTransportEndpoint('ws', 'ws://relay.example/ws', { pageProtocol: 'https:' }), /mixed content/);
+  assert.throws(() => validateTransportEndpoint('wt', 'http://relay.example:4433'), /https:\/\//);
   assert.equal(computeTransportLatencyMs(1000, 1042), 42);
   assert.equal(computeTransportLatencyMs(1000, 1042, -10), 32);
   assert.equal(computeTransportLatencyMs(1000, 100_000), null, 'impossible clock skew is rejected instead of reported');
@@ -1573,12 +1607,11 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   const trackerHtml = fs.readFileSync(path.join(root, 'tracker/index.html'), 'utf8');
   assert.match(trackerHtml, /id="selCameraFacing"/);
 
-  // iOS Safari falls back to WebSocket even with a WebTransport room available.
-  const iosUa = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-  assert.equal(recommendPhoneTransport(iosUa, true), 'ws');
-  const desktopChrome = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
-  assert.equal(recommendPhoneTransport(desktopChrome, true), 'wt');
-  assert.equal(recommendPhoneTransport(desktopChrome, false), 'ws');
+  // Runtime feature detection, rather than a Safari/iOS UA allow-list, decides
+  // whether the configured WebTransport endpoint is attempted.
+  assert.equal(recommendPhoneTransport({ webTransportAvailable: true, wtUrl: 'https://relay.example:4433' }), 'wt');
+  assert.equal(recommendPhoneTransport({ webTransportAvailable: false, wtUrl: 'https://relay.example:4433' }), 'ws');
+  assert.equal(recommendPhoneTransport({ webTransportAvailable: true, wtUrl: 'http://relay.example:4433' }), 'ws');
 }
 
 console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, and shortcut tests passed.`);

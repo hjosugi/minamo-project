@@ -2,6 +2,9 @@
 
 Status: implemented benchmark definitions for issues #121 and #123.
 
+The local runner for #234 is documented in
+[drum-benchmark-runner.md](drum-benchmark-runner.md).
+
 ## Clip Set
 
 Minimum local clip set:
@@ -26,6 +29,9 @@ Raw video and audio stay local unless the contributor explicitly opts in to shar
 - recall
 - false double hits per zone
 
+The runner also records mean and p95 absolute timing error, zone accuracy, and
+hand-assignment accuracy for matched events.
+
 Default timing tolerance is 35 ms. Fast-roll tests additionally require a per-zone minimum separation of 35 ms to detect double-trigger regressions.
 
 ## Pass Gates
@@ -34,4 +40,3 @@ Default timing tolerance is 35 ms. Fast-roll tests additionally require a per-zo
 - alternating hands: recall >= 0.95, hand assignment >= 0.9
 - fast roll: recall >= 0.9, false double hits = 0
 - false-positive hold: detected = 0
-

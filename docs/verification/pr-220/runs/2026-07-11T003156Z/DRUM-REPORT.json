@@ -1,0 +1,44 @@
+{
+  "schema": "minamo.drum-benchmark-report.v1",
+  "generatedAt": "2026-07-11T00:49:33.624Z",
+  "tool": {
+    "node": "v26.4.0",
+    "runner": "scripts/drum-benchmark.ts",
+    "ffprobe": "ffprobe n8.1.2"
+  },
+  "manifest": "drum-benchmark-runner.manifest.json",
+  "toleranceMs": 35,
+  "minimumSeparationMs": 35,
+  "pass": true,
+  "clips": [
+    {
+      "id": "runner-validation",
+      "media": "drum-benchmark-runner.mp4",
+      "sha256": "b7b93a057b45f63f08658498e66d77aead7848421f938286190a6af158223d36",
+      "durationMs": 2000,
+      "video": { "codec": "h264", "fps": 30, "width": 320, "height": 180 },
+      "audio": { "codec": "aac", "sampleRate": 48000, "channels": 1 },
+      "consent": { "localOnly": true, "license": "0BSD generated fixture", "reportMetadataAllowed": true },
+      "pipeline": { "name": "deterministic-runner-adapter", "version": "1" },
+      "expectedEvents": 3,
+      "detectedEvents": [
+        { "eventId": "right:snare:502", "timeNs": 502000000, "hand": "Right", "stickId": "stick-right", "zoneId": "snare", "zoneType": "snare", "position": { "x": 0, "y": 0, "z": 0 }, "velocity": { "x": 0, "y": 1, "z": 0 }, "speed": 1, "confidence": 0.95, "audioAligned": true },
+        { "eventId": "left:snare:1003", "timeNs": 1003000000, "hand": "Left", "stickId": "stick-left", "zoneId": "snare", "zoneType": "snare", "position": { "x": 0, "y": 0, "z": 0 }, "velocity": { "x": 0, "y": 1, "z": 0 }, "speed": 1, "confidence": 0.95, "audioAligned": true },
+        { "eventId": "right:snare:1498", "timeNs": 1498000000, "hand": "Right", "stickId": "stick-right", "zoneId": "snare", "zoneType": "snare", "position": { "x": 0, "y": 0, "z": 0 }, "velocity": { "x": 0, "y": 1, "z": 0 }, "speed": 1, "confidence": 0.95, "audioAligned": true }
+      ],
+      "score": {
+        "expected": 3,
+        "detected": 3,
+        "matched": 3,
+        "precision": 1,
+        "recall": 1,
+        "falseDoubleHits": 0,
+        "meanTimingErrorMs": 2.3333333333333335,
+        "p95TimingErrorMs": 3,
+        "zoneAccuracy": 1,
+        "handAssignmentAccuracy": 1
+      },
+      "gates": { "pass": true }
+    }
+  ]
+}
