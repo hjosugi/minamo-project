@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](PROTOCOL.md) | [日本語](PROTOCOL.ja.md)
+
 # KGM1 Wire Protocol Specification
 
 Version 1. Status: implemented in `shared/codec.js`.

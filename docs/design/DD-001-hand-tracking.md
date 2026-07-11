@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-001-hand-tracking.md) | [日本語](DD-001-hand-tracking.ja.md)
+
 # DD-001: Hand Tracking
 
 Status: design. Backlog: KGM-022, KGM-024, KGM-026.

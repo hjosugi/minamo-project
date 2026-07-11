@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DEV_HTTPS.md) | [日本語](DEV_HTTPS.ja.md)
+
 # HTTPS Local Development
 
 Camera capture works on `localhost` without HTTPS. For phones, tablets, and

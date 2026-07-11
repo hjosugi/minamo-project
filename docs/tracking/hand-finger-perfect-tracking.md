@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](hand-finger-perfect-tracking.md) | [日本語](hand-finger-perfect-tracking.ja.md)
+
 # Hand and Finger-perfect Tracking Design
 
 > 日本語版: [hand-finger-perfect-tracking.ja.md](hand-finger-perfect-tracking.ja.md)

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](COMMANDS.md) | [日本語](COMMANDS.ja.md)
+
 # Inochi2D runtime commands
 
 ## Repository checks

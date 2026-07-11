@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](layered-avatar.md) | [日本語](layered-avatar.ja.md)
+
 # Layered Avatar Mode
 
 Layered avatar mode is the no-rig PNGTuber path. Drop a PSD file or multiple

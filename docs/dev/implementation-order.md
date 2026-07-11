@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](implementation-order.md) | [日本語](implementation-order.ja.md)
+
 # Implementation Order
 
 ## Sprint 1

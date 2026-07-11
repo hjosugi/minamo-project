@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ktx2-textures.md) | [日本語](ktx2-textures.ja.md)
+
 # KTX2 Texture Compression Guide
 
 Status: implemented design for issue #158. Related: #41.

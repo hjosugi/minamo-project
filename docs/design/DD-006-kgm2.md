@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-006-kgm2.md) | [日本語](DD-006-kgm2.ja.md)
+
 # DD-006: KGM2 Protocol
 
 Status: reference implementation. Backlog: KGM-027, KGM-028, KGM-029.

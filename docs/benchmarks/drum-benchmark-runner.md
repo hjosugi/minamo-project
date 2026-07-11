@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-benchmark-runner.md) | [日本語](drum-benchmark-runner.ja.md)
+
 # Local Drum Benchmark Runner
 
 Status: implemented runner contract for #234. Raw media remains local.

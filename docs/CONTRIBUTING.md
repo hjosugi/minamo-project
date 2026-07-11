@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](CONTRIBUTING.md) | [日本語](CONTRIBUTING.ja.md)
+
 # Contribution Guide
 
 Use the issue templates for new bugs and feature requests. For tracking issues,

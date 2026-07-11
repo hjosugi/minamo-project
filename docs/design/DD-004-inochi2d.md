@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-004-inochi2d.md) | [日本語](DD-004-inochi2d.ja.md)
+
 # DD-004: Inochi2D Render Backend (inox2d WASM)
 
 Status: implemented (experimental). Backlog: KGM-038. Runtime issue: #229.

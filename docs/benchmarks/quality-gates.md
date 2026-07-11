@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](quality-gates.md) | [日本語](quality-gates.ja.md)
+
 # Quality Gates
 
 ## P0 gates

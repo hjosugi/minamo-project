@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](troubleshooting.md) | [日本語](troubleshooting.ja.md)
+
 # Troubleshooting Bad Tracking
 
 ## Poor face tracking

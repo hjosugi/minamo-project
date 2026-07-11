@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](motion-delta-quantization.md) | [日本語](motion-delta-quantization.ja.md)
+
 # Motion Delta Quantization Design
 
 Status: implemented design for issue #161. Related: #41, KGM2 protocol draft.

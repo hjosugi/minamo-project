@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-kick-pedal.md) | [日本語](drum-kick-pedal.ja.md)
+
 # Kick Pedal Inference Design
 
 Status: implemented design for issue #119. Part of the drum performance system

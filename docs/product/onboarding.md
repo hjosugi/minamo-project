@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](onboarding.md) | [日本語](onboarding.ja.md)
+
 # First-Run Onboarding
 
 The first screen should take users directly into setup:

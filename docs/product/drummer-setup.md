@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drummer-setup.md) | [日本語](drummer-setup.ja.md)
+
 # Drummer Setup Guide
 
 ## Camera

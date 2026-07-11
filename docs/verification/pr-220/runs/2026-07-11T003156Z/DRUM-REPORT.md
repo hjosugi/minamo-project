@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DRUM-REPORT.md) | [日本語](DRUM-REPORT.ja.md)
+
 # Drum benchmark report
 
 - Status: **PASS**

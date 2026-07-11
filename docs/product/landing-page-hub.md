@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](landing-page-hub.md) | [日本語](landing-page-hub.ja.md)
+
 # Landing Page Hub Copy
 
 > 日本語版: [landing-page-hub.ja.md](landing-page-hub.ja.md)

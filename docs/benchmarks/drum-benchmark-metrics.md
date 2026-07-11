@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-benchmark-metrics.md) | [日本語](drum-benchmark-metrics.ja.md)
+
 # Drum Benchmark Metrics
 
 Status: implemented benchmark definitions for issues #121 and #123.

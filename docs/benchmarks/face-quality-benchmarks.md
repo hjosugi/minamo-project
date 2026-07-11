@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](face-quality-benchmarks.md) | [日本語](face-quality-benchmarks.ja.md)
+
 # Face Quality Benchmarks
 
 Status: implemented benchmark definitions for issues #106 and #107.

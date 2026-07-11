@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](INDEX.md) | [日本語](INDEX.ja.md)
+
 # Documentation Index
 
 Primary language is English; documents that originated in Japanese keep a

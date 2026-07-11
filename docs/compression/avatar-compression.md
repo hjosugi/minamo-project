@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](avatar-compression.md) | [日本語](avatar-compression.ja.md)
+
 # Avatar and Motion Compression
 
 Focused per-stage guides:

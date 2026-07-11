@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-BLOCKED.md) | [日本語](RESULT-BLOCKED.ja.md)
+
 # Verification result
 
 - Status: `BLOCKED`

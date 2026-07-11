@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # PR #220 verification evidence
 
 This directory defines the durable, redacted evidence format for PR #220 and

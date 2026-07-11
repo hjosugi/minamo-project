@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](e2ee.md) | [日本語](e2ee.ja.md)
+
 # Tracking Frame E2EE
 
 Status: implemented reference profile in `shared/e2ee.js`.

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](BACKLOG.md) | [日本語](BACKLOG.ja.md)
+
 # Minamo Backlog
 
 Issue-ready backlog. Every entry follows the same fixed format so it can be

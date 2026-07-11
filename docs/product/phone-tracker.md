@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](phone-tracker.md) | [日本語](phone-tracker.ja.md)
+
 # Phone-as-Tracker Mode
 
 Status: QR/token runtime implemented for #226; capability-based WT-to-WSS

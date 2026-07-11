@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](SECURITY_REVIEW.md) | [日本語](SECURITY_REVIEW.ja.md)
+
 # Security Review Checklist
 
 Use this checklist before merging features that touch camera input, local

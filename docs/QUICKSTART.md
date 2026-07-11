@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](QUICKSTART.md) | [日本語](QUICKSTART.ja.md)
+
 # Quick Start
 
 > 日本語版: [QUICKSTART.ja.md](QUICKSTART.ja.md)

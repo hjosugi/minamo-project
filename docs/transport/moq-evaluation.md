@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](moq-evaluation.md) | [日本語](moq-evaluation.ja.md)
+
 # MoQ Distribution Evaluation
 
 Status: evaluated. Recommendation: no-go for Minamo production distribution

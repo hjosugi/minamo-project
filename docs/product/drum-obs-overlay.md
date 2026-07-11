@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-obs-overlay.md) | [日本語](drum-obs-overlay.ja.md)
+
 # Drum OBS Overlay
 
 Status: implemented for issue #120. See also

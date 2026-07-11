@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](asset-license-checklist.md) | [日本語](asset-license-checklist.ja.md)
+
 # Asset License Checklist
 
 Status: implemented checklist for issue #163. Related: #41.

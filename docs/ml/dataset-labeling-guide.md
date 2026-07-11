@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](dataset-labeling-guide.md) | [日本語](dataset-labeling-guide.ja.md)
+
 # Stick and Drum Dataset Labeling Guide
 
 This guide covers the privacy-preserving dataset path used by the tracker and the first YOLO-style stick detector baseline.

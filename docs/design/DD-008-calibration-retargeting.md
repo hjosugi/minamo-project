@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-008-calibration-retargeting.md) | [日本語](DD-008-calibration-retargeting.ja.md)
+
 # DD-008: Calibration and Retargeting
 
 Status: design. Backlog: KGM-013, KGM-014, KGM-044.

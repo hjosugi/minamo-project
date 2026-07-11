@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](model-roadmap-yolo-edge.md) | [日本語](model-roadmap-yolo-edge.ja.md)
+
 # YOLO / Edge ML Roadmap
 
 ## 1. Why custom models are needed

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # Minamo
 
 [![ci](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml)

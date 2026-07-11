@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-performance-tracking.md) | [日本語](drum-performance-tracking.ja.md)
+
 # Drum Performance Tracking Design
 
 > English version: [drum-performance-tracking.md](drum-performance-tracking.md)

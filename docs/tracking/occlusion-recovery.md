@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](occlusion-recovery.md) | [日本語](occlusion-recovery.ja.md)
+
 # Occlusion Recovery
 
 > 日本語版: [occlusion-recovery.ja.md](occlusion-recovery.ja.md)

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DEPENDENCY_POLICY.md) | [日本語](DEPENDENCY_POLICY.ja.md)
+
 # Dependency Update Policy
 
 Minamo is local-first tracking software, so dependency changes must preserve

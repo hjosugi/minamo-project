@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-PASS.md) | [日本語](RESULT-PASS.ja.md)
+
 # Verification result
 
 - Status: `PASS`

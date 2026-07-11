@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](glb-inspection.md) | [日本語](glb-inspection.ja.md)
+
 # GLB Inspection Script Design
 
 Status: implemented design for issue #156. Related: #41.

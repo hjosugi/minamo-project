@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-007-recording.md) | [日本語](DD-007-recording.ja.md)
+
 # DD-007: Recording and Replay (.kgm files)
 
 Status: design. Backlog: KGM-047, KGM-048.

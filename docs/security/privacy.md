@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](privacy.md) | [日本語](privacy.ja.md)
+
 # Security and Privacy
 
 ## Default rule

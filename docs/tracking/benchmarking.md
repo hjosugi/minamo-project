@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](benchmarking.md) | [日本語](benchmarking.ja.md)
+
 # Benchmarking and Quality Gates
 
 ## 1. Why benchmarks matter

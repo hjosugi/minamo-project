@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](000-template.md) | [日本語](000-template.ja.md)
+
 # ADR-NNN: Title
 
 ## Status
