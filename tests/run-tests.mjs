@@ -40,6 +40,7 @@ import {
 } from '../viewer/avatar-loader.js';
 import {
   EXPRESSION_MAPPING_SCHEMA,
+  createDefaultInochiExpressionMap,
   createDefaultVrmExpressionMap,
   createPerfectSyncExpressionMap,
   detectPerfectSyncExpressions,
@@ -47,6 +48,13 @@ import {
   parseExpressionMap,
   serializeExpressionMap,
 } from '../shared/expression-mapping.js';
+import {
+  INOX2D_UPSTREAM_REVISION,
+  Inochi2DRuntime,
+  formatInochi2DError,
+  inspectInochi2DFile,
+  isInochi2DFile,
+} from '../viewer/inochi2d-runtime.js';
 import {
   LAYERED_AVATAR_SCHEMA,
   classifyLayerName,
@@ -1379,6 +1387,100 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.deepEqual(roundTripped.targets.map((target) => target.out).sort(), ['aa', 'blink', 'happy']);
   const fallbackOutputs = evaluateExpressionMap(roundTripped, weights);
   assert.ok(Math.abs(fallbackOutputs.find((target) => target.out === 'aa').value - 0.84) < 1e-6);
+
+  const inochiMap = createDefaultInochiExpressionMap([
+    'Eye:: Left:: Blink',
+    'Eye:: Right:: Blink',
+    'Mouth:: Open',
+    'Mouth:: Smile',
+  ]);
+  assert.deepEqual(inochiMap.targets.map((target) => target.out), [
+    'Eye:: Left:: Blink',
+    'Eye:: Right:: Blink',
+    'Mouth:: Open',
+    'Mouth:: Smile',
+  ]);
+}
+
+{
+  // Pinned Inox2D browser adapter lifecycle (issue #229).
+  const payload = new TextEncoder().encode(JSON.stringify({
+    meta: { name: 'Fixture Puppet', artist: 'Minamo', version: '1.0' },
+    param: [
+      { name: 'Head:: Yaw-Pitch', is_vec2: true, min: [-1, -1], max: [1, 1], defaults: [0, 0] },
+      { name: 'Mouth:: Open', is_vec2: false, min: [0, 0], max: [1, 0], defaults: [0, 0] },
+    ],
+  }));
+  const bytes = new Uint8Array(12 + payload.length);
+  bytes.set([0x54, 0x52, 0x4e, 0x53, 0x52, 0x54, 0x53, 0x00]);
+  new DataView(bytes.buffer).setUint32(8, payload.length, false);
+  bytes.set(payload, 12);
+
+  const inspected = inspectInochi2DFile(bytes);
+  assert.equal(inspected.name, 'Fixture Puppet');
+  assert.equal(inspected.parameters[0].isVec2, true);
+  assert.deepEqual(inspected.parameters.map((parameter) => parameter.name), ['Head:: Yaw-Pitch', 'Mouth:: Open']);
+  assert.equal(isInochi2DFile('avatar.inp'), true);
+  assert.equal(isInochi2DFile('avatar.INX'), true);
+  assert.equal(isInochi2DFile('avatar.vrm'), false);
+  assert.match(INOX2D_UPSTREAM_REVISION, /^[a-f0-9]{40}$/);
+  assert.throws(() => inspectInochi2DFile(new Uint8Array(12)), /magic/);
+  assert.match(formatInochi2DError(new Error('BC7 texture encoding is not supported yet')), /Re-export with PNG or TGA/);
+
+  let canvasRemoved = false;
+  let contextLost = false;
+  const canvas = {
+    id: '', width: 0, height: 0, className: '', style: {},
+    setAttribute() {},
+    remove() { canvasRemoved = true; },
+    getContext(kind) {
+      if (kind !== 'webgl2') return null;
+      return { getExtension: () => ({ loseContext: () => { contextLost = true; } }) };
+    },
+  };
+  const documentRef = {
+    body: { appendChild() {} },
+    createElement(tag) { assert.equal(tag, 'canvas'); return canvas; },
+  };
+  let model;
+  class FakeInoxModel {
+    constructor(modelBytes, canvasId) {
+      assert.equal(modelBytes.byteLength, bytes.byteLength);
+      assert.match(canvasId, /^minamo-inochi2d-/);
+      this.calls = [];
+      this.freed = false;
+      model = this;
+    }
+    set_parameter(name, value) { this.calls.push(['set1', name, value]); }
+    set_parameter_2d(name, x, y) { this.calls.push(['set2', name, x, y]); }
+    update(dt) { this.calls.push(['update', dt]); }
+    draw() { this.calls.push(['draw']); }
+    free() { this.freed = true; }
+  }
+  const runtime = new Inochi2DRuntime({
+    documentRef,
+    moduleLoader: async () => ({ default: async () => {}, InoxModel: FakeInoxModel }),
+  });
+  await runtime.load(bytes);
+  runtime.setParam('Mouth:: Open', 0.7);
+  runtime.setParam('Head:: Yaw-Pitch', [0.2, -0.1]);
+  runtime.update(0.2);
+  const texture = { needsUpdate: false };
+  runtime.render(texture);
+  assert.deepEqual(runtime.listParams(), ['Head:: Yaw-Pitch', 'Mouth:: Open']);
+  assert.deepEqual(model.calls, [
+    ['set1', 'Mouth:: Open', 0.7],
+    ['set2', 'Head:: Yaw-Pitch', 0.2, -0.1],
+    ['update', 0.1],
+    ['draw'],
+  ]);
+  assert.equal(texture.needsUpdate, true);
+  runtime.dispose();
+  runtime.dispose();
+  assert.equal(model.freed, true);
+  assert.equal(canvasRemoved, true);
+  assert.equal(contextLost, true);
+  assert.throws(() => runtime.update(0.01), /disposed/);
 }
 
 {

@@ -118,6 +118,10 @@ node --check relay-node/server.mjs
   covering jump clamps, short recovery holds, and long occlusion omission.
 - A Tauri 2 desktop shell opens bundled tracker, viewer, and replay windows
   from the existing Vite app and reports per-OS virtual camera backend status.
+- The Viewer has an experimental, offline Inochi2D backend for `.inp/.inx`:
+  official Inox2D source is revision-pinned and compiled to checked-in WASM,
+  named parameters share the live/exportable expression mapping editor, and a
+  hidden WebGL2 target is composited through the final Three.js scene.
 - Offline MediaPipe vendoring, Docker Compose, HTTPS development, contribution,
   security, release, dependency, label, glossary, and roadmap docs exist.
 
@@ -126,7 +130,7 @@ node --check relay-node/server.mjs
 The remaining issue set includes large feature, research, app, and integration
 work that is not complete merely because a design document exists. Examples:
 Tauri virtual camera output, phone companion capture, full-body ONNX backend,
-Live2D/Inochi2D runtime integration, full drum
+Live2D runtime integration, real-puppet Inochi2D validation, full drum
 performance tracking, KGM2 production transport, MoQ/cluster relays, encryption,
 asset compression pipelines, and manual benchmark/validation tasks.
 

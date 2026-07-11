@@ -644,9 +644,12 @@ is the high-quality 2D path that makes Minamo cover the Live2D-style use
 case with an open format.
 
 Acceptance criteria:
-- [ ] A sample Inochi2D puppet loads and follows head + blink + mouth
-- [ ] Backend selectable per avatar file extension
-- [ ] Parameter mapping editable and exportable (shares KGM-044 format)
+- [x] A sample Inochi2D puppet loads and follows head + blink + mouth
+- [x] Backend selectable per avatar file extension
+- [x] Parameter mapping editable and exportable (shares KGM-044 format)
+
+The runtime criteria are covered by #229. The publishable real-puppet visual
+and performance evidence remains separate in #230.
 
 ### [KGM-039] Layered-PNG pseudo-2.5D mode (PNGTuber tier)
 - Labels: area/render, type/feature

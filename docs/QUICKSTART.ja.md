@@ -13,7 +13,7 @@
 ブラウザで開きます。
 
 - http://localhost:8000/tracker/ — 実webcamトラッカー(表情52ch + 頭部姿勢)
-- http://localhost:8000/viewer/ — VRMビューア(`.vrm` / `.glb` をドロップで差し替え、
+- http://localhost:8000/viewer/ — アバタービューア(`.vrm` / `.glb` またはInochi2D `.inp` / `.inx` をドロップで差し替え、
   trackerの`.jsonl`記録をドロップでモーション再生)
 - http://localhost:8000/replay/ — viewer検証用のローカルJSONLリプレイ送信ページ
 - http://localhost:8000/landing/ — ランディングハブ。**Start demo** を押すと、

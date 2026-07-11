@@ -72,6 +72,12 @@ REQUIRED = [
     'docs/compression/visual-regression-checklist.md',
     'docs/compression/asset-license-checklist.md',
     'viewer/drum-overlay.html',
+    'viewer/inochi2d-runtime.js',
+    'viewer/vendor/inochi2d/minamo_inochi2d.js',
+    'viewer/vendor/inochi2d/minamo_inochi2d_bg.wasm',
+    'third_party/inochi2d-wasm/Cargo.toml',
+    'third_party/inochi2d-wasm/Cargo.lock',
+    'third_party/inochi2d-wasm/LICENSE.inox2d',
     'docs/tracking/drum-hihat-pedal.md',
     'docs/tracking/drum-kick-pedal.md',
     'docs/product/drum-obs-overlay.md',
@@ -1225,7 +1231,7 @@ def validate_layered_avatar_contracts() -> None:
     ]:
         if needle not in viewer:
             add_error('viewer/viewer.js', f'missing layered avatar viewer contract: {needle}')
-    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .glb, .psd, .png set, or .jsonl']:
+    for needle in ['layeredAvatar', 'btnLoadLayered', 'fileLayeredAvatar', 'rngLayerParallax', 'drop .vrm, .glb, .inp, .inx, .psd, .png set, or .jsonl']:
         if needle not in viewer_html:
             add_error('viewer/index.html', f'missing layered avatar UI contract: {needle}')
     avatar_loader = read('viewer/avatar-loader.js')
@@ -1244,6 +1250,63 @@ def validate_layered_avatar_contracts() -> None:
     for needle in ['Layered PNG / PSD', 'layered-avatar.md', 'eyesOpen', 'mouthClosed']:
         if needle not in integrations:
             add_error('docs/integrations/avatar-integrations.md', f'missing layered avatar integration docs: {needle}')
+
+
+def validate_inochi2d_runtime_contracts() -> None:
+    runtime = read('viewer/inochi2d-runtime.js')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    mapping = read('shared/expression-mapping.js')
+    cargo = read('third_party/inochi2d-wasm/Cargo.toml')
+    rust = read('third_party/inochi2d-wasm/src/lib.rs')
+    docs = read('docs/design/DD-004-inochi2d.md')
+    tests = read('tests/run-tests.mjs')
+    revision = 'df8413e6b0c525dbb880b4dca2bdf0a5d4b9aaba'
+
+    for needle in [
+        'class Inochi2DRuntime',
+        'inspectInochi2DFile',
+        'setParam(name, value)',
+        'update(dtSec)',
+        'render(target = this.canvas)',
+        'listParams()',
+        'dispose()',
+        "import('./vendor/inochi2d/minamo_inochi2d.js')",
+        'WEBGL_lose_context',
+    ]:
+        if needle not in runtime:
+            add_error('viewer/inochi2d-runtime.js', f'missing Inochi2D adapter contract: {needle}')
+    for needle in ['loadInochi2DFile', 'CanvasTexture', 'applyInochi2D', 'configureInochiExpressionMapping', 'disposeInochiAvatar']:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing Inochi2D viewer integration: {needle}')
+    for needle in ['btnLoadInochi', 'fileInochi', '.inp,.inx']:
+        if needle not in viewer_html:
+            add_error('viewer/index.html', f'missing Inochi2D file UI: {needle}')
+    for needle in ['createDefaultInochiExpressionMap', 'mouth shape', 'mouth width']:
+        if needle not in mapping:
+            add_error('shared/expression-mapping.js', f'missing Inochi2D mapping contract: {needle}')
+    if cargo.count(revision) != 2:
+        add_error('third_party/inochi2d-wasm/Cargo.toml', 'both Inox2D crates must use the reviewed upstream revision')
+    for needle in ['parse_inp', 'set_parameter', 'set_parameter_2d', 'pub fn update', 'pub fn draw', 'pub fn resize']:
+        if needle not in rust:
+            add_error('third_party/inochi2d-wasm/src/lib.rs', f'missing WASM boundary contract: {needle}')
+    for needle in [revision, 'one `CanvasTexture`', 'BC7', 'real-puppet']:
+        if needle not in docs:
+            add_error('docs/design/DD-004-inochi2d.md', f'missing Inochi2D design decision: {needle}')
+    for needle in ['Inochi2DRuntime', 'inspectInochi2DFile', 'FakeInoxModel', 'INOX2D_UPSTREAM_REVISION']:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing Inochi2D regression coverage: {needle}')
+
+    wasm_path = ROOT / 'viewer/vendor/inochi2d/minamo_inochi2d_bg.wasm'
+    js_path = ROOT / 'viewer/vendor/inochi2d/minamo_inochi2d.js'
+    if wasm_path.exists():
+        wasm_hash = hashlib.sha256(wasm_path.read_bytes()).hexdigest()
+        if wasm_hash != 'e5545620cc98944b71200d0205628abcc1f2cb3ce5873fa5cfc61c6876f95667':
+            add_error(str(wasm_path.relative_to(ROOT)), 'generated WASM hash changed without dependency-policy review')
+    if js_path.exists():
+        js_hash = hashlib.sha256(js_path.read_bytes()).hexdigest()
+        if js_hash != '59922217e5db606c8d77916987909d63d24e0de3a0acb59e07fbbb3120edd2ce':
+            add_error(str(js_path.relative_to(ROOT)), 'generated WASM glue hash changed without dependency-policy review')
 
 
 def validate_transport_contracts() -> None:
@@ -1804,6 +1867,7 @@ validate_obs_viewer_contracts()
 validate_scene_preset_contracts()
 validate_perfect_sync_mapping_contracts()
 validate_layered_avatar_contracts()
+validate_inochi2d_runtime_contracts()
 validate_transport_contracts()
 validate_desktop_contracts()
 validate_static_demo_entrypoints()

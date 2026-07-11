@@ -1,6 +1,6 @@
 # DD-004: Inochi2D Render Backend (inox2d WASM)
 
-Status: design. Backlog: KGM-038.
+Status: implemented (experimental). Backlog: KGM-038. Runtime issue: #229.
 
 ## Problem
 
@@ -15,16 +15,27 @@ yet; Minamo wants a first-class open 2D path.
 - Drive puppet parameters from KGM channels through the same mapping
   editor as VRM (KGM-044): one mapping model, two backends.
 
-## Approach
+## Implemented approach
 
-1. Compile inox2d with a WebGL2 (glow) or wgpu backend to wasm32 via
-   wasm-bindgen. Verify upstream's current wasm story first; contribute
-   fixes upstream rather than forking.
-2. Thin JS wrapper matching `Inochi2DRuntimeAdapter` in
+1. Compile the official inox2d WebGL2/glow renderer to wasm32 via
+   wasm-bindgen. The source dependencies are pinned to upstream commit
+   `df8413e6b0c525dbb880b4dca2bdf0a5d4b9aaba`; the glue and 580 KiB WASM
+   artifact are checked in for offline Viewer/Tauri builds.
+2. A thin JS wrapper matches `Inochi2DRuntimeAdapter` in
    `src/adapters/inochi2d_mapper.ts`: `load(bytes)`, `setParam(name, v)`,
    `update(dt)`, `render(target)`, `listParams()`, `dispose()`.
-3. Parameter discovery: puppets expose named parameters (e.g. "Head:: Yaw",
-   "Eye:: Blink"). Enumerate them at load and feed the mapping editor.
+3. Parameter discovery parses only the length-prefixed JSON header shared by
+   `.inp` and `.inx`; texture bytes are not decoded as JSON. Named parameters,
+   vector shape, ranges, and defaults feed the existing expression mapping
+   editor.
+4. Inox2D renders into a hidden WebGL2 canvas with alpha and stencil. Three.js
+   uploads that canvas through one `CanvasTexture` plane, leaving the existing
+   Viewer renderer as the only visible swap chain. The source texture is
+   refreshed before the final scene render each frame.
+5. File input, drag/drop, and `?inochi=<cors-url>` choose this backend by
+   `.inp`/`.inx` extension. Replacing the avatar or unloading the page frees
+   the WASM object, disposes Three resources, loses the hidden GL context, and
+   removes the hidden canvas.
 
 ## Default mapping heuristics
 
@@ -39,13 +50,25 @@ yet; Minamo wants a first-class open 2D path.
 Fuzzy matching by normalized parameter names; anything unmatched appears
 unmapped in the editor rather than guessing.
 
-The current mapper exposes `filterInochiParamsForRuntime()` so a runtime can
-drop unsupported parameters deterministically.
+The runtime applies fuzzy defaults only when a discovered parameter name
+matches a known alias. Unmatched parameters remain visible and unmapped in the
+editor. Export uses the same `minamo.expression-map.v1` format as VRM.
+
+## Diagnostics and unsupported features
+
+- Invalid magic, truncated JSON, malformed puppet data, missing WebGL2/stencil,
+  and unsupported renderer features have separate user-facing diagnostics.
+- The pinned upstream parser supports both `.inp` and `.inx`. It does not
+  support BC7 puppet textures; users must re-export those textures as PNG or
+  TGA.
+- Inox2D describes its Rust renderer as experimental. Upstream feature gaps do
+  not trigger a silent bot/VRM fallback.
 
 ## Risks
 
-- inox2d WASM maturity: if blocked, fallback plan is Inochi2D's own
-  JS bindings if/when available, or scoping v1 to a puppet subset
-  (mesh deforms without physics).
-- Two GL contexts (three.js + inox2d): render inox2d to a texture and
-  composite in three.js to keep one swap chain.
+- Inox2D WASM maturity: the pinned source and generated artifact must be
+  re-reviewed together when updating upstream.
+- Two GL contexts remain necessary, but only the Three.js context presents to
+  the screen. The Inox2D context is an internal texture producer.
+- A redistributable real-puppet visual/latency matrix remains tracked by #230;
+  #229 covers the runtime and browser lifecycle, not that separate evidence.

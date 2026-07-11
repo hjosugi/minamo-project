@@ -36,7 +36,17 @@ Mapping targets:
 
 ## 3. Inochi2D / Inox2D
 
-Use Inochi2D-compatible parameters for open 2D avatar pipelines. Keep a separate mapper because parameter naming and rig semantics differ from Live2D.
+Drop an `.inp` or `.inx` puppet onto the Viewer, or use **Open INP / INX**.
+The Viewer runs the pinned Inox2D WebGL2/WASM backend locally and composites
+its transparent canvas into the existing Three.js scene. No puppet data or
+tracking data is uploaded.
+
+The mapping editor lists parameters discovered from the puppet and generates
+conservative head, blink, and mouth defaults from normalized name aliases.
+Names that do not match remain unmapped; edit the JSON live and save the same
+`minamo.expression-map.v1` format used by VRM. `.inp` and `.inx` use the same
+runtime parser. BC7 textures are not supported by the pinned upstream renderer,
+so re-export affected puppets with PNG or TGA textures.
 
 ## 4. Layered PNG / PSD
 

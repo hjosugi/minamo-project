@@ -78,6 +78,46 @@ export function createDefaultVrmExpressionMap(availableNames = []) {
   });
 }
 
+export function createDefaultInochiExpressionMap(availableNames = []) {
+  const used = new Set();
+  const target = (aliases, expr, curve = 'linear', clamp = [0, 1]) => {
+    const out = findMappedParameter(availableNames, aliases, used);
+    if (!out) return null;
+    used.add(out);
+    return { out, expr, curve, clamp };
+  };
+  return normalizeExpressionMap({
+    schema: EXPRESSION_MAPPING_SCHEMA,
+    name: 'Inochi2D parameter fallback',
+    targets: [
+      target(['eye left blink', 'left eye blink', 'eye l blink', 'blink left'], [['eyeBlinkLeft', 1]]),
+      target(['eye right blink', 'right eye blink', 'eye r blink', 'blink right'], [['eyeBlinkRight', 1]]),
+      target(['eye blink', 'blink'], [['eyeBlinkLeft', 0.5], ['eyeBlinkRight', 0.5]]),
+      target(['mouth open', 'jaw open', 'mouth shape'], [['jawOpen', 1]], 'ease'),
+      target(['mouth smile', 'smile', 'mouth width'], [['mouthSmileLeft', 0.5], ['mouthSmileRight', 0.5]], 'ease'),
+      target(['mouth pucker', 'pucker'], [['mouthPucker', 1]], 'ease'),
+      target(['mouth funnel', 'funnel'], [['mouthFunnel', 1]], 'ease'),
+      target(['brow up', 'eyebrow up'], [['browInnerUp', 1]], 'ease'),
+    ].filter(Boolean),
+  });
+}
+
+export function findMappedParameter(availableNames, aliases, excluded = new Set()) {
+  const entries = (availableNames || [])
+    .filter((name) => !excluded.has(name))
+    .map((name) => ({ name, normalized: normalizeMappingName(name) }));
+  const normalizedAliases = (aliases || []).map(normalizeMappingName).filter(Boolean);
+  for (const alias of normalizedAliases) {
+    const exact = entries.find((entry) => entry.normalized === alias);
+    if (exact) return exact.name;
+  }
+  for (const alias of normalizedAliases) {
+    const partial = entries.find((entry) => entry.normalized.includes(alias) || alias.includes(entry.normalized));
+    if (partial) return partial.name;
+  }
+  return null;
+}
+
 export function parseExpressionMap(json) {
   return normalizeExpressionMap(JSON.parse(json));
 }
@@ -149,6 +189,10 @@ function normalizeSource(value) {
   const weight = Number(value[1]);
   if (!source || !Number.isFinite(weight)) return null;
   return [source, weight];
+}
+
+function normalizeMappingName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function clamp(value, min, max) {

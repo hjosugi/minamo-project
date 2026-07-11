@@ -12,7 +12,7 @@ must stay open while required evidence is pending, blocked, or failed.
 | #226 | QR pairing UI | `iphone/qr-ui/` | PENDING | — |
 | #227 | secure WSS/WT negotiation | `iphone/transports/` | BLOCKED | [automated scope and browser blocker](runs/2026-07-11T003156Z/RESULT-227.md) |
 | #228 | real iPhone timing | `iphone/timing/` | PENDING | — |
-| #229 | Inochi2D runtime | `inochi2d/runtime/` | PENDING | — |
+| #229 | Inochi2D runtime | `inochi2d/runtime/` | PASS | [runtime result](runs/2026-07-11T020516Z/RESULT-229.md) |
 | #230 | real Inochi2D puppet | `inochi2d/puppet/` | PENDING | — |
 | #231 | Windows virtual camera | `virtual-camera/windows/` | PENDING | — |
 | #232 | Linux virtual camera | `virtual-camera/linux/` | PENDING | — |

@@ -23,8 +23,8 @@
   表情52ch + 頭部姿勢 + 上半身(実験的)。One Euroフィルタで平滑化
 - 配送は3段構え: BroadcastChannel(サーバ不要) / WebSocket(互換) /
   WebTransportデータグラム(最低遅延, Rust)
-- ビューアはVRM(three-vrm)対応。VRMが無くても内蔵ボットで即動作。
-  2D(Inochi2D)は設計済み
+- ビューアはVRM(three-vrm)、実験的なInochi2D `.inp/.inx` WASM描画、
+  レイヤーPNG/PSDに対応。アバターが無くても内蔵ボットで即動作
 - [landing/](landing/) にランディングページハブとモックトラッキングデモ
 
 詳細: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)(実装済み)/
@@ -43,7 +43,7 @@
 1. http://localhost:8000/tracker/ を開き **Start tracking**
 2. mode: local のまま **Connect**
 3. 「ビューアを別タブで開く」→ 同一ブラウザ内でBroadcastChannel経由で動く
-4. ビューアに `.vrm` をドロップすると自分のアバターに差し替わる
+4. ビューアに `.vrm`、`.inp`、`.inx` をドロップすると自分のアバターに差し替わる
 
 ランディングハブとモックデモは http://localhost:8000/landing/ 。
 
