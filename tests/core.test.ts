@@ -1,5 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  DRUM_DETECTED_EVENTS_SCHEMA,
+  formatDrumBenchmarkMarkdown,
+  runDrumBenchmark,
+  validateDrumBenchmarkManifest,
+} from '../scripts/drum-benchmark';
 import {
   ConfidenceDecay,
   FingerContactHysteresis,
@@ -47,6 +56,7 @@ import {
   privacyPreservingDatasetRecord,
   chooseExecutionProviderFromCapabilities,
   scoreDrumBenchmark,
+  scoreDrumBenchmarkEvents,
   runModelBenchmark,
   verifyModelSpecBytes,
   verifyModelHash,
@@ -423,6 +433,13 @@ describe('audio and drum helpers', () => {
     expect(inferKickPedalHit([{ timeMs: 54, strength: 0.7, frequencyHz: 80 }], 50)?.zoneType).toBe('kick');
     const score = scoreDrumBenchmark([50, 100], [hit, { ...hit, eventId: 'h2', timeNs: 100_000_000 }]);
     expect(score.recall).toBe(1);
+    const detailed = scoreDrumBenchmarkEvents([
+      { timeMs: 50, zoneId: 'snare', hand: 'Right' },
+      { timeMs: 100, zoneId: 'snare', hand: 'Left' },
+    ], [hit, { ...hit, eventId: 'h2', timeNs: 100_000_000, hand: 'Left' }]);
+    expect(detailed.zoneAccuracy).toBe(1);
+    expect(detailed.handAssignmentAccuracy).toBe(1);
+    expect(detailed.p95TimingErrorMs).toBe(0);
     expect(createDrumDatasetAnnotation('frame-1', [{
       kind: 'stick',
       id: 'stick-r',
@@ -436,6 +453,85 @@ describe('audio and drum helpers', () => {
     expect(voiceActivityMouthAccent(0.9, 0.02)).toBeGreaterThanOrEqual(0.9);
   });
 });
+
+describe('local drum benchmark runner (issue #234)', () => {
+  it('runs a detector command adapter and emits redacted JSON/Markdown scores', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'minamo-drum-'));
+    try {
+      const media = join(root, 'private-session.mp4');
+      const detected = join(root, 'private', 'detected.json');
+      const manifestPath = join(root, 'manifest.json');
+      const mediaBytes = Buffer.from('local private media fixture');
+      writeFileSync(media, mediaBytes);
+      const manifest = {
+        schema: 'minamo.drum-benchmark-manifest.v1',
+        outputDir: 'report',
+        toleranceMs: 35,
+        minimumSeparationMs: 35,
+        clips: [{
+          id: 'alternating-hands',
+          media: 'private-session.mp4',
+          sha256: createHash('sha256').update(mediaBytes).digest('hex'),
+          durationMs: 1000,
+          video: { fps: 60, width: 1280, height: 720 },
+          audio: { codec: 'aac', sampleRate: 48000, channels: 2 },
+          consent: { localOnly: true, license: 'private-consented', reportMetadataAllowed: true },
+          annotations: [
+            { timeMs: 100, zoneId: 'snare', hand: 'Right' },
+            { timeMs: 500, zoneId: 'snare', hand: 'Left' },
+          ],
+          detectedEvents: 'private/detected.json',
+          pipeline: { name: 'fixture-detector', version: '1', command: ['fixture-detector', '{detected}'] },
+          pass: { precision: 1, recall: 1, falseDoubleHits: 0, p95TimingErrorMs: 5, zoneAccuracy: 1, handAssignmentAccuracy: 1 },
+        }],
+      };
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+      expect(validateDrumBenchmarkManifest(manifest).clips).toHaveLength(1);
+      const result = await runDrumBenchmark(manifestPath, {
+        probeMedia: () => ({
+          durationMs: 1000,
+          video: { codec: 'h264', fps: 60, width: 1280, height: 720 },
+          audio: { codec: 'aac', sampleRate: 48000, channels: 2 },
+          ffprobeVersion: 'ffprobe fixture',
+        }),
+        runPipeline: (command) => {
+          expect(command[0]).toBe('fixture-detector');
+          writeFileSync(command[1], JSON.stringify({
+            schema: DRUM_DETECTED_EVENTS_SCHEMA,
+            events: [
+              fixtureDrumHit('right', 102, 'Right'),
+              fixtureDrumHit('left', 503, 'Left'),
+            ],
+          }));
+        },
+      });
+      expect(result.report.pass).toBe(true);
+      expect(result.report.clips[0].score.meanTimingErrorMs).toBe(2.5);
+      const markdown = formatDrumBenchmarkMarkdown(result.report);
+      expect(markdown).toContain('alternating-hands');
+      expect(markdown).not.toContain(root);
+      expect(markdown).toContain('Raw video/audio is not embedded');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+function fixtureDrumHit(eventId: string, timeMs: number, hand: 'Left' | 'Right') {
+  return {
+    eventId,
+    timeNs: timeMs * 1_000_000,
+    hand,
+    stickId: `stick-${hand.toLowerCase()}`,
+    zoneId: 'snare',
+    zoneType: 'snare',
+    position: { x: 0, y: 0, z: 0 },
+    velocity: { x: 0, y: 1, z: 0 },
+    speed: 1,
+    confidence: 0.9,
+    audioAligned: true,
+  };
+}
 
 describe('stability layer', () => {
   it('guards finite values and rig ranges', () => {

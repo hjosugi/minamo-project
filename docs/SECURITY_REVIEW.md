@@ -44,8 +44,10 @@ artifacts.
 - QR images and copied URLs are credentials. Evidence screenshots and
   diagnostics must redact them before publication.
 - Public phone pairing still requires HTTPS/WSS and a configured origin allow
-  list. Secure transport negotiation and downgrade handling remain tracked by
-  #227; the token UI is not a substitute for TLS.
+  list. #227 rejects plain WS from HTTPS, prefers a configured WT endpoint only
+  when the runtime exposes WebTransport, and falls back only to WSS. Local mode
+  is never a silent fallback for remote phone pairing; the token UI remains no
+  substitute for TLS.
 
 ## Supply Chain
 

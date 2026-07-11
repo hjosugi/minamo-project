@@ -68,6 +68,16 @@ export interface DrumBenchmarkResult {
   precision: number;
   recall: number;
   falseDoubleHits: number;
+  meanTimingErrorMs: number | null;
+  p95TimingErrorMs: number | null;
+  zoneAccuracy: number | null;
+  handAssignmentAccuracy: number | null;
+}
+
+export interface DrumBenchmarkExpectedHit {
+  timeMs: number;
+  zoneId?: string;
+  hand?: 'Left' | 'Right';
 }
 
 export interface DrumDatasetAnnotation {
@@ -250,13 +260,37 @@ export function scoreDrumBenchmark(
   toleranceMs = 35,
   minimumSeparationMs = 35,
 ): DrumBenchmarkResult {
+  return scoreDrumBenchmarkEvents(
+    expectedHitTimesMs.map((timeMs) => ({ timeMs })),
+    detectedHits,
+    toleranceMs,
+    minimumSeparationMs,
+  );
+}
+
+export function scoreDrumBenchmarkEvents(
+  expectedHits: readonly DrumBenchmarkExpectedHit[],
+  detectedHits: readonly DrumHitEvent[],
+  toleranceMs = 35,
+  minimumSeparationMs = 35,
+): DrumBenchmarkResult {
   const unmatched = [...detectedHits].sort((a, b) => a.timeNs - b.timeNs);
-  let matched = 0;
-  for (const expected of expectedHitTimesMs) {
-    const index = unmatched.findIndex((hit) => Math.abs(hit.timeNs / 1_000_000 - expected) <= toleranceMs);
+  const matches: Array<{ expected: DrumBenchmarkExpectedHit; detected: DrumHitEvent; errorMs: number }> = [];
+  for (const expected of expectedHits) {
+    let index = -1;
+    let closest = Infinity;
+    for (let candidateIndex = 0; candidateIndex < unmatched.length; candidateIndex++) {
+      const candidate = unmatched[candidateIndex];
+      if (!candidate) continue;
+      const error = Math.abs(candidate.timeNs / 1_000_000 - expected.timeMs);
+      if (error <= toleranceMs && error < closest) {
+        closest = error;
+        index = candidateIndex;
+      }
+    }
     if (index >= 0) {
-      matched++;
-      unmatched.splice(index, 1);
+      const [detected] = unmatched.splice(index, 1);
+      if (detected) matches.push({ expected, detected, errorMs: closest });
     }
   }
   let falseDoubleHits = 0;
@@ -269,13 +303,29 @@ export function scoreDrumBenchmark(
       falseDoubleHits++;
     }
   }
+  const timingErrors = matches.map((match) => match.errorMs).sort((a, b) => a - b);
+  const zoneMatches = matches.filter((match) => match.expected.zoneId !== undefined);
+  const handMatches = matches.filter((match) => match.expected.hand !== undefined);
+  const matched = matches.length;
   return {
-    expected: expectedHitTimesMs.length,
+    expected: expectedHits.length,
     detected: detectedHits.length,
     matched,
     precision: detectedHits.length ? matched / detectedHits.length : 1,
-    recall: expectedHitTimesMs.length ? matched / expectedHitTimesMs.length : 1,
+    recall: expectedHits.length ? matched / expectedHits.length : 1,
     falseDoubleHits,
+    meanTimingErrorMs: timingErrors.length
+      ? timingErrors.reduce((sum, value) => sum + value, 0) / timingErrors.length
+      : null,
+    p95TimingErrorMs: timingErrors.length
+      ? timingErrors[Math.min(timingErrors.length - 1, Math.ceil(timingErrors.length * 0.95) - 1)] ?? null
+      : null,
+    zoneAccuracy: zoneMatches.length
+      ? zoneMatches.filter((match) => match.detected.zoneId === match.expected.zoneId).length / zoneMatches.length
+      : null,
+    handAssignmentAccuracy: handMatches.length
+      ? handMatches.filter((match) => match.detected.hand === match.expected.hand).length / handMatches.length
+      : null,
   };
 }
 

@@ -70,6 +70,13 @@ pnpm test
   renderer. Neither path calls a third-party QR service or uploads camera
   media; the relay does not log QR payloads or room tokens.
 
+### TypeScript command runner
+
+- `tsx` runs the local-only drum benchmark CLI directly from the TypeScript
+  core so scoring logic is not duplicated. Its lockfile dependency `esbuild`
+  is the only package allowed to run an install script in
+  `pnpm-workspace.yaml`; changes to that allow-list require supply-chain review.
+
 ## Rollback
 
 - Keep each dependency update in its own commit unless it is inseparable from

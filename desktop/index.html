@@ -118,8 +118,20 @@
                 <input id="pairingTrackerBase" name="trackerBase" type="url" inputmode="url" autocomplete="off" spellcheck="false" required />
               </label>
               <label class="pairing-field pairing-field-wide">
-                <span>WebSocket relay URL</span>
-                <input id="pairingRelayUrl" name="relayUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" required />
+                <span>Secure WebSocket relay / fallback URL</span>
+                <input id="pairingRelayUrl" name="relayUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://relay.example/ws" required />
+              </label>
+              <label class="pairing-check pairing-field-wide">
+                <input id="pairingPreferWt" name="preferWt" type="checkbox" />
+                <span>Try WebTransport first when the phone supports it</span>
+              </label>
+              <label class="pairing-field pairing-field-wide">
+                <span>WebTransport URL (optional)</span>
+                <input id="pairingWtUrl" name="wtUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://relay.example:4433" />
+              </label>
+              <label class="pairing-field pairing-field-wide">
+                <span>WebTransport certificate SHA-256 (optional)</span>
+                <input id="pairingWtHash" name="wtHash" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="64 hexadecimal characters" />
               </label>
               <label class="pairing-field">
                 <span>Phone camera</span>
@@ -159,7 +171,7 @@
                 <button id="btnGeneratePairing" class="primary-button" type="submit" aria-keyshortcuts="Control+Enter Meta+Enter">Generate QR</button>
                 <button id="btnExpirePairing" class="secondary-button" type="button" disabled>Expire now</button>
               </div>
-              <p class="pairing-help pairing-field-wide">Enter submits the form; Ctrl/⌘+Enter regenerates from anywhere in this panel. Pairing sends motion data only—camera video stays on the phone.</p>
+              <p class="pairing-help pairing-field-wide">Enter submits the form; Ctrl/⌘+Enter regenerates from anywhere in this panel. On HTTPS, WebTransport falls back only to WSS—never plain WS or a silent local channel. Pairing sends motion data only.</p>
             </div>
 
             <div class="qr-card">

@@ -79,18 +79,34 @@ export class MinamoTransport extends EventTarget {
 
   /**
    * @param {{ mode: string, room: string, role: string, participantId?: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string }} options
-   * @param {{ timeoutMs?: number, capabilities?: { local?: boolean, ws?: boolean, wt?: boolean } }} autoOptions
+   * @param {{ timeoutMs?: number, capabilities?: { local?: boolean, ws?: boolean, wt?: boolean }, secureOnly?: boolean, allowLocalFallback?: boolean, pageProtocol?: string }} autoOptions
    */
   async connectAuto(options, autoOptions = {}) {
     const requestedMode = normalizeMode(options.mode);
-    const plan = transportFallbackPlan(requestedMode, autoOptions.capabilities || detectTransportCapabilities());
+    const secureOnly = Boolean(autoOptions.secureOnly);
+    const plan = transportFallbackPlan(
+      requestedMode,
+      autoOptions.capabilities || detectTransportCapabilities(),
+      {
+        secureOnly,
+        allowLocalFallback: autoOptions.allowLocalFallback !== false,
+        pageProtocol: autoOptions.pageProtocol || globalThis.location?.protocol || '',
+        wsUrl: options.wsUrl || '',
+        wtUrl: options.wtUrl || '',
+      },
+    );
     const attempts = [];
     let lastError = null;
     this.requestedMode = requestedMode;
+    if (!plan.length) {
+      throw new Error(secureOnly
+        ? 'No secure transport is configured. Provide an HTTPS WebTransport URL or a WSS fallback URL.'
+        : `No supported transport is available for ${requestedMode}.`);
+    }
     for (const mode of plan) {
       try {
         await promiseWithTimeout(
-          this.connect({ ...options, mode, requestedMode, wsEncoding: mode === 'ws-json' ? 'json' : options.wsEncoding }),
+          this.connect({ ...options, mode, requestedMode, secureOnly, wsEncoding: mode === 'ws-json' ? 'json' : options.wsEncoding }),
           autoOptions.timeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS,
           `${mode} connection timed out`
         );
@@ -98,9 +114,10 @@ export class MinamoTransport extends EventTarget {
         if (mode !== requestedMode) this._status('open', `${mode} fallback active after ${requestedMode} failed`);
         return { mode, requestedMode, attempts };
       } catch (error) {
-        lastError = error;
-        attempts.push({ mode, error: error?.message || String(error) });
-        this._status('fallback', `${mode} unavailable; trying fallback`);
+        const message = sanitizeTransportError(error?.message || String(error));
+        lastError = new Error(message);
+        attempts.push({ mode, error: message });
+        this._status('fallback', `${mode} unavailable (${message}); trying fallback`);
         await this.close();
       }
     }
@@ -109,9 +126,9 @@ export class MinamoTransport extends EventTarget {
   }
 
   /**
-   * @param {{ mode: string, requestedMode?: string, room: string, role: string, participantId?: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string }} options
+   * @param {{ mode: string, requestedMode?: string, room: string, role: string, participantId?: string, wsUrl?: string, wtUrl?: string, certHashHex?: string, token?: string, wsEncoding?: string, secureOnly?: boolean }} options
    */
-  async connect({ mode, requestedMode, room, role, participantId = '', wsUrl, wtUrl, certHashHex, token = '', wsEncoding = 'binary' }) {
+  async connect({ mode, requestedMode, room, role, participantId = '', wsUrl, wtUrl, certHashHex, token = '', wsEncoding = 'binary', secureOnly = false }) {
     await this.close();
     mode = normalizeMode(mode);
     this.requestedMode = normalizeMode(requestedMode || mode);
@@ -132,7 +149,11 @@ export class MinamoTransport extends EventTarget {
     }
 
     if (mode === 'ws' || mode === 'ws-json') {
-      const url = new URL(wsUrl || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+      const fallbackUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+      const url = new URL(validateTransportEndpoint('ws', wsUrl || fallbackUrl, {
+        secureOnly,
+        pageProtocol: location.protocol,
+      }));
       url.searchParams.set('room', room);
       url.searchParams.set('role', role);
       if (this.participantId) url.searchParams.set('participant', this.participantId);
@@ -168,7 +189,10 @@ export class MinamoTransport extends EventTarget {
       if (typeof WebTransport === 'undefined') {
         throw new Error('WebTransport is not supported in this browser.');
       }
-      const base = (wtUrl || 'https://localhost:4433').replace(/\/+$/, '');
+      const base = validateTransportEndpoint('wt', wtUrl || 'https://localhost:4433', {
+        secureOnly,
+        pageProtocol: location.protocol,
+      }).replace(/\/+$/, '');
       const tokenPath = token ? `/${encodeURIComponent(token)}` : '';
       const url = `${base}/room/${encodeURIComponent(room)}${tokenPath}/${role}`;
       /** @type {any} */
@@ -293,15 +317,45 @@ export function detectTransportCapabilities(scope = globalThis) {
  * @param {string} mode
  * @param {{ local?: boolean, ws?: boolean, wt?: boolean }} capabilities
  */
-export function transportFallbackPlan(mode, capabilities = detectTransportCapabilities()) {
+export function transportFallbackPlan(mode, capabilities = detectTransportCapabilities(), options = {}) {
   const requested = normalizeMode(mode);
+  const secureOnly = Boolean(options.secureOnly);
+  const allowLocalFallback = options.allowLocalFallback !== false;
+  const pageProtocol = options.pageProtocol || '';
   return (TRANSPORT_FALLBACKS[requested] || TRANSPORT_FALLBACKS.local)
     .filter((candidate) => {
-      if (candidate === 'local') return capabilities.local !== false;
-      if (candidate === 'ws' || candidate === 'ws-json') return capabilities.ws !== false;
-      if (candidate === 'wt') return capabilities.wt !== false;
+      if (candidate === 'local') return allowLocalFallback && capabilities.local !== false;
+      if (candidate === 'ws' || candidate === 'ws-json') {
+        if (capabilities.ws === false) return false;
+        if (!secureOnly && pageProtocol !== 'https:') return true;
+        const url = options.wsUrl || (pageProtocol === 'https:' ? 'wss://current-origin/ws' : '');
+        return endpointUsesProtocol(url, 'wss:');
+      }
+      if (candidate === 'wt') {
+        if (capabilities.wt === false) return false;
+        return !options.wtUrl || endpointUsesProtocol(options.wtUrl, 'https:');
+      }
       return false;
     });
+}
+
+export function validateTransportEndpoint(mode, value, { secureOnly = false, pageProtocol = '' } = {}) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    throw new Error(`${mode === 'wt' ? 'WebTransport' : 'WebSocket'} endpoint must be an absolute URL.`);
+  }
+  if (mode === 'wt' && url.protocol !== 'https:') {
+    throw new Error('WebTransport endpoint must use https://.');
+  }
+  if ((mode === 'ws' || mode === 'ws-json') && !['ws:', 'wss:'].includes(url.protocol)) {
+    throw new Error('WebSocket endpoint must use ws:// or wss://.');
+  }
+  if ((secureOnly || pageProtocol === 'https:') && (mode === 'ws' || mode === 'ws-json') && url.protocol !== 'wss:') {
+    throw new Error('HTTPS pages require a wss:// WebSocket fallback; ws:// would be blocked as mixed content.');
+  }
+  return url.toString();
 }
 
 export function computeTransportLatencyMs(sourceTimestampMs, receiveTimestampMs, clockOffsetMs = 0) {
@@ -366,6 +420,20 @@ function redactToken(url) {
   const safe = new URL(url);
   if (safe.searchParams.has('token')) safe.searchParams.set('token', '***');
   return safe.toString();
+}
+
+function endpointUsesProtocol(value, protocol) {
+  try {
+    return new URL(String(value)).protocol === protocol;
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeTransportError(value) {
+  return String(value)
+    .replace(/([?&]token=)[^&#\s]*/gi, '$1***')
+    .replace(/(\/room\/[^/\s]+\/)[^/\s]+(\/(?:pub|sub)\b)/gi, '$1***$2');
 }
 
 function base64ToBytes(value) {

@@ -1,7 +1,8 @@
 # Phone-as-Tracker Mode
 
-Status: QR/token runtime implemented for #226; secure WSS negotiation (#227)
-and real-iPhone timing evidence (#228) remain pending.
+Status: QR/token runtime implemented for #226; capability-based WT-to-WSS
+negotiation implemented for #227; real-browser/iPhone timing evidence (#228)
+remains pending.
 
 ## Goal
 
@@ -12,7 +13,7 @@ Use a phone browser as a tracker camera while the desktop viewer or OBS source r
 The desktop app or landing page can generate a QR code for:
 
 ```text
-/tracker/?mode=ws&room=<room>&token=<token>&wsUrl=<relay>&camera=user
+/tracker/?mode=wt&room=<room>&token=<token>&wtUrl=<wt-relay>&wsUrl=<wss-fallback>&camera=user
 ```
 
 Optional parameters:
@@ -35,8 +36,10 @@ viewer follows the same `room`, `token`, and `wsUrl` contract.
 2. In **Pair a tracker**, set a tracker URL that the phone can reach. Use an
    HTTPS LAN hostname/address for a real phone; `localhost` means the phone
    itself and will not reach the desktop.
-3. Set the matching `ws://` or `wss://` relay URL, room, front/back camera,
-   resolution, frame rate, and token lifetime.
+3. Set the matching WebSocket relay URL, room, front/back camera, resolution,
+   frame rate, and token lifetime. For an HTTPS phone URL, the relay must be
+   `wss://`. Optionally enable WebTransport and provide its `https://` URL and
+   certificate hash.
 4. Generate and scan the QR. The tracker URL and viewer URL can also be copied
    independently. Visible fallback text is token-redacted; clipboard values
    contain the live token.
@@ -48,6 +51,21 @@ minutes). `relay-node` keeps issued tokens in memory, binds each token to one
 room, rejects expired/revoked tokens with WebSocket code `4401`, and sends
 `Cache-Control: no-store` on token API responses. Existing
 `MINAMO_RELAY_TOKEN` deployments remain supported.
+
+## Secure transport negotiation
+
+- Transport selection uses runtime capabilities, not user-agent strings.
+- If WT is configured and `WebTransport` exists, the tracker/viewer attempts WT.
+- Unsupported WT, setup failure, timeout, or connection failure falls back to
+  the configured WSS endpoint.
+- On HTTPS pages, plain `ws://` is rejected with an actionable mixed-content
+  error and local BroadcastChannel is not used as a hidden remote fallback.
+- Status diagnostics identify the selected mode and retain redacted failure
+  reasons. Room tokens are removed from displayed errors.
+
+This allows Safari 26.4+ to attempt WT while Safari 26.3 and earlier use WSS.
+The device/browser matrix and five cold timing runs remain evidence work in
+#228; runtime support alone is not a real-device PASS.
 
 ## Requirements
 

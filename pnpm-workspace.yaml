@@ -1,3 +1,6 @@
 packages:
   - .
   - relay-node
+
+onlyBuiltDependencies:
+  - esbuild

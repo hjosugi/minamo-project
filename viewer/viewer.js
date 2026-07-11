@@ -1038,7 +1038,7 @@ function persistSettings() {
 }
 
 function updateModeFields() {
-  const ws = $('selMode').value === 'ws';
+  const ws = $('selMode').value === 'ws' || $('selMode').value === 'wt';
   const wt = $('selMode').value === 'wt';
   $('fieldWsUrl').hidden = !ws;
   $('fieldWtUrl').hidden = !wt;
@@ -1204,14 +1204,19 @@ $('btnConnect').addEventListener('click', async () => {
     persistSettings();
     stopReplay();
     resetOrderGate();
+    const mode = $('selMode').value;
     await transport.connectAuto({
-      mode: $('selMode').value,
+      mode,
       room: $('inpRoom').value || 'demo',
       role: 'sub',
       wsUrl: $('inpWsUrl').value,
       wtUrl: $('inpWtUrl').value,
       certHashHex: $('inpWtHash').value,
       token: $('inpToken').value,
+    }, {
+      secureOnly: location.protocol === 'https:' && mode !== 'local',
+      allowLocalFallback: mode === 'local',
+      pageProtocol: location.protocol,
     });
   } catch (e) {
     chip.textContent = `connect error: ${e.message}`;
@@ -1359,14 +1364,19 @@ applySettingsToUi();
 refreshExpressionMapEditor();
 refreshParticipantSelector();
 if (params.get('room')) {
+  const mode = settings.mode;
   transport.connectAuto({
-    mode: settings.mode,
+    mode,
     room: settings.room,
     role: 'sub',
     wsUrl: settings.wsUrl,
     wtUrl: settings.wtUrl,
     certHashHex: settings.wtHash,
     token: settings.token,
+  }, {
+    secureOnly: location.protocol === 'https:' && mode !== 'local',
+    allowLocalFallback: mode === 'local',
+    pageProtocol: location.protocol,
   }).catch(() => {});
 }
 

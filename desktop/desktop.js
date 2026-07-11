@@ -169,6 +169,9 @@ function initializePhonePairing() {
   $('pairingRoom').value = defaultPairingRoom();
   $('pairingTrackerBase').value = defaultTrackerBaseUrl();
   $('pairingRelayUrl').value = defaultRelayUrl();
+  $('pairingWtUrl').value = defaultWtUrl();
+  $('pairingPreferWt').addEventListener('change', updatePairingTransportFields);
+  updatePairingTransportFields();
   $('pairingForm')?.addEventListener('submit', generatePhonePairing);
   $('btnExpirePairing')?.addEventListener('click', expirePhonePairing);
   $('btnCopyTrackerUrl')?.addEventListener('click', () => copyPairingUrl('tracker'));
@@ -195,6 +198,13 @@ async function generatePhonePairing(event) {
     const room = parsePairingRoom($('pairingRoom').value);
     const trackerBase = normalizeTrackerBaseUrl($('pairingTrackerBase').value);
     const relayUrl = normalizeRelayUrl($('pairingRelayUrl').value);
+    const securePage = new URL(trackerBase).protocol === 'https:';
+    if (securePage && new URL(relayUrl).protocol !== 'wss:') {
+      throw new Error('An HTTPS phone tracker requires a wss:// relay fallback. Plain ws:// is mixed content.');
+    }
+    const preferWt = $('pairingPreferWt').checked;
+    const wtUrl = preferWt ? normalizeWtUrl($('pairingWtUrl').value) : '';
+    const wtHash = preferWt ? normalizeWtHash($('pairingWtHash').value) : '';
     const ttlSeconds = Number($('pairingTtl').value);
     const canRotateOnRelay = phonePairing.relayUrl === relayUrl && phonePairing.room === room;
     if (phonePairing.token && !canRotateOnRelay && phonePairing.relayUrl) {
@@ -221,10 +231,12 @@ async function generatePhonePairing(event) {
       throw new Error('Relay returned an already-expired pairing token.');
     }
     const options = {
-      mode: 'ws',
+      mode: preferWt ? 'wt' : 'ws',
       room,
       token: response.token,
       wsUrl: relayUrl,
+      wtUrl,
+      wtHash,
     };
     const trackerUrl = buildPhoneTrackerUrl({
       ...options,
@@ -511,6 +523,26 @@ function normalizeRelayUrl(value) {
   return url.toString();
 }
 
+function normalizeWtUrl(value) {
+  const url = new URL(String(value));
+  if (url.protocol !== 'https:') throw new Error('WebTransport URL must use https://.');
+  url.search = '';
+  url.hash = '';
+  return url.toString().replace(/\/$/, '');
+}
+
+function normalizeWtHash(value) {
+  const hash = String(value || '').replace(/[^0-9a-fA-F]/g, '');
+  if (hash && hash.length !== 64) throw new Error('WebTransport certificate SHA-256 must contain 64 hexadecimal characters.');
+  return hash.toLowerCase();
+}
+
+function updatePairingTransportFields() {
+  const enabled = $('pairingPreferWt').checked;
+  $('pairingWtUrl').disabled = !enabled;
+  $('pairingWtHash').disabled = !enabled;
+}
+
 function viewerBaseFromTracker(trackerBase) {
   return new URL('../viewer/', trackerBase).toString();
 }
@@ -533,6 +565,19 @@ function defaultRelayUrl() {
     return relay.toString();
   }
   return 'ws://localhost:8787/ws';
+}
+
+function defaultWtUrl() {
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    const relay = new URL(location.href);
+    relay.protocol = 'https:';
+    relay.port = '4433';
+    relay.pathname = '';
+    relay.search = '';
+    relay.hash = '';
+    return relay.toString().replace(/\/$/, '');
+  }
+  return 'https://localhost:4433';
 }
 
 function defaultPairingRoom() {

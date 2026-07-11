@@ -101,6 +101,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [benchmarks/hand-stability-report.md](benchmarks/hand-stability-report.md)
 - [benchmarks/face-quality-benchmarks.md](benchmarks/face-quality-benchmarks.md)
 - [benchmarks/drum-benchmark-metrics.md](benchmarks/drum-benchmark-metrics.md)
+- [benchmarks/drum-benchmark-runner.md](benchmarks/drum-benchmark-runner.md)
 - [benchmarks/onnx-pose-backends.md](benchmarks/onnx-pose-backends.md) — pose backend fps/VRAM table (#23)
 - [dev/implementation-order.md](dev/implementation-order.md)
 - [ml/model-roadmap-yolo-edge.md](ml/model-roadmap-yolo-edge.md)
