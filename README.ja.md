@@ -5,6 +5,10 @@
 
 > English version: [README.md](README.md)
 
+**[GitHub PagesでMinamoを試す](https://hjosugi.github.io/minamo-project/)** —
+カメラなしでも動くUIデモから始め、実TrackerとViewerへ進めます。モックと実トラッキングの
+違いは[Pagesデモガイド](docs/PAGES_DEMO.ja.md)を参照してください。
+
 普通のwebcamひとつで、誰でも無料・低遅延でアバターを動かすための
 高精度トラッキングシステム。
 
@@ -38,6 +42,9 @@
 [docs/PROTOCOL_V2_DRAFT.md](docs/PROTOCOL_V2_DRAFT.md)(リッチスキーマ草案)。
 
 ## クイックスタート
+
+最短の公開プレビューは <https://hjosugi.github.io/minamo-project/> です。
+UIデモはインストールもアカウントも不要です。
 
 ### 1. サーバ不要(local モード)
 

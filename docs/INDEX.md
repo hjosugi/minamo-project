@@ -9,6 +9,7 @@ Primary language is English; documents that originated in Japanese keep a
 ## Start
 
 - [../README.md](../README.md) ([日本語](../README.ja.md))
+- [PAGES_DEMO.md](PAGES_DEMO.md) ([日本語](PAGES_DEMO.ja.md)) — public GitHub Pages demo, real-tracker path, and deployment notes
 - [QUICKSTART.md](QUICKSTART.md) ([日本語](QUICKSTART.ja.md))
 - [DEV_HTTPS.md](DEV_HTTPS.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — as implemented today

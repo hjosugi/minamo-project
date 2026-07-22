@@ -11,7 +11,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
     'README.md',
+    'docs/PAGES_DEMO.md',
+    'docs/PAGES_DEMO.ja.md',
     'docs/QUICKSTART.md',
+    'favicon.svg',
     'docs/PROTOCOL.md',
     'docs/PROTOCOL_V2_DRAFT.md',
     'docs/ARCHITECTURE.md',

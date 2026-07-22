@@ -8,6 +8,7 @@
 ## 開始
 
 - [../README.md](../README.md) ([日本語](../README.ja.md))
+- [PAGES_DEMO.md](PAGES_DEMO.md) ([日本語](PAGES_DEMO.ja.md)) — GitHub Pages公開デモ、実Trackerへの導線、deploy手順
 - [QUICKSTART.md](QUICKSTART.md) ([日本語](QUICKSTART.ja.md))
 - [DEV_HTTPS.md](DEV_HTTPS.md)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — 現在の実装

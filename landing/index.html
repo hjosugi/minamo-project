@@ -1,87 +1,100 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KGM1 Avatar Tracking Hub</title>
+    <meta name="description" content="Minamoの顔・手・ドラム信号を、カメラなしでも試せるブラウザUIデモです。" />
+    <title>Minamo Browser Demo</title>
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="hero">
       <nav class="nav">
-        <div class="brand">KGM1</div>
-        <a href="#quickstart">Quickstart</a>
-        <a href="#tracking">Tracking</a>
-        <a href="#issues">Issues</a>
-        <a href="../roadmap/">Roadmap</a>
-        <a href="../docs/PROTOCOL_V2_DRAFT.md">Protocol</a>
+        <a class="brand" href="../">MINAMO</a>
+        <a href="#quickstart">試し方</a>
+        <a href="#tracking">表示する信号</a>
+        <a href="../tracker/">実トラッカー</a>
+        <a href="../docs/PAGES_DEMO.ja.md">Docs</a>
       </nav>
       <section class="hero-grid">
         <div>
-          <p class="eyebrow">Local-first webcam avatar tracking</p>
-          <h1>Fingers, eyes, mouth — even drums — moving naturally, from an ordinary webcam.</h1>
+          <p class="eyebrow">Camera optional · mock signal demo</p>
+          <h1>顔、指、ドラム。<br />まずは動くところを30秒で。</h1>
           <p class="lead">
-            KGM1 is a tracking foundation for starting 2D/3D avatar streaming on a budget.
-            It is designed around a stabilization layer that prevents jitter, bent joints, flips, and warping.
+            Minamoが扱う顔・手・ドラム信号を可視化するUIデモです。
+            カメラを許可すると映像の上に重なり、許可しなくてもモックアニメーションだけで動きます。
+          </p>
+          <p class="disclosure">
+            このページの骨格と数値はシミュレーションです。実際のMediaPipe推論は
+            <a href="../tracker/">Tracker</a> で試せます。
           </p>
           <div class="cta-row">
-            <button id="startDemo">Start demo</button>
-            <a class="button secondary" href="../docs/QUICKSTART.md">Read quickstart</a>
+            <button id="startDemo">デモを開始</button>
+            <a class="button secondary" href="../tracker/">実トラッカーを開く</a>
+            <a class="button secondary" href="../docs/QUICKSTART.ja.md">手順を読む</a>
           </div>
           <div class="metrics">
-            <div><strong id="fps">0</strong><span>fps</span></div>
-            <div><strong id="confidence">0.00</strong><span>confidence</span></div>
-            <div><strong id="hits">0</strong><span>drum hits</span></div>
+            <div><strong id="fps">0</strong><span>demo fps</span></div>
+            <div><strong id="confidence">0.00</strong><span>mock confidence</span></div>
+            <div><strong id="hits">0</strong><span>mock drum hits</span></div>
           </div>
         </div>
         <div class="demo-card">
           <video id="video" autoplay muted playsinline></video>
           <canvas id="overlay" width="960" height="540"></canvas>
-          <div class="demo-note">If no webcam is available, it runs with mock tracking only.</div>
+          <div class="demo-note">カメラ映像は端末内だけで表示され、送信・保存されません。</div>
         </div>
       </section>
     </header>
 
     <main>
       <section id="quickstart" class="section">
-        <p class="eyebrow">Quickstart</p>
-        <h2>Clone it, open it on a local server. That's it.</h2>
-        <pre><code>git clone https://github.com/hjosugi/minamo-project.git
-cd minamo-project
-python3 -m http.server 8000
-# open http://localhost:8000/landing/</code></pre>
+        <p class="eyebrow">Three ways to try</p>
+        <h2>デモの次は、実データをViewerへ。</h2>
+        <div class="steps">
+          <article><b>01</b><h3>UIデモ</h3><p>上の「デモを開始」を押すだけ。カメラは任意です。</p></article>
+          <article><b>02</b><h3>Tracker</h3><p>カメラを開始し、localモードでConnectします。</p></article>
+          <article><b>03</b><h3>Viewer</h3><p>同じブラウザの別タブで開き、内蔵ボットや自分のアバターを動かします。</p></article>
+        </div>
+        <div class="cta-row">
+          <a class="button" href="../tracker/">Trackerへ</a>
+          <a class="button secondary" href="../viewer/">Viewerへ</a>
+        </div>
       </section>
 
       <section id="tracking" class="section cards">
         <article>
-          <h3>Finger-perfect</h3>
-          <p>Handles MCP/PIP/DIP/tip per finger, producing curl, spread, pinch, contact, velocity, and occlusion.</p>
+          <h3>手と指</h3>
+          <p>左右の手、指ごとの関節、curl、spread、pinch、速度、遮蔽状態を扱います。</p>
         </article>
         <article>
-          <h3>Eyes and mouth</h3>
-          <p>Stabilizes blinks, gaze, iris, mouth opening, mouth width, lip rounding, smiles, and vowel-like mouth shapes.</p>
+          <h3>顔・目・口</h3>
+          <p>頭部姿勢、blink、gaze、口の開き・幅・丸め、smileなどを安定化します。</p>
         </article>
         <article>
-          <h3>Drum tracking</h3>
-          <p>Integrates stick trajectories, drum-surface calibration, hit velocity, audio onsets, and foot pedals.</p>
+          <h3>ドラム</h3>
+          <p>スティック軌道、打面、hit velocity、音声onset、ペダルの統合を目指します。</p>
         </article>
         <article>
-          <h3>Anti-jitter</h3>
-          <p>One Euro Filter, outlier rejection, velocity limits, skeletal constraints, and occlusion recovery prevent weird motion.</p>
+          <h3>破綻防止</h3>
+          <p>One Euro Filter、外れ値除去、速度制限、解剖学的制約、遮蔽復帰を重ねます。</p>
         </article>
       </section>
 
-      <section id="issues" class="section">
-        <p class="eyebrow">Issue-ready backlog</p>
-        <h2>Ships with Markdown that's easy to file as GitHub issues later.</h2>
-        <p>`issues/backlog/` contains 100+ issue candidates. Register them in bulk with `scripts/create_github_issues.py`.</p>
-        <pre><code>python3 scripts/create_github_issues.py --repo OWNER/REPO --dry-run
-python3 scripts/create_github_issues.py --repo OWNER/REPO --apply --label priority:P0</code></pre>
+      <section class="section">
+        <p class="eyebrow">Privacy</p>
+        <h2>映像をアップロードしない設計。</h2>
+        <p>
+          このデモとTrackerのカメラ映像はブラウザ内で処理されます。ネットワーク接続を使う場合も、
+          Viewerへ渡すのはモーションパラメータです。詳しくは
+          <a href="../docs/security/privacy.ja.md">プライバシー設計</a>を参照してください。
+        </p>
       </section>
     </main>
 
     <footer>
-      <span>KGM1 Avatar Tracking System</span>
+      <a href="../">Minamo</a>
       <span>Local-first, privacy-first, streamer-first.</span>
     </footer>
 
