@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-234.md) | [日本語](RESULT-234.ja.md)
+
 # Drum benchmark runner result
 
 - Status: `PASS`

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # Erlang Router Service
 
 This is the OTP-side design and load-harness area for the future clustered

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](002-stability-layer-required.md) | [日本語](002-stability-layer-required.ja.md)
+
 # ADR-002: Stability layer is required before avatar mapping
 
 ## Status

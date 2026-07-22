@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](face-eye-mouth-high-precision.md) | [日本語](face-eye-mouth-high-precision.ja.md)
+
 # Face, Eye, and Mouth High-precision Tracking
 
 > 日本語版: [face-eye-mouth-high-precision.ja.md](face-eye-mouth-high-precision.ja.md)

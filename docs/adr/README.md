@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # Architecture Decision Records
 
 ADRs record decisions that shape the tracker, viewer, relays, protocol, and

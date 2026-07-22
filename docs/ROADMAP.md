@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ROADMAP.md) | [日本語](ROADMAP.ja.md)
+
 # Roadmap
 
 Milestone view of docs/BACKLOG.md (53 issues, KGM-001..053). Each backlog

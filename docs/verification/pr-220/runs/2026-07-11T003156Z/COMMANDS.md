@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](COMMANDS.md) | [日本語](COMMANDS.ja.md)
+
 # Command log
 
 - Verification commit SHA: `e809c712cfdd95cfbd07edea6870bb300c9533f0`

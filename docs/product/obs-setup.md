@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](obs-setup.md) | [日本語](obs-setup.ja.md)
+
 # OBS Setup
 
 ## Browser source

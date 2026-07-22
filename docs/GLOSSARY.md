@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](GLOSSARY.md) | [日本語](GLOSSARY.ja.md)
+
 # Glossary
 
 ## Protocol

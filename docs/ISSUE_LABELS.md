@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ISSUE_LABELS.md) | [日本語](ISSUE_LABELS.ja.md)
+
 # Issue Label Taxonomy
 
 Labels should make triage mechanical: an issue normally gets one `type/*`, one

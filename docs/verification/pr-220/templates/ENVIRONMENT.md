@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ENVIRONMENT.md) | [日本語](ENVIRONMENT.ja.md)
+
 # Environment
 
 - Date/time (UTC):

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](imu-stick-integration.md) | [日本語](imu-stick-integration.ja.md)
+
 # Research: IMU Stick Optional Integration
 
 Status: research design for issue #185. Out of MVP scope; kept as a design doc.

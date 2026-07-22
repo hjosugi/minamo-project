@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](visual-regression-checklist.md) | [日本語](visual-regression-checklist.ja.md)
+
 # Avatar Visual Regression Checklist
 
 Status: implemented checklist for issue #162. Related: #41.

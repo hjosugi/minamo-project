@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](webtransport-realtime.md) | [日本語](webtransport-realtime.ja.md)
+
 # WebTransport Realtime Design
 
 Status: implemented prototype for browser sender/receiver transport,

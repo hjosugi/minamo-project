@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](calibration.md) | [日本語](calibration.ja.md)
+
 # Calibration Design
 
 ## 1. Goals

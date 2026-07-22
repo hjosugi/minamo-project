@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RELEASE_CHECKLIST.md) | [日本語](RELEASE_CHECKLIST.ja.md)
+
 # Release Checklist
 
 ## Preflight

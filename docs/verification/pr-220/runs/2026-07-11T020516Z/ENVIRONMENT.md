@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ENVIRONMENT.md) | [日本語](ENVIRONMENT.ja.md)
+
 # Inochi2D runtime environment
 
 - Date (UTC): `2026-07-11`

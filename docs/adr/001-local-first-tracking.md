@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](001-local-first-tracking.md) | [日本語](001-local-first-tracking.ja.md)
+
 # ADR-001: Local-first tracking by default
 
 ## Status

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](multi-avatar-rooms.md) | [日本語](multi-avatar-rooms.ja.md)
+
 # Multi-Avatar Rooms
 
 Status: protocol and renderer design for issue #43.

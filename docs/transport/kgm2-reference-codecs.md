@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](kgm2-reference-codecs.md) | [日本語](kgm2-reference-codecs.ja.md)
+
 # KGM2 Reference Codecs
 
 Status: implemented for KGM2 compact face frames and KGM1B packet framing.

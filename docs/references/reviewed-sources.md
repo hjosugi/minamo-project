@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](reviewed-sources.md) | [日本語](reviewed-sources.ja.md)
+
 # Reviewed Sources
 
 Reviewed date: 2026-07-05

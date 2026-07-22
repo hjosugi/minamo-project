@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](onnx-pose-backends.md) | [日本語](onnx-pose-backends.ja.md)
+
 # ONNX Pose Backend Benchmarks
 
 Status: benchmark harness in place for issue #23; device numbers pending real

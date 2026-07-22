@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](avatar-integrations.md) | [日本語](avatar-integrations.ja.md)
+
 # Avatar Integrations
 
 ## 1. VRM

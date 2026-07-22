@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](PROTOCOL_V2_DRAFT.md) | [日本語](PROTOCOL_V2_DRAFT.ja.md)
+
 # KGM Rich Tracking Protocol (v2 draft)
 
 Version: 0.1.0

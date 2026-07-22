@@ -1,39 +1,181 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Minamo — webcam avatar tracking</title>
+  <meta name="description" content="Minamoは、普通のWebカメラだけでアバターを動かす、ローカルファーストのモーショントラッキング基盤です。ブラウザデモをすぐ試せます。" />
+  <title>Minamo — Webカメラでアバターを動かす</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./assets/minamo.css" />
 </head>
-<body>
-  <div class="hero">
-    <span class="wordmark">Minamo</span>
-    <p class="lead">Avatar-streaming tracking for everyone, free, with just an ordinary webcam. All inference runs in the browser. The only thing that leaves your machine is about 76 bytes of motion data per frame.</p>
-  </div>
-  <div class="cards">
-    <a class="card" href="./tracker/">
-      <span class="tag face">signal in</span>
-      <h3>Tracker</h3>
-      <p>Webcam → 52-channel facial expression + head pose. Smoothed with a One Euro filter and sent as KGM1 binary.</p>
+<body class="site-home">
+  <a class="site-skip" href="#main">本文へ移動</a>
+
+  <header class="site-nav" aria-label="メインナビゲーション">
+    <a class="site-brand" href="./" aria-label="Minamo ホーム">
+      <span class="wordmark">Mina<span class="mirror">mo</span></span>
+      <span>v0.1.8</span>
     </a>
-    <a class="card" href="./viewer/">
-      <span class="tag pose">signal out</span>
-      <h3>Viewer</h3>
-      <p>Receives KGM1 and drives a VRM avatar (or the built-in bot). Drops straight into an OBS browser source.</p>
-    </a>
-    <a class="card" href="./docs/PROTOCOL.md">
-      <span class="tag">spec</span>
-      <h3>Docs</h3>
-      <p>KGM1 protocol spec, architecture, and roadmap. See the docs/ directory.</p>
-    </a>
-  </div>
-  <div class="cards" style="padding-top:0;">
-    <div class="card">
-      <span class="tag">quick start</span>
-      <h3>Fastest way to try it (no server needed)</h3>
-      <p>Serve this site statically (<code>scripts/dev.sh</code> or <code>npx serve</code>) → click "Start tracking" in the Tracker → Connect in local mode → "Open viewer in a new tab". It works within the same browser via BroadcastChannel.</p>
-    </div>
-  </div>
+    <nav>
+      <a href="#about">Minamoとは</a>
+      <a href="#try">試す</a>
+      <a href="#status">現在地</a>
+      <a href="./docs/PAGES_DEMO.ja.md">Docs</a>
+      <a href="https://github.com/hjosugi/minamo-project">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="site-hero" aria-labelledby="hero-title">
+      <div class="site-hero-copy">
+        <p class="site-kicker"><span></span> Local-first avatar tracking</p>
+        <h1 id="hero-title">普通のWebカメラから、<br /><em>自然なアバターの動き</em>へ。</h1>
+        <p class="site-lead">
+          Minamoは、顔・目・口・手・指・上半身、そしてドラム演奏までを扱う
+          オープンなトラッキング基盤です。映像は端末内で処理し、外へ送るのは小さなモーションデータだけです。
+        </p>
+        <div class="site-actions">
+          <a class="site-button site-button-primary" href="./landing/">
+            <span>30秒デモを試す</span><small>カメラなしでも動作</small>
+          </a>
+          <a class="site-button" href="./tracker/">
+            <span>実トラッカーを開く</span><small>カメラ許可が必要</small>
+          </a>
+        </div>
+        <ul class="site-trust" aria-label="特徴">
+          <li><b>LOCAL</b> 映像をアップロードしない</li>
+          <li><b>OPEN</b> 0BSDライセンス</li>
+          <li><b>WEB</b> インストール不要のデモ</li>
+        </ul>
+      </div>
+
+      <div class="signal-stage" aria-label="カメラからアバターへモーション信号が伝わるイメージ">
+        <div class="signal-stage-head">
+          <span>LIVE SIGNAL PREVIEW</span>
+          <span class="signal-live"><i></i> LOCAL</span>
+        </div>
+        <div class="signal-person" aria-hidden="true">
+          <div class="signal-face"><i></i><i></i><b></b></div>
+          <div class="signal-body"></div>
+          <div class="signal-hand signal-hand-left"><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="signal-hand signal-hand-right"><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="signal-ring ring-one"></span>
+          <span class="signal-ring ring-two"></span>
+        </div>
+        <div class="signal-readout">
+          <div><span>FACE</span><b>52 ch</b><i style="--meter: 91%"></i></div>
+          <div><span>HANDS</span><b>21 × 2</b><i style="--meter: 84%"></i></div>
+          <div><span>MOTION</span><b>~76 B/f</b><i style="--meter: 72%"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="site-section site-about">
+      <div class="site-section-heading">
+        <p class="site-kicker">What it is</p>
+        <h2>カメラ映像を、配信で使える動きに変える。</h2>
+      </div>
+      <div class="site-flow" aria-label="Minamoの処理の流れ">
+        <article>
+          <span>01</span>
+          <h3>Webカメラで検出</h3>
+          <p>顔の表情、頭の向き、手や指のランドマークをブラウザ内で取得します。</p>
+        </article>
+        <div class="site-flow-arrow" aria-hidden="true">→</div>
+        <article>
+          <span>02</span>
+          <h3>破綻しにくく安定化</h3>
+          <p>フィルタ、速度制限、解剖学的制約、遮蔽復帰でガタつきや不自然な曲がりを抑えます。</p>
+        </article>
+        <div class="site-flow-arrow" aria-hidden="true">→</div>
+        <article>
+          <span>03</span>
+          <h3>好きなアバターへ</h3>
+          <p>VRM、実験的なInochi2D、レイヤー画像、OBS向け表示へモーションを渡します。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="try" class="site-section site-try">
+      <div class="site-section-heading">
+        <p class="site-kicker">Try it now</p>
+        <h2>まずは、いちばん簡単な入口から。</h2>
+        <p>データのアップロードやアカウント作成はありません。用途に合わせて3つの入口を選べます。</p>
+      </div>
+      <div class="site-try-grid">
+        <a class="site-try-card featured" href="./landing/">
+          <span class="site-badge">おすすめ</span>
+          <b>UIデモ</b>
+          <h3>カメラなしでも30秒で試す</h3>
+          <p>顔・手・ドラム信号のモック可視化を起動します。カメラを許可すると背景に重ねて確認できます。</p>
+          <strong>デモを開く →</strong>
+        </a>
+        <a class="site-try-card" href="./tracker/">
+          <span class="site-badge">実データ</span>
+          <b>Tracker</b>
+          <h3>実際のWebカメラで動かす</h3>
+          <p>トラッカーを開始し、localモードで接続。別タブのViewerへ同一ブラウザ内で送信します。</p>
+          <strong>Trackerを開く →</strong>
+        </a>
+        <a class="site-try-card" href="./viewer/">
+          <span class="site-badge">出力</span>
+          <b>Viewer</b>
+          <h3>アバター表示を確認する</h3>
+          <p>内蔵ボットから始め、VRM / GLB / Inochi2Dファイルや記録済みJSONLをローカルで読み込めます。</p>
+          <strong>Viewerを開く →</strong>
+        </a>
+      </div>
+      <p class="site-demo-note"><b>デモについて:</b> UIデモの骨格と数値はシミュレーションです。実際のMediaPipeトラッキングを試す場合はTrackerを使用してください。</p>
+    </section>
+
+    <section id="status" class="site-section site-status">
+      <div class="site-section-heading">
+        <p class="site-kicker">Release status</p>
+        <h2>動くものと、まだ実験中のもの。</h2>
+      </div>
+      <div class="site-status-grid">
+        <article class="ready">
+          <span>READY TO TRY</span>
+          <h3>ブラウザで確認できる</h3>
+          <ul>
+            <li>顔52ch・頭部姿勢のWebトラッカー</li>
+            <li>ローカル送信、記録、リプレイ</li>
+            <li>VRM / GLBビューアとOBS向け表示</li>
+            <li>品質警告とキャリブレーション</li>
+          </ul>
+        </article>
+        <article class="experimental">
+          <span>EXPERIMENTAL</span>
+          <h3>環境ごとの検証が必要</h3>
+          <ul>
+            <li>Inochi2D WASM描画</li>
+            <li>WebTransport・スマートフォン連携</li>
+            <li>ドラム・ペダルの実機精度</li>
+            <li>OS別の仮想カメラ出力</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="site-section site-docs">
+      <div class="site-section-heading">
+        <p class="site-kicker">Documentation</p>
+        <h2>試したあとに読むもの。</h2>
+      </div>
+      <div class="site-doc-links">
+        <a href="./docs/PAGES_DEMO.ja.md"><span>01</span><b>Pagesデモガイド</b><small>デモと実トラッカーの違い</small></a>
+        <a href="./docs/QUICKSTART.ja.md"><span>02</span><b>Quick Start</b><small>ローカル起動と接続</small></a>
+        <a href="./docs/ARCHITECTURE.ja.md"><span>03</span><b>Architecture</b><small>現在の実装構成</small></a>
+        <a href="./docs/PROTOCOL.ja.md"><span>04</span><b>KGM1 Protocol</b><small>モーションデータ仕様</small></a>
+        <a href="./roadmap/"><span>05</span><b>Roadmap</b><small>今後の実装計画</small></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span class="wordmark">Mina<span class="mirror">mo</span></span>
+    <p>Local-first, privacy-first avatar tracking.</p>
+    <div><a href="https://github.com/hjosugi/minamo-project">GitHub</a><a href="./LICENSE">0BSD</a></div>
+  </footer>
 </body>
 </html>

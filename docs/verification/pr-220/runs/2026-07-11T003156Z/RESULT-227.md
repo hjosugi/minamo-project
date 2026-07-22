@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-227.md) | [日本語](RESULT-227.ja.md)
+
 # Secure phone transport result
 
 - Status: `BLOCKED`

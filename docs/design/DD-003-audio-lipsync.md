@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-003-audio-lipsync.md) | [日本語](DD-003-audio-lipsync.ja.md)
+
 # DD-003: Audio Lipsync Fusion
 
 Status: design. Backlog: KGM-045, KGM-046.

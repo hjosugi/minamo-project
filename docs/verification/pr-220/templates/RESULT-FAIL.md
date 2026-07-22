@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-FAIL.md) | [日本語](RESULT-FAIL.ja.md)
+
 # Verification result
 
 - Status: `FAIL`

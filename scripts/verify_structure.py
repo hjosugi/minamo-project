@@ -11,7 +11,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
     'README.md',
+    'docs/PAGES_DEMO.md',
+    'docs/PAGES_DEMO.ja.md',
     'docs/QUICKSTART.md',
+    'favicon.svg',
     'docs/PROTOCOL.md',
     'docs/PROTOCOL_V2_DRAFT.md',
     'docs/ARCHITECTURE.md',
@@ -248,7 +251,7 @@ def validate_adr_headings() -> None:
         '## References',
     }
     for path in sorted((ROOT / 'docs' / 'adr').glob('*.md')):
-        if path.name == 'README.md':
+        if path.name == 'README.md' or path.name.endswith('.ja.md'):
             continue
         text = path.read_text(encoding='utf-8')
         headings = {line.strip() for line in text.splitlines() if line.startswith('## ')}

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ISSUE_REGISTRATION_PROMPT.md) | [日本語](ISSUE_REGISTRATION_PROMPT.ja.md)
+
 # Issue Registration Prompt
 
 > English version: [ISSUE_REGISTRATION_PROMPT.md](ISSUE_REGISTRATION_PROMPT.md)

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](meshopt-vs-draco.md) | [日本語](meshopt-vs-draco.ja.md)
+
 # Meshopt vs Draco Decision Document
 
 Status: implemented decision for issue #159. Related: #41.

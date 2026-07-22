@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](creator-ux.md) | [日本語](creator-ux.ja.md)
+
 # Creator UX Design
 
 > 日本語版: [creator-ux.ja.md](creator-ux.ja.md)

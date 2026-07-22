@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](phone-camera-companion.md) | [日本語](phone-camera-companion.ja.md)
+
 # Research: Phone Camera Companion App
 
 Status: research design for issue #184. Related: #51 (phone-as-tracker mode),

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](hand-stability-report.md) | [日本語](hand-stability-report.ja.md)
+
 # Hand Stability Benchmark Report
 
 Date: 2026-07-06

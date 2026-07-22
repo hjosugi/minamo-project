@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](texture-atlas-2d.md) | [日本語](texture-atlas-2d.ja.md)
+
 # 2D Texture Atlas Compression Guide
 
 Status: implemented design for issue #160. Related: #41, #38.

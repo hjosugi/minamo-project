@@ -157,7 +157,8 @@ function loop(now) {
 
 startButton.addEventListener('click', async () => {
   running = true;
-  startButton.textContent = 'Running';
+  startButton.textContent = 'デモ実行中';
+  startButton.disabled = true;
   await startCamera();
   requestAnimationFrame(loop);
 });

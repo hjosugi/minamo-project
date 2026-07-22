@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-009-onnx-backend-registry.md) | [日本語](DD-009-onnx-backend-registry.ja.md)
+
 # DD-009: Runtime-Toggleable Pose Backend Registry
 
 Status: design + implementation for issue #23 (KGM-023). Builds on

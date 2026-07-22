@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](stability-anti-jitter.md) | [日本語](stability-anti-jitter.ja.md)
+
 # Stability, Anti-jitter, and Anti-broken-motion Design
 
 ## 1. Principle

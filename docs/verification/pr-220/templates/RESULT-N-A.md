@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-N-A.md) | [日本語](RESULT-N-A.ja.md)
+
 # Verification result
 
 - Status: `N/A`

@@ -1,6 +1,11 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # Minamo
 
 [![ci](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml/badge.svg)](https://github.com/hjosugi/minamo-project/actions/workflows/ci.yml)
+
+**[Try Minamo on GitHub Pages](https://hjosugi.github.io/minamo-project/)** — start with a camera-optional UI demo, then open the real Tracker and Viewer. See the [Pages demo guide](docs/PAGES_DEMO.md) for the difference between simulated and real tracking.
 
 > 日本語版: [README.ja.md](README.ja.md)
 
@@ -46,6 +51,9 @@ Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md) (implemented v1 wire format) and
 [docs/PROTOCOL_V2_DRAFT.md](docs/PROTOCOL_V2_DRAFT.md) (rich tracking schema draft).
 
 ## Quick start
+
+The fastest public preview is <https://hjosugi.github.io/minamo-project/>. No
+install or account is required for the UI demo.
 
 ### 1. No server (local mode)
 

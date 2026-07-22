@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](RESULT-229.md) | [日本語](RESULT-229.ja.md)
+
 # Inochi2D runtime result
 
 - Status: `PASS`

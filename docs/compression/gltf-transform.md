@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](gltf-transform.md) | [日本語](gltf-transform.ja.md)
+
 # glTF Transform Optimization Guide
 
 Status: implemented design for issue #157. Related: #41.

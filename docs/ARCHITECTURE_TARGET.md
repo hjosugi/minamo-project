@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](ARCHITECTURE_TARGET.md) | [日本語](ARCHITECTURE_TARGET.ja.md)
+
 # Target Architecture
 
 > **Relationship to other docs:** [ARCHITECTURE.md](ARCHITECTURE.md)

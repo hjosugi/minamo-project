@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-002-fullbody-onnx.md) | [日本語](DD-002-fullbody-onnx.ja.md)
+
 # DD-002: Full-Body Backend via ONNX Runtime Web
 
 Status: research design. Backlog: KGM-023.

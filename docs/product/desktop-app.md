@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](desktop-app.md) | [日本語](desktop-app.ja.md)
+
 # Minamo Studio Desktop App
 
 Minamo Studio is the Tauri desktop shell for the existing tracker, viewer, and

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](DD-005-elixir-relay-cluster.md) | [日本語](DD-005-elixir-relay-cluster.ja.md)
+
 # DD-005: Elixir Clustered Relay
 
 Status: harness implemented. Backlog: KGM-032, relates to KGM-034.

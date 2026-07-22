@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-hihat-pedal.md) | [日本語](drum-hihat-pedal.ja.md)
+
 # Hi-Hat Pedal Inference Design
 
 Status: implemented design for issue #118. Part of the drum performance system

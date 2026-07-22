@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](multi-camera-fusion.md) | [日本語](multi-camera-fusion.ja.md)
+
 # Research: Multi-Camera Fusion for Drummer Mode
 
 Status: research design for issue #183. Out of MVP scope; kept as a design doc.

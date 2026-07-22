@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](drum-dataset-schema.md) | [日本語](drum-dataset-schema.ja.md)
+
 # YOLO Stick/Drum Training Data Schema
 
 Status: implemented schema for issue #122. Related: full-body/stick ML roadmap

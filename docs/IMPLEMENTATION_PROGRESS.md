@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](IMPLEMENTATION_PROGRESS.md) | [日本語](IMPLEMENTATION_PROGRESS.ja.md)
+
 # Implementation Progress Ledger
 
 Date: 2026-07-05

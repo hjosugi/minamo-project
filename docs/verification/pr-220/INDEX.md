@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](INDEX.md) | [日本語](INDEX.ja.md)
+
 # PR #220 evidence index
 
 Status values remain `PENDING` until a redacted run is linked. Parent issues
