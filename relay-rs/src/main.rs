@@ -16,8 +16,10 @@
 // Run: cargo run --release
 
 use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, Mutex};
@@ -35,6 +37,131 @@ struct Room {
 }
 
 type Rooms = Arc<Mutex<HashMap<String, Room>>>;
+// Per-IP concurrent session counts, for connection-flood throttling (#246).
+type IpSessions = Arc<Mutex<HashMap<IpAddr, usize>>>;
+
+// Resource caps that bound how much a single (unauthenticated) client can
+// allocate. All are env-configurable with sane defaults (#246).
+#[derive(Clone)]
+struct RelayLimits {
+    max_rooms: usize,
+    max_sessions: u64,
+    max_sessions_per_ip: usize,
+    max_datagram_bytes: usize,
+    publish_rate_per_sec: u32,
+}
+
+impl Default for RelayLimits {
+    fn default() -> Self {
+        Self {
+            max_rooms: 1024,
+            max_sessions: 4096,
+            max_sessions_per_ip: 64,
+            max_datagram_bytes: 8192,  // KGM1 frames are ~76-119 bytes
+            publish_rate_per_sec: 480, // 8x a 60 fps publisher
+        }
+    }
+}
+
+impl RelayLimits {
+    fn from_env() -> Self {
+        let d = Self::default();
+        Self {
+            max_rooms: env_parse("MINAMO_MAX_ROOMS", d.max_rooms),
+            max_sessions: env_parse("MINAMO_MAX_SESSIONS", d.max_sessions),
+            max_sessions_per_ip: env_parse("MINAMO_MAX_SESSIONS_PER_IP", d.max_sessions_per_ip),
+            max_datagram_bytes: env_parse("MINAMO_MAX_DATAGRAM_BYTES", d.max_datagram_bytes),
+            publish_rate_per_sec: env_parse("MINAMO_MAX_PUBLISH_RATE", d.publish_rate_per_sec),
+        }
+    }
+}
+
+fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> T {
+    std::env::var(key)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default)
+}
+
+// A new session may be accepted while active sessions are below the cap.
+fn within_session_cap(active: u64, max: u64) -> bool {
+    active < max
+}
+
+// A session may join a room if the room already exists or there is headroom to
+// allocate a new one, so cycling room names cannot grow the map without bound.
+fn room_admits(room_count: usize, room_exists: bool, max_rooms: usize) -> bool {
+    room_exists || room_count < max_rooms
+}
+
+// Reject datagrams larger than the KGM1 wire-format maximum.
+fn datagram_within_limit(len: usize, max: usize) -> bool {
+    len <= max
+}
+
+// The metrics endpoint is unauthenticated; it is only safe on a loopback bind.
+fn is_loopback_metrics_addr(addr: &str) -> bool {
+    if let Ok(socket_addr) = addr.parse::<SocketAddr>() {
+        return socket_addr.ip().is_loopback();
+    }
+    let host = addr.rsplit_once(':').map(|(h, _)| h).unwrap_or(addr);
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return ip.is_loopback();
+    }
+    host.eq_ignore_ascii_case("localhost")
+}
+
+// Fixed-window rate limiter for a single publisher's datagrams.
+struct RateWindow {
+    limit: u32,
+    window: Duration,
+    count: u32,
+    reset_at: Instant,
+}
+
+impl RateWindow {
+    fn new(limit: u32, window: Duration, now: Instant) -> Self {
+        Self {
+            limit,
+            window,
+            count: 0,
+            reset_at: now + window,
+        }
+    }
+
+    fn allow(&mut self, now: Instant) -> bool {
+        if now >= self.reset_at {
+            self.count = 0;
+            self.reset_at = now + self.window;
+        }
+        if self.count >= self.limit {
+            return false;
+        }
+        self.count += 1;
+        true
+    }
+}
+
+// Register a session for an IP, returning false if it is already at the cap.
+async fn register_ip_session(sessions: &IpSessions, ip: IpAddr, max: usize) -> bool {
+    let mut map = sessions.lock().await;
+    let count = map.entry(ip).or_insert(0);
+    if *count >= max {
+        return false;
+    }
+    *count += 1;
+    true
+}
+
+async fn deregister_ip_session(sessions: &IpSessions, ip: IpAddr) {
+    let mut map = sessions.lock().await;
+    if let Some(count) = map.get_mut(&ip) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            map.remove(&ip);
+        }
+    }
+}
 
 #[derive(Default)]
 struct RelayMetrics {
@@ -43,6 +170,8 @@ struct RelayMetrics {
     frames_in_total: AtomicU64,
     frames_out_total: AtomicU64,
     frames_dropped_newest_only_total: AtomicU64,
+    frames_rejected_total: AtomicU64,
+    sessions_rejected_total: AtomicU64,
     auth_failures_total: AtomicU64,
 }
 
@@ -62,6 +191,8 @@ async fn main() -> anyhow::Result<()> {
     let endpoint = Endpoint::server(config)?;
     let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
     let metrics: Metrics = Arc::new(RelayMetrics::default());
+    let limits = Arc::new(RelayLimits::from_env());
+    let ip_sessions: IpSessions = Arc::new(Mutex::new(HashMap::new()));
     let relay_token = Arc::new(
         std::env::var("MINAMO_RELAY_TOKEN")
             .or_else(|_| std::env::var("ROOM_TOKEN"))
@@ -70,6 +201,16 @@ async fn main() -> anyhow::Result<()> {
     let metrics_addr =
         std::env::var("MINAMO_METRICS_ADDR").unwrap_or_else(|_| METRICS_ADDR.to_string());
     if metrics_addr != "off" {
+        if !is_loopback_metrics_addr(&metrics_addr) {
+            log_event(
+                "metrics_exposed_non_loopback",
+                &[("addr", metrics_addr.clone())],
+            );
+            eprintln!(
+                "WARNING: metrics endpoint {metrics_addr} is not loopback and is unauthenticated; \
+                 bind it to 127.0.0.1 or set MINAMO_METRICS_ADDR=off unless it is firewalled."
+            );
+        }
         tokio::spawn(metrics_server(
             metrics.clone(),
             rooms.clone(),
@@ -92,8 +233,10 @@ async fn main() -> anyhow::Result<()> {
                 let rooms = rooms.clone();
                 let relay_token = relay_token.clone();
                 let metrics = metrics.clone();
+                let limits = limits.clone();
+                let ip_sessions = ip_sessions.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_session(incoming, rooms, relay_token, metrics).await {
+                    if let Err(e) = handle_session(incoming, rooms, relay_token, metrics, limits, ip_sessions).await {
                         log_event("session_error", &[("error", e.to_string())]);
                     }
                 });
@@ -112,6 +255,39 @@ async fn handle_session(
     rooms: Rooms,
     relay_token: Arc<String>,
     metrics: Metrics,
+    limits: Arc<RelayLimits>,
+    ip_sessions: IpSessions,
+) -> anyhow::Result<()> {
+    let peer_ip = incoming.remote_address().ip();
+
+    // Per-IP connection throttle: reject a flood from a single address before
+    // spending the WebTransport handshake (#246).
+    if !register_ip_session(&ip_sessions, peer_ip, limits.max_sessions_per_ip).await {
+        metrics
+            .sessions_rejected_total
+            .fetch_add(1, Ordering::Relaxed);
+        log_event(
+            "session_rejected",
+            &[("reason", "per_ip_limit".to_string())],
+        );
+        if let Ok(request) = incoming.await {
+            request.too_many_requests().await;
+        }
+        return Ok(());
+    }
+
+    // Always release the per-IP slot, whatever the session does next.
+    let result = serve_session(incoming, &rooms, &relay_token, &metrics, &limits).await;
+    deregister_ip_session(&ip_sessions, peer_ip).await;
+    result
+}
+
+async fn serve_session(
+    incoming: IncomingSession,
+    rooms: &Rooms,
+    relay_token: &Arc<String>,
+    metrics: &Metrics,
+    limits: &RelayLimits,
 ) -> anyhow::Result<()> {
     let request = incoming.await?;
     let path = request.path().to_string();
@@ -138,25 +314,76 @@ async fn handle_session(
         return Ok(());
     }
 
+    // Concurrent-session cap across the whole relay.
+    if !within_session_cap(
+        metrics.active_sessions.load(Ordering::Relaxed),
+        limits.max_sessions,
+    ) {
+        metrics
+            .sessions_rejected_total
+            .fetch_add(1, Ordering::Relaxed);
+        log_event(
+            "session_rejected",
+            &[("reason", "session_limit".to_string()), ("room", room)],
+        );
+        request.too_many_requests().await;
+        return Ok(());
+    }
+
     let connection = request.accept().await?;
+
+    // Room cap: reject only when this would allocate a *new* room, so an
+    // attacker cycling room names cannot grow the map without bound.
+    let tx = {
+        let mut map = rooms.lock().await;
+        if !room_admits(map.len(), map.contains_key(&room), limits.max_rooms) {
+            None
+        } else {
+            let entry = map.entry(room.clone()).or_insert_with(|| Room {
+                tx: broadcast::channel(ROOM_CAPACITY).0,
+                participants: 0,
+            });
+            entry.participants += 1;
+            Some(entry.tx.clone())
+        }
+    };
+    let tx = match tx {
+        Some(tx) => tx,
+        None => {
+            metrics
+                .sessions_rejected_total
+                .fetch_add(1, Ordering::Relaxed);
+            log_event(
+                "session_rejected",
+                &[("reason", "room_limit".to_string()), ("room", room)],
+            );
+            connection.close(1u32.into(), b"room limit reached");
+            return Ok(());
+        }
+    };
+
     metrics.sessions_total.fetch_add(1, Ordering::Relaxed);
     metrics.active_sessions.fetch_add(1, Ordering::Relaxed);
     log_event("join", &[("room", room.clone()), ("role", role.clone())]);
 
-    let tx = {
-        let mut map = rooms.lock().await;
-        let entry = map.entry(room.clone()).or_insert_with(|| Room {
-            tx: broadcast::channel(ROOM_CAPACITY).0,
-            participants: 0,
-        });
-        entry.participants += 1;
-        entry.tx.clone()
-    };
-
     match role.as_str() {
         "pub" => {
-            // Publisher: every received datagram fans out to the room.
+            // Publisher: fan out each datagram, bounded by a size cap and a
+            // per-publisher rate limit so one publisher cannot saturate the room.
+            let mut rate = RateWindow::new(
+                limits.publish_rate_per_sec,
+                Duration::from_secs(1),
+                Instant::now(),
+            );
             while let Ok(dgram) = connection.receive_datagram().await {
+                if !datagram_within_limit(dgram.len(), limits.max_datagram_bytes)
+                    || !rate.allow(Instant::now())
+                {
+                    metrics
+                        .frames_rejected_total
+                        .fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
                 metrics.frames_in_total.fetch_add(1, Ordering::Relaxed);
                 let _ = tx.send(dgram.to_vec());
             }
@@ -168,7 +395,7 @@ async fn handle_session(
                 tokio::select! {
                     msg = rx.recv() => match msg {
                         Ok(frame) => {
-                            let frame = drain_newest(&mut rx, frame, &metrics);
+                            let frame = drain_newest(&mut rx, frame, metrics);
                             if connection.send_datagram(&frame).is_err() {
                                 break;
                             }
@@ -197,7 +424,7 @@ async fn handle_session(
 
     metrics.active_sessions.fetch_sub(1, Ordering::Relaxed);
     log_event("leave", &[("room", room.clone()), ("role", role.clone())]);
-    gc_room(&rooms, &room).await;
+    gc_room(rooms, &room).await;
     Ok(())
 }
 
@@ -295,6 +522,12 @@ fn render_metrics(metrics: &RelayMetrics, room_count: u64) -> String {
             "# HELP minamo_relay_frames_dropped_newest_only_total Stale frames replaced by newest-only delivery.\n",
             "# TYPE minamo_relay_frames_dropped_newest_only_total counter\n",
             "minamo_relay_frames_dropped_newest_only_total {}\n",
+            "# HELP minamo_relay_frames_rejected_total Datagrams rejected for size or rate limits.\n",
+            "# TYPE minamo_relay_frames_rejected_total counter\n",
+            "minamo_relay_frames_rejected_total {}\n",
+            "# HELP minamo_relay_sessions_rejected_total Sessions rejected by room/session/per-IP caps.\n",
+            "# TYPE minamo_relay_sessions_rejected_total counter\n",
+            "minamo_relay_sessions_rejected_total {}\n",
             "# HELP minamo_relay_auth_failures_total Room-token authentication failures.\n",
             "# TYPE minamo_relay_auth_failures_total counter\n",
             "minamo_relay_auth_failures_total {}\n",
@@ -307,6 +540,8 @@ fn render_metrics(metrics: &RelayMetrics, room_count: u64) -> String {
         metrics
             .frames_dropped_newest_only_total
             .load(Ordering::Relaxed),
+        metrics.frames_rejected_total.load(Ordering::Relaxed),
+        metrics.sessions_rejected_total.load(Ordering::Relaxed),
         metrics.auth_failures_total.load(Ordering::Relaxed),
     )
 }
@@ -384,6 +619,8 @@ mod tests {
             let rooms: Rooms = Arc::new(Mutex::new(HashMap::new()));
             let metrics: Metrics = Arc::new(RelayMetrics::default());
             let relay_token = Arc::new(token.to_string());
+            let limits = Arc::new(RelayLimits::default());
+            let ip_sessions: IpSessions = Arc::new(Mutex::new(HashMap::new()));
 
             let task = tokio::spawn({
                 let rooms = rooms.clone();
@@ -393,8 +630,18 @@ mod tests {
                         let rooms = rooms.clone();
                         let relay_token = relay_token.clone();
                         let metrics = metrics.clone();
+                        let limits = limits.clone();
+                        let ip_sessions = ip_sessions.clone();
                         tokio::spawn(async move {
-                            let _ = handle_session(incoming, rooms, relay_token, metrics).await;
+                            let _ = handle_session(
+                                incoming,
+                                rooms,
+                                relay_token,
+                                metrics,
+                                limits,
+                                ip_sessions,
+                            )
+                            .await;
                         });
                     }
                 }
@@ -481,12 +728,69 @@ mod tests {
         metrics
             .frames_dropped_newest_only_total
             .store(9, Ordering::Relaxed);
+        metrics.frames_rejected_total.store(4, Ordering::Relaxed);
+        metrics.sessions_rejected_total.store(5, Ordering::Relaxed);
         metrics.auth_failures_total.store(1, Ordering::Relaxed);
         let body = render_metrics(&metrics, 3);
         assert!(body.contains("minamo_relay_sessions_total 2"));
         assert!(body.contains("minamo_relay_active_sessions 1"));
         assert!(body.contains("minamo_relay_rooms 3"));
         assert!(body.contains("minamo_relay_frames_dropped_newest_only_total 9"));
+        assert!(body.contains("minamo_relay_frames_rejected_total 4"));
+        assert!(body.contains("minamo_relay_sessions_rejected_total 5"));
+    }
+
+    #[test]
+    fn session_and_room_and_datagram_caps() {
+        assert!(within_session_cap(0, 2));
+        assert!(within_session_cap(1, 2));
+        assert!(!within_session_cap(2, 2));
+
+        // Existing rooms always admit; new rooms only with headroom.
+        assert!(room_admits(2, true, 2));
+        assert!(room_admits(1, false, 2));
+        assert!(!room_admits(2, false, 2));
+
+        assert!(datagram_within_limit(0, 8192));
+        assert!(datagram_within_limit(8192, 8192));
+        assert!(!datagram_within_limit(8193, 8192));
+    }
+
+    #[test]
+    fn metrics_loopback_detection() {
+        assert!(is_loopback_metrics_addr("127.0.0.1:9487"));
+        assert!(is_loopback_metrics_addr("[::1]:9487"));
+        assert!(is_loopback_metrics_addr("localhost:9487"));
+        assert!(!is_loopback_metrics_addr("0.0.0.0:9487"));
+        assert!(!is_loopback_metrics_addr("192.168.1.10:9487"));
+    }
+
+    #[test]
+    fn rate_window_bounds_publisher_datagrams() {
+        let base = Instant::now();
+        let mut rate = RateWindow::new(2, Duration::from_secs(1), base);
+        assert!(rate.allow(base));
+        assert!(rate.allow(base + Duration::from_millis(10)));
+        assert!(!rate.allow(base + Duration::from_millis(20)));
+        // The window resets after a second.
+        assert!(rate.allow(base + Duration::from_millis(1001)));
+    }
+
+    #[tokio::test]
+    async fn per_ip_session_registration_enforces_the_cap() {
+        let sessions: IpSessions = Arc::new(Mutex::new(HashMap::new()));
+        let ip: IpAddr = "203.0.113.7".parse().unwrap();
+        assert!(register_ip_session(&sessions, ip, 2).await);
+        assert!(register_ip_session(&sessions, ip, 2).await);
+        assert!(!register_ip_session(&sessions, ip, 2).await);
+
+        deregister_ip_session(&sessions, ip).await;
+        assert!(register_ip_session(&sessions, ip, 2).await);
+
+        // A fully released IP is removed from the map (no leak).
+        deregister_ip_session(&sessions, ip).await;
+        deregister_ip_session(&sessions, ip).await;
+        assert!(sessions.lock().await.is_empty());
     }
 
     #[test]
