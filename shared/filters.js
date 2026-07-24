@@ -53,6 +53,9 @@ export class OneEuroFilter {
    * @param {number} tSec timestamp in seconds
    */
   filter(value, tSec) {
+    if (!Number.isFinite(value)) {
+      return this.x.ready ? this.x.y : 0;
+    }
     if (this.tPrev === null) {
       this.tPrev = tSec;
       this.xPrev = value;

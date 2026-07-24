@@ -5,8 +5,9 @@ export const KGM2_TYPE_KEYFRAME = 1;
 export const KGM2_TYPE_DELTA = 2;
 export const KGM2_FACE_CHANNELS = 52;
 export const KGM2_FACE_MASK_BYTES = 7;
+export const KGM2_MAX_KEYFRAMES = 64;
 
-const QUAT_COMPONENT_SCALE = 511;
+const QUAT_COMPONENT_SCALE = 511.5;
 const QUAT_COMPONENT_MAX = 1 / Math.sqrt(2);
 const POS_SCALE = 1000;
 
@@ -22,7 +23,7 @@ export function packSmallestThreeQuat(quat) {
   for (let i = 0; i < 4; i++) {
     if (i === largest) continue;
     const component = clamp((q[i] * sign) / QUAT_COMPONENT_MAX, -1, 1);
-    const encoded = clampInt(Math.round(component * QUAT_COMPONENT_SCALE) + 512, 0, 1023);
+    const encoded = clampInt(Math.round(component * QUAT_COMPONENT_SCALE + QUAT_COMPONENT_SCALE), 0, 1023);
     packed |= encoded << shift;
     shift += 10;
   }
@@ -37,7 +38,7 @@ export function unpackSmallestThreeQuat(packed) {
   for (let i = 0; i < 4; i++) {
     if (i === largest) continue;
     const encoded = (packed >>> shift) & 0x03ff;
-    const component = ((encoded - 512) / QUAT_COMPONENT_SCALE) * QUAT_COMPONENT_MAX;
+    const component = ((encoded - QUAT_COMPONENT_SCALE) / QUAT_COMPONENT_SCALE) * QUAT_COMPONENT_MAX;
     q[i] = component;
     sum += component * component;
     shift += 10;
@@ -86,7 +87,12 @@ export class Kgm2FaceDecoder {
     if (type === KGM2_TYPE_KEYFRAME) {
       const frame = decodeKeyframeBody(dv, KGM2_HEADER_BYTES, { t, seq });
       if (!frame) return null;
+      // Refresh reused ids at the newest end of the insertion-ordered map.
+      this.keyframes.delete(keyId);
       this.keyframes.set(keyId, cloneFaceFrame(frame, keyId));
+      while (this.keyframes.size > KGM2_MAX_KEYFRAMES) {
+        this.keyframes.delete(this.keyframes.keys().next().value);
+      }
       return frame;
     }
     if (type === KGM2_TYPE_DELTA) {

@@ -2,7 +2,7 @@
 name = "kgm1-codec"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "0BSD"
 
 [lib]
 path = "src/lib.rs"

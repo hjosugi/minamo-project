@@ -4,8 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import QRCode from 'qrcode';
+import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import { encodeFrame, decodeFrame, HAND_TARGET_BYTES } from '../shared/codec.js';
 import {
+  E2EE_ENVELOPE_VERSION,
   E2EE_OVERHEAD_BYTES,
   ciphertextLooksOpaque,
   decryptFrame as decryptE2eeFrame,
@@ -87,6 +89,7 @@ import {
   KGM2_FACE_CHANNELS,
   KGM2_FACE_MASK_BYTES,
   KGM2_HEADER_BYTES,
+  KGM2_MAX_KEYFRAMES,
   KGM2_TYPE_DELTA,
   KGM2_TYPE_KEYFRAME,
   Kgm2FaceDecoder,
@@ -231,6 +234,7 @@ const required = [
   'replay/index.html',
   'replay/replay.js',
   'shared/voice-activity.js',
+  'shared/asset-probe.js',
   'shared/audio-lipsync.js',
   'shared/vrma-export.js',
   'src/core/types.ts',
@@ -239,6 +243,21 @@ const required = [
 ];
 for (const file of required) {
   assert.ok(fs.existsSync(path.join(root, file)), `Missing ${file}`);
+}
+
+{
+  const response = (ok, contentType) => ({
+    ok,
+    headers: { get: (name) => name === 'content-type' ? contentType : null },
+  });
+  assert.equal(responseLooksLikeAsset(response(true, 'application/javascript')), true);
+  assert.equal(responseLooksLikeAsset(response(true, 'application/octet-stream')), true);
+  assert.equal(
+    responseLooksLikeAsset(response(true, 'text/html; charset=utf-8')),
+    false,
+    'SPA HTML fallbacks must not be mistaken for local model assets',
+  );
+  assert.equal(responseLooksLikeAsset(response(false, 'application/javascript')), false);
 }
 
 const issuesDir = path.join(root, 'issues', 'backlog');
@@ -484,6 +503,11 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const randomForAccuracy = deterministicRandom(0xdecafbad);
   let maxError = 0;
   let packedSink = 0;
+  const halfSqrt = 1 / Math.sqrt(2);
+  const negativeEndpoint = packSmallestThreeQuat([halfSqrt, -halfSqrt, 0, 0]);
+  const positiveEndpoint = packSmallestThreeQuat([halfSqrt, halfSqrt, 0, 0]);
+  assert.equal((negativeEndpoint >>> 2) & 0x03ff, 0, 'smallest-three negative endpoint uses code 0');
+  assert.equal((positiveEndpoint >>> 2) & 0x03ff, 1023, 'smallest-three positive endpoint uses code 1023');
   for (let i = 0; i < 1_000_000; i++) {
     const quat = randomQuat(randomForAccuracy);
     const packed = packSmallestThreeQuat(quat);
@@ -565,6 +589,18 @@ function kgm2FaceFrame(seq, overrides = {}) {
     }
   }
   assert.equal(decodedAfterDroppedKeyframe, 90, '10% random loss plus a keyframe loss recovers at the next keyframe');
+
+  const longSessionEncoder = new Kgm2FaceEncoder({ keyframeInterval: 1 });
+  const longSessionDecoder = new Kgm2FaceDecoder();
+  for (let seq = 0; seq <= 0xffff + KGM2_MAX_KEYFRAMES; seq++) {
+    const packet = longSessionEncoder.encode(kgm2FaceFrame(seq));
+    assert.ok(longSessionDecoder.decode(packet));
+  }
+  assert.equal(
+    longSessionDecoder.keyframes.size,
+    KGM2_MAX_KEYFRAMES,
+    'decoder bounds keyframe history after keyId wrap',
+  );
 
   const estimatorA = new ClockOffsetEstimator();
   const estimatorB = new ClockOffsetEstimator();
@@ -760,8 +796,10 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const key = await deriveRoomKey('correct horse battery staple', 'e2ee-room');
   const wrongKey = await deriveRoomKey('wrong key', 'e2ee-room');
   const sealed = await encryptE2eeFrame(frame, key);
+  assert.equal(key.version, E2EE_ENVELOPE_VERSION);
+  assert.equal(E2EE_ENVELOPE_VERSION, 2, 'E2EE packets use the fail-closed v2 profile');
   assert.equal(E2EE_OVERHEAD_BYTES, 24);
-  assert.equal(sealed.byteLength - frame.byteLength, E2EE_OVERHEAD_BYTES, 'E2EE overhead stays <=24 bytes/frame');
+  assert.equal(sealed.byteLength - frame.byteLength, E2EE_OVERHEAD_BYTES, 'E2EE overhead stays at 24 bytes/frame');
   assert.equal(ciphertextLooksOpaque(sealed, frame), true, 'relay ciphertext test asserts the KGM1 frame is opaque');
   const opened = await decryptE2eeFrame(sealed, key);
   assert.deepEqual(Array.from(opened), Array.from(frame));
@@ -769,6 +807,94 @@ function kgm2FaceFrame(seq, overrides = {}) {
     decryptE2eeFrame(sealed, wrongKey),
     /wrong room key or corrupted frame/,
     'wrong-key subscriber gets a clear decrypt error'
+  );
+
+  const senderNonces = [
+    Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+    Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13]),
+  ];
+  const simulatedSenderCrypto = senderNonces.map((senderNonce) => ({
+    subtle: globalThis.crypto.subtle,
+    getRandomValues(target) {
+      assert.equal(target.byteLength, 12, 'each sender fills the complete 96-bit GCM nonce');
+      target.set(senderNonce);
+      return target;
+    },
+  }));
+  const simulatedPackets = await Promise.all(simulatedSenderCrypto.map(async (cryptoImpl) => {
+    const senderKey = await deriveRoomKey('correct horse battery staple', 'e2ee-room', cryptoImpl);
+    return encryptE2eeFrame(frame, senderKey, cryptoImpl);
+  }));
+  assert.deepEqual(
+    simulatedPackets.map((packet) => Array.from(packet.slice(0, 12))),
+    senderNonces.map((nonce) => Array.from(nonce)),
+    'independent senders transmit unique full-width random nonces',
+  );
+  assert.notDeepEqual(
+    Array.from(simulatedPackets[0].slice(0, 12)),
+    Array.from(simulatedPackets[1].slice(0, 12)),
+    'senders do not share a deterministic nonce prefix',
+  );
+
+  const legacyMaterial = await globalThis.crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode('correct horse battery staple'),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  );
+  const legacyKey = await globalThis.crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: new TextEncoder().encode('minamo:e2ee-room'),
+      iterations: 120_000,
+      hash: 'SHA-256',
+    },
+    legacyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+  const legacyPrefix = new Uint8Array(await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode('nonce:e2ee-room:correct horse battery staple'),
+  )).slice(0, 4);
+  const legacyNonce = new Uint8Array(12);
+  legacyNonce.set(legacyPrefix);
+  legacyNonce.set(Uint8Array.from([21, 22, 23, 24, 25, 26, 27, 28]), 4);
+  const legacyCiphertext = new Uint8Array(await globalThis.crypto.subtle.encrypt(
+    {
+      name: 'AES-GCM',
+      iv: legacyNonce,
+      additionalData: new TextEncoder().encode('minamo.kgm.e2ee.v1'),
+      tagLength: 128,
+    },
+    legacyKey,
+    frame,
+  ));
+  const legacyPacket = new Uint8Array(8 + legacyCiphertext.byteLength);
+  legacyPacket.set(legacyNonce.slice(4));
+  legacyPacket.set(legacyCiphertext, 8);
+  await assert.rejects(
+    decryptE2eeFrame(legacyPacket, key),
+    /wrong room key or corrupted frame/,
+    'the v2 profile fails closed when it receives a legacy v1 envelope',
+  );
+  const legacyReceiverNonce = new Uint8Array(12);
+  legacyReceiverNonce.set(legacyPrefix);
+  legacyReceiverNonce.set(sealed.slice(0, 8), 4);
+  await assert.rejects(
+    globalThis.crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: legacyReceiverNonce,
+        additionalData: new TextEncoder().encode('minamo.kgm.e2ee.v1'),
+        tagLength: 128,
+      },
+      legacyKey,
+      sealed.slice(8),
+    ),
+    'a legacy v1 receiver fails closed when it receives a v2 envelope',
   );
 }
 
@@ -828,6 +954,27 @@ function kgm2FaceFrame(seq, overrides = {}) {
   let y = 0;
   for (let i = 0; i < 120; i++) y = filter.filter(1, i / 60);
   assert.ok(y > 0.95, `One Euro converges toward 1, got ${y}`);
+
+  const coldFilter = new OneEuroFilter({ minCutoff: 1.0, beta: 0.1 });
+  assert.equal(coldFilter.filter(Number.NaN, 0), 0, 'non-finite first sample uses a finite fallback');
+  assert.equal(coldFilter.filter(0.5, 1 / 60), 0.5, 'non-finite first sample does not initialize filter state');
+
+  const recoveringFilter = new OneEuroFilter({ minCutoff: 1.0, beta: 0.1 });
+  recoveringFilter.filter(0, 0);
+  const beforeBadSample = recoveringFilter.filter(1, 1 / 60);
+  assert.equal(
+    recoveringFilter.filter(Number.NaN, 2 / 60),
+    beforeBadSample,
+    'NaN sample holds the previous smoothed value',
+  );
+  assert.equal(
+    recoveringFilter.filter(Number.POSITIVE_INFINITY, 3 / 60),
+    beforeBadSample,
+    'infinite sample holds the previous smoothed value',
+  );
+  const recovered = recoveringFilter.filter(1, 4 / 60);
+  assert.ok(Number.isFinite(recovered), 'filter recovers on the first finite sample');
+  assert.ok(recovered > beforeBadSample, 'recovered filter continues converging');
 
   const quat = new OneEuroQuat();
   const a = quat.filter([0, 0, 0, 1], 0);
@@ -1576,6 +1723,29 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   const decoded = decodeMotionStream(packets);
   assert.equal(decoded.frames.length, 3);
   assert.ok(Math.abs(decoded.frames[2].weights[1] - 0.5) <= 1 / 127 + 1e-9);
+
+  const fastRotationState = createEncoderState();
+  const halfSqrt = 1 / Math.sqrt(2);
+  const fastRotationPackets = [
+    encodeMotionFrame(fastRotationState, {
+      frameId: 0,
+      tMs: 0,
+      weights: [],
+      quat: [halfSqrt, 0, 0, halfSqrt],
+    }),
+    encodeMotionFrame(fastRotationState, {
+      frameId: 1,
+      tMs: 33,
+      weights: [],
+      quat: [-halfSqrt, 0, 0, halfSqrt],
+    }),
+  ];
+  assert.equal(fastRotationPackets[1].type, 'keyframe', 'saturated quaternion delta forces a keyframe');
+  const fastRotationDecoded = decodeMotionStream(fastRotationPackets);
+  assert.ok(
+    quatAngularErrorDegrees(fastRotationPackets[1].quat, fastRotationDecoded.frames[1].quat) < 0.01,
+    'fast rotation round-trip stays within 0.01 degrees',
+  );
 
   assert.equal(encodeMotionFrame(state, { frameId: 3, tMs: 80, weights: [0.04, 0.5], quat: [0, 0.05, 0, 0.9987], modelId: 'vrm-a' }, { reconnected: true }).type, 'keyframe');
   assert.equal(encodeMotionFrame(state, { frameId: 4, tMs: 90, weights: [0.04, 0.5], quat: [0, 0.05, 0, 0.9987], modelId: 'vrm-b' }).type, 'keyframe');

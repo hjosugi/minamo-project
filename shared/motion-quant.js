@@ -49,8 +49,18 @@ export function shortestPathQuat(reference = [0, 0, 0, 1], next = [0, 0, 0, 1]) 
 }
 
 export function quantizeQuatDelta(keyframeQuat = [0, 0, 0, 1], quat = [0, 0, 0, 1]) {
+  return quantizeQuatDeltaResult(keyframeQuat, quat).deltas;
+}
+
+function quantizeQuatDeltaResult(keyframeQuat, quat) {
   const aligned = shortestPathQuat(keyframeQuat, quat);
-  return aligned.map((component, i) => clamp(Math.round((component - keyframeQuat[i]) * QUAT_DELTA_SCALE), -QUAT_DELTA_SCALE, QUAT_DELTA_SCALE));
+  let saturated = false;
+  const deltas = aligned.map((component, i) => {
+    const quantized = Math.round((component - keyframeQuat[i]) * QUAT_DELTA_SCALE);
+    if (quantized < -QUAT_DELTA_SCALE || quantized > QUAT_DELTA_SCALE) saturated = true;
+    return clamp(quantized, -QUAT_DELTA_SCALE, QUAT_DELTA_SCALE);
+  });
+  return { deltas, saturated };
 }
 
 export function dequantizeQuatDelta(keyframeQuat = [0, 0, 0, 1], deltas = [0, 0, 0, 0]) {
@@ -79,7 +89,13 @@ export function shouldForceKeyframe(state, options = {}) {
 export function encodeMotionFrame(state, frame, { reconnected = false } = {}) {
   const weights = frame.weights ?? [];
   const quat = frame.quat ?? [0, 0, 0, 1];
-  const forceKeyframe = shouldForceKeyframe(state, { tMs: frame.tMs, modelId: frame.modelId, reconnected });
+  let forceKeyframe = shouldForceKeyframe(state, { tMs: frame.tMs, modelId: frame.modelId, reconnected });
+  let quatDelta = null;
+  if (!forceKeyframe) {
+    const quantized = quantizeQuatDeltaResult(state.keyframe.quat, quat);
+    forceKeyframe = quantized.saturated;
+    quatDelta = quantized.deltas;
+  }
 
   if (forceKeyframe) {
     const keyframeSeq = state.keyframeSeq + 1;
@@ -101,7 +117,7 @@ export function encodeMotionFrame(state, frame, { reconnected = false } = {}) {
     frameId: frame.frameId,
     tMs: frame.tMs,
     weightDeltas: quantizeWeightDeltas(state.keyframe.weights, weights),
-    quatDelta: quantizeQuatDelta(state.keyframe.quat, quat),
+    quatDelta,
   };
 }
 
