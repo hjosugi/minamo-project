@@ -142,9 +142,10 @@ tracker/     webcam -> 52ch expressions + head pose -> KGM1 publisher
 viewer/      KGM1 receiver -> VRM / built-in bot rendering (OBS browser source)
 replay/      local KGM1 motion JSONL replay publisher
 desktop/     Tauri desktop control surface, built by Vite
-shared/      canonical blendshapes, One Euro, KGM1 codec, transports (JS)
-src/         TypeScript core for the next-gen pipeline (types, filters,
-             anatomy constraints, adapters for MediaPipe/VRM/Live2D/Inochi2D)
+shared/      canonical blendshapes, One Euro, KGM1 codec, transports (JS) — the shipped runtime
+src/         typed TS core (types, filters, anatomy, MediaPipe/VRM/Live2D/Inochi2D
+             adapters) used by the vitest suites, `pnpm benchmark:drum`, and
+             diagnostics — NOT wired into the runtime, which is 100% shared/*.js (#255)
 src-tauri/   Minamo Studio native shell and desktop window commands
 crates/      Rust KGM1 binary header codec
 relay-node/  static serving + WebSocket relay (Node, ws only)
