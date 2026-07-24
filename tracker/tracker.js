@@ -82,6 +82,7 @@ import { createDatasetRecord, serializeDatasetRecords } from '../shared/dataset.
 import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } from '../shared/kgm-recording.js';
 import { percentileSample } from '../shared/hud-metrics.js';
 import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
+import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import {
   AUDIO_LIPSYNC_TARGET_LATENCY_MS,
   audioLipsyncWithinLatency,
@@ -355,7 +356,7 @@ async function loadMediaPipeTasksVision() {
   if (FilesetResolver) return;
   const localAvailable = await assetExists(LOCAL_TASKS_VISION_BUNDLE);
   const vision = localAvailable
-    ? await import(LOCAL_TASKS_VISION_BUNDLE)
+    ? await import(/* @vite-ignore */ LOCAL_TASKS_VISION_BUNDLE)
     : await importVerifiedModule(CDN_TASKS_VISION_BUNDLE, CDN_TASKS_VISION_INTEGRITY);
   ({ FilesetResolver, FaceLandmarker, HandLandmarker, PoseLandmarker } = vision);
 }
@@ -369,7 +370,7 @@ async function importVerifiedModule(url, integrity) {
   if (actual !== integrity) throw new Error('MediaPipe CDN bundle integrity check failed.');
   const blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
   try {
-    return await import(blobUrl);
+    return await import(/* @vite-ignore */ blobUrl);
   } finally {
     URL.revokeObjectURL(blobUrl);
   }
@@ -643,7 +644,7 @@ async function resolveModelAssets() {
 async function assetExists(url) {
   try {
     const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-    return res.ok;
+    return responseLooksLikeAsset(res);
   } catch {
     return false;
   }

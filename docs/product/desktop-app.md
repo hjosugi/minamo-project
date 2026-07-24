@@ -30,8 +30,8 @@ loads it from memory through the same reviewed avatar loaders used by file drop.
   before loading.
 - Selection state lasts only for the current app process and is not persisted.
 - The webview cannot submit an arbitrary path, and no broad filesystem or asset
-  protocol scope is granted. Only the `main` and `viewer` windows receive the
-  core IPC capability.
+  protocol scope is granted. The `main`, `tracker`, `viewer`, and `replay`
+  windows receive only the core IPC capability.
 - Browser preview remains supported; use the Viewer file controls or drag and
   drop when the Tauri runtime is not attached.
 

@@ -1705,6 +1705,7 @@ name = "minamo-desktop"
 version = "0.1.8"
 dependencies = [
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

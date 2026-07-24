@@ -55,6 +55,7 @@ REQUIRED = [
     'shared/kgm-recording.js',
     'shared/vrma-export.js',
     'shared/e2ee.js',
+    'shared/asset-probe.js',
     'shared/hud-metrics.js',
     'shared/voice-activity.js',
     'shared/audio-lipsync.js',
@@ -373,6 +374,8 @@ def validate_dependency_guardrails() -> None:
         if not re.search(r'/float16/\d+/', url):
             add_error('scripts/fetch-models.sh', f'MediaPipe model URL lacks pinned model version: {url}')
     tracker = read('tracker/tracker.js')
+    asset_probe = read('shared/asset-probe.js')
+    tests = read('tests/run-tests.mjs')
     fetch_script = read('scripts/fetch-models.sh')
     if 'vision_bundle.mjs' not in fetch_script:
         add_error('scripts/fetch-models.sh', 'MediaPipe vendor script must download vision_bundle.mjs for offline use')
@@ -380,6 +383,12 @@ def validate_dependency_guardrails() -> None:
         add_error('tracker/tracker.js', 'MediaPipe Tasks must not be statically imported from CDN')
     if 'LOCAL_TASKS_VISION_BUNDLE' not in tracker or 'importVerifiedModule' not in tracker:
         add_error('tracker/tracker.js', 'tracker must prefer local MediaPipe bundle and integrity-check CDN fallback')
+    if "from '../shared/asset-probe.js'" not in tracker or 'responseLooksLikeAsset(res)' not in tracker:
+        add_error('tracker/tracker.js', 'tracker asset probes must reject HTML SPA fallbacks')
+    if 'text/html' not in asset_probe or 'application/xhtml+xml' not in asset_probe:
+        add_error('shared/asset-probe.js', 'asset probe must reject HTML fallback content types')
+    if 'SPA HTML fallbacks must not be mistaken for local model assets' not in tests:
+        add_error('tests/run-tests.mjs', 'missing MediaPipe asset fallback regression coverage')
     if not re.search(r"CDN_TASKS_VISION_INTEGRITY = 'sha256-[A-Za-z0-9+/=]+'", tracker):
         add_error('tracker/tracker.js', 'CDN MediaPipe bundle SRI hash must be pinned')
 
@@ -985,8 +994,10 @@ def validate_e2ee_contracts() -> None:
         'decryptFrame',
         'ciphertextLooksOpaque',
         'wrong room key or corrupted frame',
-        'TAG_BYTES = 16',
-        'NONCE_SUFFIX_BYTES = 8',
+        'E2EE_ENVELOPE_VERSION = 2',
+        'NONCE_BYTES = 12',
+        'TAG_BYTES = 12',
+        "name: 'HKDF'",
     ]:
         if needle not in e2ee:
             add_error('shared/e2ee.js', f'missing E2EE contract: {needle}')
@@ -995,13 +1006,19 @@ def validate_e2ee_contracts() -> None:
         'relay ciphertext test asserts',
         'wrong-key subscriber gets a clear decrypt error',
         'ciphertextLooksOpaque',
+        'complete 96-bit GCM nonce',
+        'legacy v1 envelope',
+        'legacy v1 receiver fails closed',
     ]:
         if needle not in tests:
             add_error('tests/run-tests.mjs', f'missing E2EE regression coverage: {needle}')
     for needle in [
         'exactly 24 bytes',
         'wrong room key or corrupted frame',
-        'WebCrypto AES-GCM',
+        'WebCrypto HKDF',
+        'fully random 96-bit AES-GCM nonce',
+        'per-frame rekeying',
+        'minamo.kgm.e2ee.v2',
         'relay sees only opaque bytes',
     ]:
         if needle not in docs:

@@ -13,6 +13,9 @@ use std::sync::Mutex;
 
 const MAX_NATIVE_AVATAR_BYTES: u64 = 256 * 1024 * 1024;
 const NATIVE_AVATAR_EXTENSIONS: &[&str] = &["inp", "inx", "vrm", "glb"];
+const TRACKER_WINDOW_LABEL: &str = "tracker";
+const VIEWER_WINDOW_LABEL: &str = "viewer";
+const REPLAY_WINDOW_LABEL: &str = "replay";
 
 #[cfg(not(test))]
 #[derive(Default)]
@@ -104,7 +107,7 @@ fn virtual_camera_status() -> VirtualCameraStatus {
 async fn open_tracker(app: AppHandle) -> Result<(), String> {
     open_app_window(
         &app,
-        "tracker",
+        TRACKER_WINDOW_LABEL,
         "Minamo Tracker",
         "tracker/index.html",
         1180.0,
@@ -117,7 +120,7 @@ async fn open_tracker(app: AppHandle) -> Result<(), String> {
 async fn open_viewer(app: AppHandle) -> Result<(), String> {
     open_app_window(
         &app,
-        "viewer",
+        VIEWER_WINDOW_LABEL,
         "Minamo Viewer",
         "viewer/index.html",
         1220.0,
@@ -130,7 +133,7 @@ async fn open_viewer(app: AppHandle) -> Result<(), String> {
 async fn open_replay(app: AppHandle) -> Result<(), String> {
     open_app_window(
         &app,
-        "replay",
+        REPLAY_WINDOW_LABEL,
         "Minamo Replay",
         "replay/index.html",
         980.0,
@@ -443,6 +446,56 @@ mod tests {
                 "replay/index.html"
             ]
         );
+    }
+
+    #[test]
+    fn desktop_capability_covers_every_app_window() {
+        let tauri_config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json"))
+                .expect("tauri.conf.json should be valid JSON");
+        assert_eq!(
+            tauri_config["build"]["devUrl"], "http://localhost:5173/",
+            "the multipage dev URL must remain at the root so window routes are not duplicated"
+        );
+        assert_eq!(
+            tauri_config["app"]["windows"][0]["url"], "desktop/index.html",
+            "the main desktop window must load the desktop entry point"
+        );
+        let mut app_windows: Vec<_> = tauri_config["app"]["windows"]
+            .as_array()
+            .expect("Tauri app windows should be an array")
+            .iter()
+            .map(|window| {
+                window["label"]
+                    .as_str()
+                    .expect("every configured Tauri window should have a label")
+            })
+            .chain([
+                TRACKER_WINDOW_LABEL,
+                VIEWER_WINDOW_LABEL,
+                REPLAY_WINDOW_LABEL,
+            ])
+            .collect();
+
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("default capability should be valid JSON");
+        let mut capability_windows: Vec<_> = capability["windows"]
+            .as_array()
+            .expect("default capability windows should be an array")
+            .iter()
+            .map(|label| {
+                label
+                    .as_str()
+                    .expect("every capability window should be a label")
+            })
+            .collect();
+
+        app_windows.sort_unstable();
+        app_windows.dedup();
+        capability_windows.sort_unstable();
+        capability_windows.dedup();
+        assert_eq!(capability_windows, app_windows);
     }
 
     #[test]
