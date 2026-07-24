@@ -4,14 +4,17 @@ import {
   authorizeRoomToken,
   constantTimeEqual,
   createPairingTokenStore,
+  createRateLimiter,
   isKgm1Json,
   issuePairingToken,
   leaveRoom,
   originAllowed,
   parseParticipantId,
+  purgePairingTokens,
   renderPairingQrSvg,
   revokePairingToken,
   validatePairingToken,
+  withinBackpressureLimit,
 } from './server.mjs';
 
 test('constant-time token comparison handles matches, mismatches, and length changes', () => {
@@ -89,11 +92,59 @@ test('relay QR fallback renders locally without embedding readable token text', 
   await assert.rejects(() => renderPairingQrSvg('x'.repeat(2049)), /between 1 and 2048/);
 });
 
-test('origin allow-list is explicit when configured', () => {
-  assert.equal(originAllowed('https://studio.example', []), true);
-  assert.equal(originAllowed(undefined, ['https://studio.example']), true);
+test('origin allow-list is explicit and does not allow-all or missing-origin by default', () => {
+  // Unset list no longer means allow-all: a foreign origin with no same-origin
+  // context is rejected.
+  assert.equal(originAllowed('https://studio.example', []), false);
+  // Explicit allow-all opt-in.
+  assert.equal(originAllowed('https://anything.example', ['*']), true);
+  // Configured allow-list.
   assert.equal(originAllowed('https://studio.example', ['https://studio.example']), true);
   assert.equal(originAllowed('https://evil.example', ['https://studio.example']), false);
+  // A missing Origin (non-browser) is rejected unless explicitly permitted.
+  assert.equal(originAllowed(undefined, ['https://studio.example']), false);
+  assert.equal(originAllowed(undefined, ['https://studio.example'], { allowNoOrigin: true }), true);
+  // Same-origin: the Origin host matches the host serving the relay.
+  assert.equal(originAllowed('http://localhost:8787', [], { requestHost: 'localhost:8787' }), true);
+  assert.equal(originAllowed('https://evil.example', [], { requestHost: 'localhost:8787' }), false);
+});
+
+test('backpressure guard drops frames once a peer send queue is backed up', () => {
+  assert.equal(withinBackpressureLimit(0, 1024), true);
+  assert.equal(withinBackpressureLimit(1024, 1024), true);
+  assert.equal(withinBackpressureLimit(1025, 1024), false);
+});
+
+test('pairing-token minting is rate limited per key with a resetting window', () => {
+  const limiter = createRateLimiter({ limit: 2, windowMs: 1000 });
+  assert.equal(limiter.check('ip-a', 0).allowed, true);
+  assert.equal(limiter.check('ip-a', 10).allowed, true);
+  const blocked = limiter.check('ip-a', 20);
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.retryAfterMs, 980);
+  // A different key has its own budget.
+  assert.equal(limiter.check('ip-b', 20).allowed, true);
+  // The window resets.
+  assert.equal(limiter.check('ip-a', 1000).allowed, true);
+});
+
+test('purge removes expired/revoked tokens and empty protected rooms', () => {
+  const store = createPairingTokenStore();
+  issuePairingToken(store, { room: 'room-live', ttlSeconds: 300, nowMs: 0, token: 'a'.repeat(32) });
+  issuePairingToken(store, { room: 'room-old', ttlSeconds: 60, nowMs: 0, token: 'b'.repeat(32) });
+  const revoked = 'c'.repeat(32);
+  issuePairingToken(store, { room: 'room-live', ttlSeconds: 300, nowMs: 0, token: revoked });
+  revokePairingToken(store, revoked, 'room-live', 10);
+
+  // At t=120s the room-old token is expired and the revoked one is gone.
+  const removed = purgePairingTokens(store, 120_000);
+  assert.equal(removed, 2);
+  assert.equal(store.tokens.has('a'.repeat(32)), true);
+  assert.equal(store.tokens.has('b'.repeat(32)), false);
+  assert.equal(store.tokens.has(revoked), false);
+  // room-old lost its only token, so it is no longer protected; room-live stays.
+  assert.equal(store.protectedRooms.has('room-old'), false);
+  assert.equal(store.protectedRooms.has('room-live'), true);
 });
 
 test('KGM1 JSON fallback only accepts typed payload records', () => {

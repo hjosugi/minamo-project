@@ -27,6 +27,21 @@ const ALLOWED_ORIGINS = (process.env.MINAMO_ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+// A missing Origin header (non-browser client) is rejected by default; set this
+// to opt non-browser publishers back in (#247). Browsers always send Origin.
+const ALLOW_NO_ORIGIN = /^(1|true|yes|on)$/i.test(process.env.MINAMO_ALLOW_NO_ORIGIN || '');
+// KGM1 frames are ~76-119 bytes; cap the ws payload far below the ws default
+// (~100 MB) so a single peer cannot amplify a huge message to the whole room.
+const MAX_FRAME_BYTES = Math.max(1024, Number(process.env.MINAMO_MAX_FRAME_BYTES) || 16 * 1024);
+// Drop frames for a subscriber whose send queue exceeds this (newest-only
+// semantics), matching the Rust relay, so one slow peer cannot grow memory.
+const MAX_BUFFERED_BYTES = Math.max(64 * 1024, Number(process.env.MINAMO_MAX_BUFFERED_BYTES) || 1024 * 1024);
+// Rate-limit pairing-token minting so an allowed origin cannot mint unbounded
+// tokens.
+const tokenMintLimiter = createRateLimiter({
+  limit: Math.max(1, Number(process.env.MINAMO_PAIRING_RATE_LIMIT) || 30),
+  windowMs: Math.max(1000, Number(process.env.MINAMO_PAIRING_RATE_WINDOW_MS) || 60_000),
+});
 const pairingTokens = createPairingTokenStore();
 
 const MIME = {
@@ -73,7 +88,7 @@ const http = createServer(async (req, res) => {
 // room name -> Set<WebSocket>
 const rooms = new Map();
 
-const wss = new WebSocketServer({ server: http, path: '/ws' });
+const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: MAX_FRAME_BYTES });
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
@@ -88,7 +103,10 @@ wss.on('connection', (ws, req) => {
   const token = url.searchParams.get('token') || '';
   const participantId = parseParticipantId(url.searchParams.get('participant'), role);
 
-  if (!originAllowed(req.headers.origin)) {
+  if (!originAllowed(req.headers.origin, ALLOWED_ORIGINS, {
+    requestHost: req.headers.host,
+    allowNoOrigin: ALLOW_NO_ORIGIN,
+  })) {
     ws.close(4403, 'origin not allowed');
     return;
   }
@@ -119,9 +137,11 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (data, isBinary) => {
     if (!isBinary && !isKgm1Json(data)) return;
     for (const peer of rooms.get(room) ?? []) {
-      if (peer !== ws && peer.readyState === peer.OPEN) {
-        peer.send(data, { binary: isBinary });
-      }
+      if (peer === ws || peer.readyState !== peer.OPEN) continue;
+      // Newest-only backpressure: skip a subscriber whose send queue is already
+      // backed up rather than letting it grow without bound (#247).
+      if (!withinBackpressureLimit(peer.bufferedAmount, MAX_BUFFERED_BYTES)) continue;
+      peer.send(data, { binary: isBinary });
     }
   });
 
@@ -140,11 +160,17 @@ const beat = setInterval(() => {
   }
 }, 30_000);
 beat.unref?.();
+// periodic GC: bound the pairing-token store and the rate-limiter map (#247)
+const purge = setInterval(() => {
+  purgePairingTokens(pairingTokens);
+  tokenMintLimiter.purge();
+}, 60_000);
+purge.unref?.();
 wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 });
-wss.on('close', () => clearInterval(beat));
+wss.on('close', () => { clearInterval(beat); clearInterval(purge); });
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   http.listen(PORT, () => {
@@ -152,15 +178,92 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     console.log(`  site : http://localhost:${PORT}`);
     console.log(`  ws   : ws://localhost:${PORT}/ws?room=<room>&role=<pub|sub>`);
     if (ROOM_TOKEN) console.log(`  auth : MINAMO_RELAY_TOKEN required`);
-    if (ALLOWED_ORIGINS.length) console.log(`  origins: ${ALLOWED_ORIGINS.join(', ')}`);
+    if (ALLOWED_ORIGINS.includes('*')) {
+      console.warn('  origins: * (all origins allowed — do not use beyond localhost)');
+    } else if (ALLOWED_ORIGINS.length) {
+      console.log(`  origins: ${ALLOWED_ORIGINS.join(', ')} (+ same-origin)`);
+    } else {
+      console.log('  origins: same-origin only (set MINAMO_ALLOWED_ORIGINS to allow others)');
+    }
+    console.log(`  limits: frame<=${MAX_FRAME_BYTES}B buffered<=${MAX_BUFFERED_BYTES}B`);
   });
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
 }
 
-export function originAllowed(origin, allowedOrigins = ALLOWED_ORIGINS) {
-  if (!allowedOrigins.length || !origin) return true;
-  return allowedOrigins.includes(origin);
+export function originAllowed(origin, allowedOrigins = ALLOWED_ORIGINS, options = {}) {
+  const { requestHost = '', allowNoOrigin = false } = options;
+  // Allow-all requires an explicit opt-in (MINAMO_ALLOWED_ORIGINS=*), never the
+  // unset default (#247).
+  if (allowedOrigins.includes('*')) return true;
+  // A missing Origin (non-browser client) is only accepted when explicitly
+  // permitted, so a client cannot bypass the allow-list by omitting the header.
+  if (!origin) return allowNoOrigin === true;
+  // Configured allow-list match.
+  if (allowedOrigins.includes(origin)) return true;
+  // Same-origin: the Origin's host matches the host serving this relay, which
+  // keeps the no-config local demo (tracker/viewer served by this relay)
+  // working without opening the door to cross-site origins.
+  if (requestHost && originHostMatches(origin, requestHost)) return true;
+  return false;
+}
+
+function originHostMatches(origin, requestHost) {
+  try {
+    return new URL(origin).host === requestHost;
+  } catch {
+    return false;
+  }
+}
+
+// Newest-only backpressure guard: true while the peer's send queue is small
+// enough to keep sending, false once it is backed up (drop the frame).
+export function withinBackpressureLimit(bufferedAmount, maxBufferedBytes = MAX_BUFFERED_BYTES) {
+  return Number(bufferedAmount) <= maxBufferedBytes;
+}
+
+// Fixed-window rate limiter keyed by an arbitrary identity (e.g. client IP).
+export function createRateLimiter({ limit, windowMs }) {
+  const hits = new Map();
+  return {
+    check(key, nowMs = Date.now()) {
+      const entry = hits.get(key);
+      if (!entry || Number(nowMs) >= entry.resetAt) {
+        hits.set(key, { count: 1, resetAt: Number(nowMs) + windowMs });
+        return { allowed: true, remaining: limit - 1, retryAfterMs: 0 };
+      }
+      if (entry.count >= limit) {
+        return { allowed: false, remaining: 0, retryAfterMs: entry.resetAt - Number(nowMs) };
+      }
+      entry.count += 1;
+      return { allowed: true, remaining: limit - entry.count, retryAfterMs: 0 };
+    },
+    purge(nowMs = Date.now()) {
+      for (const [key, entry] of hits) {
+        if (Number(nowMs) >= entry.resetAt) hits.delete(key);
+      }
+    },
+  };
+}
+
+// Bound the pairing-token store: drop expired/revoked tokens and any protected
+// room left with no live token (#247).
+export function purgePairingTokens(store, nowMs = Date.now()) {
+  let removed = 0;
+  for (const [token, record] of store.tokens) {
+    const expired = Number(nowMs) >= record.expiresAt;
+    const revoked = record.revokedAt !== null;
+    if (expired || revoked) {
+      store.tokens.delete(token);
+      removed += 1;
+    }
+  }
+  const liveRooms = new Set();
+  for (const record of store.tokens.values()) liveRooms.add(record.room);
+  for (const room of store.protectedRooms) {
+    if (!liveRooms.has(room)) store.protectedRooms.delete(room);
+  }
+  return removed;
 }
 
 export function constantTimeEqual(a, b) {
@@ -283,8 +386,12 @@ async function handlePairingTokenRequest(req, res, store) {
     'referrer-policy': 'no-referrer',
     vary: 'Origin',
   };
-  if (origin && originAllowed(origin)) headers['access-control-allow-origin'] = origin;
-  if (origin && !originAllowed(origin)) {
+  const allowed = originAllowed(origin, ALLOWED_ORIGINS, {
+    requestHost: req.headers.host,
+    allowNoOrigin: ALLOW_NO_ORIGIN,
+  });
+  if (origin && allowed) headers['access-control-allow-origin'] = origin;
+  if (origin && !allowed) {
     sendJson(res, 403, { error: 'origin not allowed' }, headers);
     return;
   }
@@ -295,6 +402,15 @@ async function handlePairingTokenRequest(req, res, store) {
   try {
     const body = await readJsonBody(req);
     if (req.method === 'POST') {
+      const clientKey = req.socket?.remoteAddress || 'unknown';
+      const limit = tokenMintLimiter.check(clientKey);
+      if (!limit.allowed) {
+        sendJson(res, 429, { error: 'too many pairing token requests' }, {
+          ...headers,
+          'retry-after': String(Math.ceil(limit.retryAfterMs / 1000)),
+        });
+        return;
+      }
       const issued = issuePairingToken(store, {
         room: body.room,
         ttlSeconds: body.ttlSeconds,
@@ -331,8 +447,12 @@ async function handlePairingQrRequest(req, res) {
     'referrer-policy': 'no-referrer',
     vary: 'Origin',
   };
-  if (origin && originAllowed(origin)) headers['access-control-allow-origin'] = origin;
-  if (origin && !originAllowed(origin)) {
+  const allowed = originAllowed(origin, ALLOWED_ORIGINS, {
+    requestHost: req.headers.host,
+    allowNoOrigin: ALLOW_NO_ORIGIN,
+  });
+  if (origin && allowed) headers['access-control-allow-origin'] = origin;
+  if (origin && !allowed) {
     sendJson(res, 403, { error: 'origin not allowed' }, headers);
     return;
   }
@@ -372,6 +492,7 @@ function sendJson(res, status, body, headers = {}) {
 
 function shutdown() {
   clearInterval(beat);
+  clearInterval(purge);
   for (const ws of wss.clients) ws.close(1001, 'server shutdown');
   wss.close(() => {
     http.close(() => process.exit(0));
