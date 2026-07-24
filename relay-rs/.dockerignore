@@ -1,0 +1,5 @@
+# Keep the relay-rs build context to the crate sources only (#261).
+target
+.git
+Dockerfile
+.dockerignore
