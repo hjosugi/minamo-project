@@ -420,7 +420,7 @@ def validate_foundation_contracts() -> None:
             add_error('.github/workflows/ci.yml', f'CI missing JavaScript gate: {needle}')
     if 'pnpm install --frozen-lockfile' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must install the frozen pnpm lockfile')
-    if 'cargo test --manifest-path relay-rs/Cargo.toml' not in ci:
+    if 'cargo test --locked --manifest-path relay-rs/Cargo.toml' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must run relay-rs tests')
     if 'pnpm test' not in ci or 'working-directory: relay-node' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must run relay-node tests')
@@ -1480,8 +1480,8 @@ def validate_desktop_contracts() -> None:
             add_error('scripts/release-smoke.mjs', 'release smoke must run desktop Tauri checks')
     for needle in [
         'libwebkit2gtk-4.1-dev',
-        'cargo check --manifest-path src-tauri/Cargo.toml',
-        'cargo test --manifest-path src-tauri/Cargo.toml',
+        'cargo check --locked --manifest-path src-tauri/Cargo.toml',
+        'cargo test --locked --manifest-path src-tauri/Cargo.toml',
     ]:
         if needle not in ci:
             add_error('.github/workflows/ci.yml', f'CI missing desktop gate: {needle}')
