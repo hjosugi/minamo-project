@@ -11,7 +11,8 @@
 //
 // A breaking 1.0 change to any of these fails the scheduled canary early,
 // pointing at docs/mediapipe-1.0-migration.md. Run against an installed
-// @mediapipe/tasks-vision (pin it to @rc in the canary CI job).
+// @mediapipe/tasks-vision (the canary CI job installs the @nightly dist-tag,
+// which carries the 1.0.0-rc.* builds).
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

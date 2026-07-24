@@ -14,7 +14,8 @@ how we detect it early.
 - **Exact pin.** `package.json` pins `@mediapipe/tasks-vision` to the exact
   version `0.10.35` (no caret), so a surprise `0.11`/`1.0` cannot auto-land.
 - **Weekly canary.** `.github/workflows/mediapipe-canary.yml` installs
-  `@mediapipe/tasks-vision@rc` on a schedule and runs
+  `@mediapipe/tasks-vision@nightly` (the dist-tag carrying the `1.0.0-rc.*`
+  builds) on a schedule and runs
   `scripts/mediapipe-canary-smoke.mjs`, which asserts the packaging surface the
   tracker relies on. A breaking change fails the canary and points back here —
   without touching the pinned build developers and CI use.
@@ -58,7 +59,7 @@ transition. Do not consolidate onto Holistic as part of a 1.0 bump.
 1. Read the failing check names in the workflow log — they map 1:1 to the
    watchlist sections above.
 2. Reproduce locally:
-   `pnpm add @mediapipe/tasks-vision@rc && node scripts/mediapipe-canary-smoke.mjs`.
+   `pnpm add -w @mediapipe/tasks-vision@nightly && node scripts/mediapipe-canary-smoke.mjs`.
 3. Adjust the tracker adapter, `scripts/fetch-models.sh`, and the canary asset
    list as needed, then bump the exact pin in `package.json` (and regenerate the
    pinned model hashes — see `scripts/model-pins.sha256`).

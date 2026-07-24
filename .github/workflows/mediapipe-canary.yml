@@ -37,6 +37,8 @@ jobs:
       - name: Canary smoke on the pinned version (sanity)
         run: node scripts/mediapipe-canary-smoke.mjs
       - name: Install the tasks-vision release candidate
-        run: pnpm add "@mediapipe/tasks-vision@rc"
+        # The 1.0.0-rc.* nightlies ship under the `nightly` dist-tag (there is no
+        # `rc` tag). -w targets the pnpm workspace root explicitly.
+        run: pnpm add -w "@mediapipe/tasks-vision@nightly"
       - name: Canary smoke on the release candidate
         run: node scripts/mediapipe-canary-smoke.mjs

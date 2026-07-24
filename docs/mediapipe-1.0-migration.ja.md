@@ -15,8 +15,9 @@
   キャレットなしの `0.10.35` に固定しており、想定外の `0.11`/`1.0` が自動的に
   入ることはありません。
 - **週次カナリア。** `.github/workflows/mediapipe-canary.yml` が定期的に
-  `@mediapipe/tasks-vision@rc` を導入し、`scripts/mediapipe-canary-smoke.mjs`
-  を実行します。トラッカーが依存するパッケージング面を検査し、破壊的変更が
+  `@mediapipe/tasks-vision@nightly`（`1.0.0-rc.*` ビルドを配信する dist-tag）を
+  導入し、`scripts/mediapipe-canary-smoke.mjs` を実行します。トラッカーが依存する
+  パッケージング面を検査し、破壊的変更が
   あれば固定ビルドに触れずにカナリアだけが失敗し、本ページを指し示します。
 
 ## ウォッチリスト — 1.0 で変わり得る箇所
@@ -59,7 +60,7 @@ Holistic Landmarker はweb上ではまだ成熟しておらず、Face / Hand / P
 1. ワークフローログの失敗チェック名を読みます。上記ウォッチリストの節に 1:1 で
    対応します。
 2. ローカルで再現します:
-   `pnpm add @mediapipe/tasks-vision@rc && node scripts/mediapipe-canary-smoke.mjs`。
+   `pnpm add -w @mediapipe/tasks-vision@nightly && node scripts/mediapipe-canary-smoke.mjs`。
 3. 必要に応じてトラッカーのアダプタ、`scripts/fetch-models.sh`、カナリアの
    アセット一覧を調整し、`package.json` の完全固定バージョンを更新します
    （固定モデルハッシュも再生成 — `scripts/model-pins.sha256` を参照）。
