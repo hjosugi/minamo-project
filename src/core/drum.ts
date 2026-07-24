@@ -1,5 +1,24 @@
-import { clamp, distance, length, sub } from './math';
+// Drum hit detection.
+//
+// Canonical conventions (issue #254) — both the single-sample DrumHitDetector
+// and the trajectory path obey these; do not mix definitions:
+//   * Coordinate space: MediaPipe image / normalized coordinates where +Y points
+//     DOWN. A downstroke (a stick descending toward a drum head) therefore has a
+//     POSITIVE velocity.y. Callers must feed positions in this space and must NOT
+//     pre-flip Y into KGM1 space (where +Y is up).
+//   * Velocity: metres per second — a position delta divided by the elapsed time
+//     in seconds (see estimateHitVelocity). Raw per-frame deltas are never used
+//     for thresholds, so behaviour is frame-rate independent.
+// The shared thresholds below are the single source of truth for "is this a
+// downstroke" and "is the stick moving fast enough to count as a hit".
+import { clamp, distance, length } from './math';
 import type { DrumHitEvent, HandState, Vec3 } from './types';
+
+// Minimum downward velocity (m/s, +Y points down) for a motion to count as a
+// downstroke.
+export const DRUM_DOWNSTROKE_MIN_SPEED_MPS = 0.5;
+// Minimum overall stick speed (m/s) required to register a hit.
+export const DRUM_MIN_HIT_SPEED_MPS = 0.45;
 
 export interface DrumZone {
   id: string;
@@ -14,6 +33,9 @@ export interface StickTipSample {
   timeMs: number;
   position: Vec3;
   previousPosition: Vec3;
+  // Timestamp of `previousPosition`, so velocity can be computed in m/s rather
+  // than as a frame-rate-dependent per-frame delta (#254).
+  previousTimeMs: number;
   hand?: 'Left' | 'Right';
 }
 
@@ -104,15 +126,16 @@ export class DrumHitDetector {
 
   detect(sample: StickTipSample): DrumHitEvent[] {
     const hits: DrumHitEvent[] = [];
-    const velocity = sub(sample.position, sample.previousPosition);
+    const dtSec = Math.max(0, (sample.timeMs - sample.previousTimeMs) / 1000);
+    const velocity = estimateHitVelocity(sample.position, sample.previousPosition, dtSec);
     const speed = length(velocity);
-    const downstroke = velocity.y > 0.015;
+    const downstroke = velocity.y > DRUM_DOWNSTROKE_MIN_SPEED_MPS;
 
     for (const zone of this.zones) {
       const dist = distance(sample.position, zone.center);
       const last = this.lastHitMs.get(zone.id) ?? -Infinity;
       const cooledDown = sample.timeMs - last >= zone.cooldownMs;
-      if (dist <= zone.radius && downstroke && speed > 0.02 && cooledDown) {
+      if (dist <= zone.radius && downstroke && speed >= DRUM_MIN_HIT_SPEED_MPS && cooledDown) {
         this.lastHitMs.set(zone.id, sample.timeMs);
         const hit: DrumHitEvent = {
           eventId: `${sample.id}:${zone.id}:${Math.round(sample.timeMs)}`,
@@ -123,7 +146,7 @@ export class DrumHitDetector {
           position: sample.position,
           velocity,
           speed,
-          confidence: Math.min(1, 0.5 + speed * 10),
+          confidence: clamp(0.5 + Math.min(speed / 4, 1) * 0.5, 0, 1),
           audioAligned: false,
         };
         if (sample.hand) hit.hand = sample.hand;
@@ -149,7 +172,7 @@ export function estimateStickTipTrajectory(
     previousPosition,
     velocity,
     speed,
-    downstroke: velocity.y > 0.5,
+    downstroke: velocity.y > DRUM_DOWNSTROKE_MIN_SPEED_MPS,
     confidence: current.confidence,
   };
   if (current.hand) out.hand = current.hand;
@@ -160,7 +183,7 @@ export function detectVisualDrumHitCandidates(
   trajectory: StickTipTrajectory,
   zones: readonly DrumZone[],
 ): VisualDrumHitCandidate[] {
-  if (!trajectory.downstroke || trajectory.speed < 0.45 || trajectory.confidence < 0.35) return [];
+  if (!trajectory.downstroke || trajectory.speed < DRUM_MIN_HIT_SPEED_MPS || trajectory.confidence < 0.35) return [];
   const candidates: VisualDrumHitCandidate[] = [];
   for (const zone of zones) {
     const dist = distance(trajectory.position, zone.center);
