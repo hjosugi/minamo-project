@@ -5,6 +5,11 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import QRCode from 'qrcode';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
+import {
+  CAMERA_METADATA_TIMEOUT_MS,
+  startVideoPlayback,
+  waitForVideoMetadata,
+} from '../shared/camera-startup.js';
 import { encodeFrame, decodeFrame, HAND_TARGET_BYTES } from '../shared/codec.js';
 import {
   E2EE_ENVELOPE_VERSION,
@@ -1884,6 +1889,72 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(recommendPhoneTransport({ webTransportAvailable: true, wtUrl: 'https://relay.example:4433' }), 'wt');
   assert.equal(recommendPhoneTransport({ webTransportAvailable: false, wtUrl: 'https://relay.example:4433' }), 'ws');
   assert.equal(recommendPhoneTransport({ webTransportAvailable: true, wtUrl: 'http://relay.example:4433' }), 'ws');
+}
+
+{
+  // Camera startup: bounded metadata wait + actionable play() handling (#253).
+  const stubVideo = (readyState = 0) => {
+    const listeners = new Map();
+    return {
+      readyState,
+      listeners,
+      addEventListener(type, fn) { listeners.set(type, fn); },
+      removeEventListener(type, fn) { if (listeners.get(type) === fn) listeners.delete(type); },
+      emit(type) { listeners.get(type)?.(); },
+    };
+  };
+  const makeTimers = () => {
+    let scheduled = null;
+    return {
+      setTimeoutFn: (fn) => { scheduled = fn; return 1; },
+      clearTimeoutFn: () => { scheduled = null; },
+      fire: () => { scheduled?.(); },
+    };
+  };
+
+  // Resolves and cleans up when metadata arrives.
+  {
+    const t = makeTimers();
+    const video = stubVideo();
+    const p = waitForVideoMetadata(video, { setTimeoutFn: t.setTimeoutFn, clearTimeoutFn: t.clearTimeoutFn });
+    video.emit('loadedmetadata');
+    await p;
+    assert.equal(video.listeners.size, 0, 'metadata listeners are removed after resolve');
+  }
+  // A stalled camera rejects on timeout instead of hanging forever.
+  {
+    const t = makeTimers();
+    const video = stubVideo();
+    const p = waitForVideoMetadata(video, { timeoutMs: 8000, setTimeoutFn: t.setTimeoutFn, clearTimeoutFn: t.clearTimeoutFn });
+    t.fire();
+    await assert.rejects(p, (err) => err.name === 'CameraMetadataTimeoutError');
+    assert.equal(video.listeners.size, 0, 'metadata listeners are removed after timeout');
+  }
+  // A media error rejects with an actionable error.
+  {
+    const t = makeTimers();
+    const video = stubVideo();
+    const p = waitForVideoMetadata(video, { setTimeoutFn: t.setTimeoutFn, clearTimeoutFn: t.clearTimeoutFn });
+    video.emit('error');
+    await assert.rejects(p, (err) => err.name === 'CameraMetadataError');
+  }
+  // Already-loaded metadata resolves synchronously (no timer scheduled).
+  {
+    const t = makeTimers();
+    await waitForVideoMetadata(stubVideo(2), { setTimeoutFn: t.setTimeoutFn, clearTimeoutFn: t.clearTimeoutFn });
+  }
+  // Autoplay-policy rejection becomes an actionable message.
+  await assert.rejects(
+    startVideoPlayback({ play: () => Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' })) }),
+    (err) => err.name === 'CameraPlaybackBlockedError',
+  );
+  // A superseded-load AbortError is non-fatal.
+  await startVideoPlayback({ play: () => Promise.reject(Object.assign(new Error('interrupted'), { name: 'AbortError' })) });
+  // A normal play() resolves.
+  let played = false;
+  await startVideoPlayback({ play: () => { played = true; return Promise.resolve(); } });
+  assert.equal(played, true, 'play() success resolves');
+  assert.ok(CAMERA_METADATA_TIMEOUT_MS > 0, 'camera metadata timeout is configured');
 }
 
 console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, and shortcut tests passed.`);

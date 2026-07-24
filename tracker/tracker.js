@@ -83,6 +83,7 @@ import { KGM_RECORDING_MIME, encodeKgmRecording, tenMinuteKgmEstimateBytes } fro
 import { percentileSample } from '../shared/hud-metrics.js';
 import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
+import { waitForVideoMetadata, startVideoPlayback } from '../shared/camera-startup.js';
 import {
   AUDIO_LIPSYNC_TARGET_LATENCY_MS,
   audioLipsyncWithinLatency,
@@ -410,8 +411,16 @@ async function startCamera() {
     audio: false,
   });
   video.srcObject = stream;
-  await new Promise((r) => { video.onloadedmetadata = r; });
-  await video.play();
+  try {
+    // Bounded metadata wait + actionable play() handling so a stalled camera
+    // cannot hang startup forever (#253).
+    await waitForVideoMetadata(video);
+    await startVideoPlayback(video);
+  } catch (error) {
+    for (const t of stream.getTracks()) t.stop();
+    if (video.srcObject === stream) video.srcObject = null;
+    throw error;
+  }
   overlay.width = video.videoWidth;
   overlay.height = video.videoHeight;
   const track = stream.getVideoTracks()[0];
