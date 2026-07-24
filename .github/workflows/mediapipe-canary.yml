@@ -1,0 +1,42 @@
+name: mediapipe-canary
+
+# Early-warning canary for upcoming @mediapipe/tasks-vision releases (#272).
+# The tracker's core feature depends on Face Landmarker blendshapes + the facial
+# transformation matrix; a surprise breaking 1.0 release would take it down. This
+# scheduled job installs the release candidate and checks the packaging surface
+# the tracker relies on, without touching the exact version pinned for builds.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+  # Also run when the canary itself or its watchlist changes.
+  push:
+    paths:
+      - 'scripts/mediapipe-canary-smoke.mjs'
+      - '.github/workflows/mediapipe-canary.yml'
+      - 'docs/mediapipe-1.0-migration.md'
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Canary smoke on the pinned version (sanity)
+        run: node scripts/mediapipe-canary-smoke.mjs
+      - name: Install the tasks-vision release candidate
+        run: pnpm add "@mediapipe/tasks-vision@rc"
+      - name: Canary smoke on the release candidate
+        run: node scripts/mediapipe-canary-smoke.mjs
