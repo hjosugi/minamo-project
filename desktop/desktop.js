@@ -59,7 +59,12 @@ function renderPages(pages) {
   for (const page of pages) {
     const row = document.createElement('div');
     row.className = 'page-row';
-    row.innerHTML = `<span>${page.name}</span><span>${page.bundled ? 'bundled' : 'missing'}</span>`;
+    // textContent, not innerHTML, so page.name can never inject markup (#251).
+    const name = document.createElement('span');
+    name.textContent = page.name;
+    const state = document.createElement('span');
+    state.textContent = page.bundled ? 'bundled' : 'missing';
+    row.append(name, state);
     list.append(row);
   }
 }
