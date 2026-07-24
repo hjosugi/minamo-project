@@ -14,7 +14,7 @@
     "build": "pnpm typecheck && vite build && node scripts/copy-pages-static.mjs",
     "lint": "node scripts/lint.mjs",
     "preview": "vite preview",
-    "test": "node tests/run-tests.mjs && vitest run",
+    "test": "node tests/run-tests.mjs && node scripts/check-tree-duplication.mjs && vitest run",
     "verify": "python3 scripts/verify_structure.py",
     "release:smoke": "node scripts/release-smoke.mjs",
     "typecheck:js": "tsc --noEmit -p tsconfig.browser-js.json",
