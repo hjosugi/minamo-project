@@ -1,0 +1,56 @@
+# Automated dependency + vulnerability update PRs (#260).
+# Covers every ecosystem the project ships: npm (root + relay-node via the pnpm
+# workspace), Cargo (root workspace, relay-rs, src-tauri), and GitHub Actions.
+# third_party/inochi2d-wasm is intentionally omitted — it is a vendored fork and
+# must be updated deliberately, not automatically.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /relay-rs
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      relay-rs-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      src-tauri-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

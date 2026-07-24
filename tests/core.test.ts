@@ -38,6 +38,9 @@ import {
   deriveFingerChain,
   detectHandSwap,
   detectVisualDrumHitCandidates,
+  DrumHitDetector,
+  DRUM_DOWNSTROKE_MIN_SPEED_MPS,
+  DRUM_MIN_HIT_SPEED_MPS,
   fetchAndVerifyModel,
   finiteNumber,
   finiteVec3Guard,
@@ -446,6 +449,69 @@ describe('audio and drum helpers', () => {
       points: [{ x: 0, y: 0, z: 0 }],
       hand: 'Right',
     }]).schema).toBe('minamo.drum-dataset.v1');
+  });
+
+  it('detects drum hits in metres/second in the canonical y-down space (#254)', () => {
+    const zones = [{ id: 'snare', type: 'snare' as const, center: { x: 0, y: 0.5, z: 0 }, radius: 0.12, cooldownMs: 40 }];
+
+    // A fast downstroke (+Y is down in image space) at ~2 m/s registers a hit.
+    const fast = new DrumHitDetector(zones).detect({
+      id: 'stick-r', timeMs: 20, previousTimeMs: 0,
+      position: { x: 0, y: 0.5, z: 0 }, previousPosition: { x: 0, y: 0.46, z: 0 }, hand: 'Right',
+    });
+    expect(fast.length).toBe(1);
+    expect(fast[0].hand).toBe('Right');
+    expect(fast[0].speed).toBeCloseTo(2, 5);
+
+    // The same spatial motion sampled over a longer frame interval yields the
+    // same m/s speed — frame-rate independent, unlike a raw per-frame delta.
+    const slowerFps = new DrumHitDetector(zones).detect({
+      id: 'stick-r', timeMs: 40, previousTimeMs: 0,
+      position: { x: 0, y: 0.5, z: 0 }, previousPosition: { x: 0, y: 0.42, z: 0 },
+    });
+    expect(slowerFps.length).toBe(1);
+    expect(slowerFps[0].speed).toBeCloseTo(2, 5);
+
+    // A slow drift with a large per-frame delta but low m/s is NOT a hit (the
+    // old raw-delta path would have misfired here).
+    const slow = new DrumHitDetector(zones).detect({
+      id: 'stick-r', timeMs: 400, previousTimeMs: 0,
+      position: { x: 0, y: 0.5, z: 0 }, previousPosition: { x: 0, y: 0.4, z: 0 },
+    });
+    expect(slow.length).toBe(0);
+
+    // An upstroke (negative velocity.y in this space) never counts as a hit.
+    const up = new DrumHitDetector(zones).detect({
+      id: 'stick-r', timeMs: 20, previousTimeMs: 0,
+      position: { x: 0, y: 0.5, z: 0 }, previousPosition: { x: 0, y: 0.55, z: 0 },
+    });
+    expect(up.length).toBe(0);
+  });
+
+  it('shares one velocity/axis convention between detector paths (#254)', () => {
+    expect(DRUM_DOWNSTROKE_MIN_SPEED_MPS).toBe(0.5);
+    expect(DRUM_MIN_HIT_SPEED_MPS).toBe(0.45);
+
+    // Below-threshold downstroke: 0.4 m/s < 0.5 → not a downstroke.
+    const slow = estimateStickTipTrajectory(
+      { id: 's', timeMs: 100, tip: { x: 0, y: 0.5, z: 0 }, confidence: 0.9 },
+      { id: 's', timeMs: 0, tip: { x: 0, y: 0.46, z: 0 }, confidence: 0.9 },
+    );
+    expect(slow.speed).toBeCloseTo(0.4, 5);
+    expect(slow.downstroke).toBe(false);
+    expect(detectVisualDrumHitCandidates(slow, [
+      { id: 'snare', type: 'snare', center: { x: 0, y: 0.5, z: 0 }, radius: 0.12, cooldownMs: 40 },
+    ]).length).toBe(0);
+
+    // Above-threshold downstroke: 2 m/s → a candidate is produced.
+    const fast = estimateStickTipTrajectory(
+      { id: 's', timeMs: 20, tip: { x: 0, y: 0.5, z: 0 }, confidence: 0.9 },
+      { id: 's', timeMs: 0, tip: { x: 0, y: 0.46, z: 0 }, confidence: 0.9 },
+    );
+    expect(fast.downstroke).toBe(true);
+    expect(detectVisualDrumHitCandidates(fast, [
+      { id: 'snare', type: 'snare', center: { x: 0, y: 0.5, z: 0 }, radius: 0.12, cooldownMs: 40 },
+    ]).length).toBe(1);
   });
 
   it('adds conservative audio-assisted mouth accent', () => {

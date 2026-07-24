@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@mediapipe/tasks-vision':
-        specifier: ^0.10.35
+        specifier: 0.10.35
         version: 0.10.35
       '@pixiv/three-vrm':
         specifier: ^3.5.4
