@@ -1,0 +1,20 @@
+# Keep the relay-node build context small and reproducible (#261).
+# node_modules are installed in the image's deps stage; never copy the host's.
+.git
+.github
+**/node_modules
+# Rust build outputs
+target
+**/target
+# Frontend/build artifacts and large vendored blobs (served from CDN in the image)
+dist
+vendor/mediapipe
+# Dev/editor/OS cruft
+*.log
+.DS_Store
+.idea
+.vscode
+# Local Docker files are not needed inside the image
+Dockerfile.relay-node
+relay-rs/Dockerfile
+.dockerignore

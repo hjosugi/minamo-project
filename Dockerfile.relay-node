@@ -12,7 +12,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/relay-node/node_modules ./relay-node/node_modules
+# .dockerignore keeps this from copying node_modules/.git/target/dist (#261).
 COPY . .
 EXPOSE 8787
 STOPSIGNAL SIGINT
+# Run as the distroless non-root user, not root (#261).
+USER nonroot
+# The relay serves its site on PORT; a 200 from / means it is healthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["relay-node/server.mjs"]
