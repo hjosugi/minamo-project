@@ -39,27 +39,39 @@ export function createVrmLoader(renderer) {
   });
 }
 
-/** @param {unknown} error */
-export function formatAvatarLoadError(error) {
+/**
+ * Classify an avatar load failure into an i18n key plus the redacted upstream
+ * detail (#307).
+ *
+ * A descriptor rather than a composed string: the caller renders it through the
+ * page's `t`, so the guidance appears in the reader's language, and because the
+ * key survives, a language toggle can replay the message instead of stranding
+ * whatever was on screen.
+ *
+ * @param {unknown} error
+ * @returns {{key: string, params: {detail: string}}}
+ */
+export function describeAvatarLoadError(error) {
   const raw = error instanceof Error ? error.message : String(error || 'unknown loader error');
-  const message = redactUrlSecrets(raw);
+  const detail = redactUrlSecrets(raw);
+  const params = { detail };
 
-  if (/KTX2Loader|KHR_texture_basisu|basis[_ -]?transcoder/i.test(message)) {
-    return `KTX2 texture decode failed. Verify that the asset is valid KTX2/BasisU and that this build contains the Basis transcoder. (${message})`;
+  if (/KTX2Loader|KHR_texture_basisu|basis[_ -]?transcoder/i.test(detail)) {
+    return { key: 'viewer.error.avatar.ktx2', params };
   }
-  if (/MeshoptDecoder|EXT_meshopt_compression|meshopt/i.test(message)) {
-    return `Meshopt geometry decode failed. Re-inspect the source and repack it with a supported meshopt encoder. (${message})`;
+  if (/MeshoptDecoder|EXT_meshopt_compression|meshopt/i.test(detail)) {
+    return { key: 'viewer.error.avatar.meshopt', params };
   }
-  if (/DRACOLoader|KHR_draco_mesh_compression|draco/i.test(message)) {
-    return `Draco geometry decode failed. Verify the Draco stream and avoid stacking Draco after meshopt. (${message})`;
+  if (/DRACOLoader|KHR_draco_mesh_compression|draco/i.test(detail)) {
+    return { key: 'viewer.error.avatar.draco', params };
   }
-  if (/Unexpected token|Unexpected end|invalid|malformed|parse|magic|header/i.test(message)) {
-    return `The avatar is corrupt or is not a valid VRM/GLB file. Run "pnpm inspect:glb -- <file> --avatar" for details. (${message})`;
+  if (/Unexpected token|Unexpected end|invalid|malformed|parse|magic|header/i.test(detail)) {
+    return { key: 'viewer.error.avatar.corrupt', params };
   }
-  if (/fetch|network|404|Failed to load/i.test(message)) {
-    return `The avatar or one of its resources could not be loaded. Use a self-contained VRM/GLB and verify local decoder assets. (${message})`;
+  if (/fetch|network|404|Failed to load/i.test(detail)) {
+    return { key: 'viewer.error.avatar.network', params };
   }
-  return `Avatar load failed. Run "pnpm inspect:glb -- <file> --avatar" and check the browser console. (${message})`;
+  return { key: 'viewer.error.avatar.generic', params };
 }
 
 function redactUrlSecrets(value) {
