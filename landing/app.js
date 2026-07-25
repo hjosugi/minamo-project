@@ -1,9 +1,4 @@
-import {
-  applyTranslations,
-  createI18n,
-  loadLanguage,
-  saveLanguage,
-} from '../shared/i18n.js';
+import { setupPageI18n } from '../shared/i18n.js';
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
@@ -25,22 +20,11 @@ let lastHitBucket = -1;
 
 // Runtime EN/JA localization (#267): navigator.language with a persisted manual
 // override, applied to every [data-i18n] node.
-const i18n = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) });
-
-function renderLanguage() {
-  document.documentElement.lang = i18n.lang;
-  applyTranslations(document, i18n.t);
-  if (running) startButton.textContent = i18n.t('landing.demo.running');
-}
-
-document.getElementById('langToggle')?.addEventListener('click', () => {
-  const next = i18n.lang === 'ja' ? 'en' : 'ja';
-  i18n.setLang(next);
-  saveLanguage(globalThis.localStorage, next);
-  renderLanguage();
+const { i18n } = setupPageI18n({
+  onRender: (t) => {
+    if (running) startButton.textContent = t('landing.demo.running');
+  },
 });
-
-renderLanguage();
 
 async function startCamera() {
   try {

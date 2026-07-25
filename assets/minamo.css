@@ -71,6 +71,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .topbar .spacer { flex: 1; }
 
+.lang-toggle {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 3px 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.lang-toggle:hover { color: var(--ink); border-color: var(--ink-dim); }
+
 .status-chip {
   font-family: var(--font-mono);
   font-size: 12px;

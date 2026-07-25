@@ -8,6 +8,7 @@ import {
   createI18n,
   detectLanguage,
   normalizeLanguage,
+  setupPageI18n,
 } from '../shared/i18n.js';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -2041,6 +2042,70 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   applyTranslations(root, createI18n({ lang: 'en' }).t);
   assert.equal(textEl.textContent, 'Start the demo');
   assert.equal(attrEl.getAttribute('aria-label'), 'Switch to Japanese');
+}
+
+{
+  // Every data-i18n / data-i18n-attr key used in the shipped markup must exist
+  // in the string tables, or the UI silently renders raw key names.
+  const pages = ['index.html', 'landing/index.html', 'tracker/index.html', 'viewer/index.html', 'desktop/index.html', 'replay/index.html'];
+  let markupKeys = 0;
+  for (const page of pages) {
+    const file = path.join(root, page);
+    if (!fs.existsSync(file)) continue;
+    const html = fs.readFileSync(file, 'utf8');
+    const keys = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
+    for (const pair of [...html.matchAll(/data-i18n-attr="([^"]+)"/g)].flatMap((m) => m[1].split(';'))) {
+      const key = pair.split(':')[1];
+      if (key) keys.push(key.trim());
+    }
+    for (const key of keys) {
+      markupKeys += 1;
+      assert.ok(MESSAGES.en[key], `${page} references unknown i18n key ${key}`);
+    }
+    // A page that opts into i18n must ship the toggle the helper binds.
+    if (keys.length) assert.match(html, /id="langToggle"/, `${page} uses data-i18n but has no language toggle`);
+  }
+  assert.ok(markupKeys > 100, `expected the product markup to be localized, saw ${markupKeys} keys`);
+}
+
+{
+  // setupPageI18n: detect → translate the document → keep <html lang> in sync →
+  // toggle and persist on click.
+  const nodes = [
+    { textContent: '', _a: { 'data-i18n': 'tracker.ui.btn.start' } },
+    { textContent: '', _a: { 'data-i18n-attr': 'aria-label:lang.toggle.aria' } },
+  ].map((el) => Object.assign(el, {
+    getAttribute: (k) => el._a[k] ?? null,
+    setAttribute: (k, v) => { el._a[k] = v; },
+  }));
+  let toggleClick = null;
+  const documentElement = { lang: '' };
+  const doc = {
+    documentElement,
+    getElementById: (id) => (id === 'langToggle'
+      ? { addEventListener: (type, fn) => { if (type === 'click') toggleClick = fn; } }
+      : null),
+    querySelectorAll: (sel) => nodes.filter((n) => n.getAttribute(sel.slice(1, -1)) !== null),
+  };
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  let renders = 0;
+  const page = setupPageI18n({ doc, storage, navigatorLanguage: 'en-US', onRender: () => { renders += 1; } });
+  assert.equal(documentElement.lang, 'en');
+  assert.equal(nodes[0].textContent, 'Start tracking');
+  assert.equal(nodes[1].getAttribute('aria-label'), 'Switch to Japanese');
+  assert.equal(renders, 1, 'onRender fires on the initial render');
+
+  toggleClick();
+  assert.equal(page.i18n.lang, 'ja');
+  assert.equal(documentElement.lang, 'ja');
+  assert.equal(nodes[0].textContent, 'トラッキング開始');
+  assert.equal(renders, 2, 'onRender fires again after a toggle');
+  assert.equal(store.get('minamo.lang'), 'ja', 'the manual override is persisted');
+  // A fresh page picks the stored override over navigator.language.
+  assert.equal(setupPageI18n({ doc, storage, navigatorLanguage: 'en-US' }).i18n.lang, 'ja');
+  // No toggle button and no document must not throw.
+  setupPageI18n({ doc: { documentElement: {}, getElementById: () => null, querySelectorAll: () => [] }, storage });
 }
 
 {

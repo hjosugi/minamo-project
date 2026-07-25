@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="referrer" content="no-referrer" />
-  <title>Minamo Tracker</title>
+  <title data-i18n="tracker.ui.title">Minamo Tracker</title>
   <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="../assets/minamo.css" />
 </head>
@@ -13,45 +13,48 @@
     <span class="wordmark">Minamo</span>
     <span class="page-name">tracker</span>
     <span class="spacer"></span>
+    <button id="langToggle" type="button" class="lang-toggle" data-i18n="lang.toggle" data-i18n-attr="aria-label:lang.toggle.aria">日本語</button>
+    <!-- statusChip has no data-i18n: tracker.js renders it from a key it can
+         replay, so a language toggle keeps the live message on screen. -->
     <span class="status-chip" id="statusChip" data-state="idle">idle</span>
   </header>
 
   <main class="layout tracker">
     <section class="panel">
-      <h2><span class="dot face"></span>Camera / signal in</h2>
+      <h2><span class="dot face"></span><span data-i18n="tracker.ui.panel.camera">Camera / signal in</span></h2>
       <div class="stage">
         <video id="video" class="mirrored" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <div class="hint" id="stageHint">Click "Start tracking" to turn on the camera.<br />Video is processed inside your browser; only tracking values are sent.</div>
+        <div class="hint" id="stageHint"><span data-i18n="tracker.ui.hint.start">Click "Start tracking" to turn on the camera.</span><br /><span data-i18n="tracker.ui.hint.privacy">Video is processed inside your browser; only tracking values are sent.</span></div>
       </div>
       <div class="controls">
-        <button id="btnStart" class="primary">Start tracking</button>
-        <button id="btnStop" disabled>Stop</button>
-        <button id="btnResetTracking" title="Reset tracking filters (R)">Reset tracking</button>
-        <label class="check"><input type="checkbox" id="chkMirror" checked />Mirror view</label>
-        <label class="check"><input type="checkbox" id="chkPose" />Upper-body pose (experimental)</label>
-        <label class="check"><input type="checkbox" id="chkHands" />Hands (experimental)</label>
-        <label class="check"><input type="checkbox" id="chkVoiceAccents" />Voice accents</label>
-        <label class="check"><input type="checkbox" id="chkAudioLipsync" />Audio lipsync</label>
-        <label class="check"><input type="checkbox" id="chkFaceLock" />Face lock</label>
-        <label class="check"><input type="checkbox" id="chkPrivacy" checked />Local-only privacy</label>
+        <button id="btnStart" class="primary" data-i18n="tracker.ui.btn.start">Start tracking</button>
+        <button id="btnStop" disabled data-i18n="tracker.ui.btn.stop">Stop</button>
+        <button id="btnResetTracking" data-i18n="tracker.ui.btn.resetTracking" data-i18n-attr="title:tracker.ui.btn.resetTracking.title" title="Reset tracking filters (R)">Reset tracking</button>
+        <label class="check"><input type="checkbox" id="chkMirror" checked /><span data-i18n="tracker.ui.check.mirror">Mirror view</span></label>
+        <label class="check"><input type="checkbox" id="chkPose" /><span data-i18n="tracker.ui.check.pose">Upper-body pose (experimental)</span></label>
+        <label class="check"><input type="checkbox" id="chkHands" /><span data-i18n="tracker.ui.check.hands">Hands (experimental)</span></label>
+        <label class="check"><input type="checkbox" id="chkVoiceAccents" /><span data-i18n="tracker.ui.check.voiceAccents">Voice accents</span></label>
+        <label class="check"><input type="checkbox" id="chkAudioLipsync" /><span data-i18n="tracker.ui.check.audioLipsync">Audio lipsync</span></label>
+        <label class="check"><input type="checkbox" id="chkFaceLock" /><span data-i18n="tracker.ui.check.faceLock">Face lock</span></label>
+        <label class="check"><input type="checkbox" id="chkPrivacy" checked /><span data-i18n="tracker.ui.check.privacy">Local-only privacy</span></label>
       </div>
       <div class="form-grid compact">
         <div class="field">
-          <span>camera</span>
+          <span data-i18n="tracker.ui.field.camera">camera</span>
           <select id="selCamera">
-            <option value="">default camera</option>
+            <option value="" data-i18n="tracker.ui.option.defaultCamera">default camera</option>
           </select>
         </div>
         <div class="field">
-          <span>camera preference</span>
+          <span data-i18n="tracker.ui.field.cameraFacing">camera preference</span>
           <select id="selCameraFacing">
-            <option value="user">front</option>
-            <option value="environment">back</option>
+            <option value="user" data-i18n="tracker.ui.option.front">front</option>
+            <option value="environment" data-i18n="tracker.ui.option.back">back</option>
           </select>
         </div>
         <div class="field">
-          <span>resolution</span>
+          <span data-i18n="tracker.ui.field.resolution">resolution</span>
           <select id="selResolution">
             <option value="480p">480p</option>
             <option value="720p" selected>720p</option>
@@ -59,85 +62,85 @@
           </select>
         </div>
         <div class="field">
-          <span>target fps</span>
+          <span data-i18n="tracker.ui.field.targetFps">target fps</span>
           <select id="selFps">
             <option value="30">30</option>
             <option value="60" selected>60</option>
           </select>
         </div>
         <div class="field">
-          <span>quality</span>
-          <output id="qualityChip" class="mini-chip" data-state="idle">waiting</output>
+          <span data-i18n="tracker.ui.field.quality">quality</span>
+          <output id="qualityChip" class="mini-chip" data-state="idle" data-i18n="tracker.ui.quality.waiting">waiting</output>
         </div>
         <div class="field">
-          <span>lean range</span>
+          <span data-i18n="tracker.ui.field.leanRange">lean range</span>
           <input type="range" id="rngHeadLean" min="0" max="20" step="0.5" value="8" />
           <output id="outHeadLean">8 cm</output>
         </div>
         <div class="field">
-          <span>body mode</span>
+          <span data-i18n="tracker.ui.field.bodyMode">body mode</span>
           <select id="selBodyMode">
-            <option value="seated" selected>seated</option>
-            <option value="standing">standing</option>
+            <option value="seated" selected data-i18n="tracker.ui.option.seated">seated</option>
+            <option value="standing" data-i18n="tracker.ui.option.standing">standing</option>
           </select>
         </div>
       </div>
       <div class="stats">
-        <span>fps <b id="statFps">--</b></span>
-        <span>inference <b id="statInfer">--</b> ms</span>
-        <span>infer p50 <b id="statInferP50">--</b> ms</span>
-        <span>infer p95 <b id="statInferP95">--</b> ms</span>
-        <span>packet <b id="statPacket">--</b> B</span>
-        <span>out <b id="statRate">--</b> KB/s</span>
-        <span>filter lag <b id="statFilterLag">--</b> ms</span>
-        <span>jitter <b id="statJitter">--</b> ms</span>
-        <span>camera <b id="statCamera">--</b></span>
-        <span>hands <b id="statHands">0</b></span>
-        <span>voice <b id="statVoiceAccent">off</b></span>
-        <span>lipsync <b id="statAudioLipsync">off</b></span>
-        <span>dropped <b id="statDropped">0</b></span>
-        <span>transport <b id="statTransportMode">local</b></span>
-        <span>latency <b id="statLatency">--</b> ms</span>
-        <span>net drop <b id="statTransportDrop">0</b></span>
+        <span><span data-i18n="tracker.ui.stat.fps">fps</span> <b id="statFps">--</b></span>
+        <span><span data-i18n="tracker.ui.stat.inference">inference</span> <b id="statInfer">--</b> ms</span>
+        <span><span data-i18n="tracker.ui.stat.inferP50">infer p50</span> <b id="statInferP50">--</b> ms</span>
+        <span><span data-i18n="tracker.ui.stat.inferP95">infer p95</span> <b id="statInferP95">--</b> ms</span>
+        <span><span data-i18n="tracker.ui.stat.packet">packet</span> <b id="statPacket">--</b> B</span>
+        <span><span data-i18n="tracker.ui.stat.out">out</span> <b id="statRate">--</b> KB/s</span>
+        <span><span data-i18n="tracker.ui.stat.filterLag">filter lag</span> <b id="statFilterLag">--</b> ms</span>
+        <span><span data-i18n="tracker.ui.stat.jitter">jitter</span> <b id="statJitter">--</b> ms</span>
+        <span><span data-i18n="tracker.ui.stat.camera">camera</span> <b id="statCamera">--</b></span>
+        <span><span data-i18n="tracker.ui.stat.hands">hands</span> <b id="statHands">0</b></span>
+        <span><span data-i18n="tracker.ui.stat.voice">voice</span> <b id="statVoiceAccent" data-i18n="tracker.ui.stat.off">off</b></span>
+        <span><span data-i18n="tracker.ui.stat.lipsync">lipsync</span> <b id="statAudioLipsync" data-i18n="tracker.ui.stat.off">off</b></span>
+        <span><span data-i18n="tracker.ui.stat.dropped">dropped</span> <b id="statDropped">0</b></span>
+        <span><span data-i18n="tracker.ui.stat.transport">transport</span> <b id="statTransportMode">local</b></span>
+        <span><span data-i18n="tracker.ui.stat.latency">latency</span> <b id="statLatency">--</b> ms</span>
+        <span><span data-i18n="tracker.ui.stat.netDrop">net drop</span> <b id="statTransportDrop">0</b></span>
       </div>
-      <canvas id="faceDebug" class="face-debug-canvas" aria-label="Face expression debug graph"></canvas>
-      <canvas id="handDebug" class="hand-debug-canvas" aria-label="Hand finger debug graph"></canvas>
+      <canvas id="faceDebug" class="face-debug-canvas" data-i18n-attr="aria-label:tracker.ui.aria.faceDebug" aria-label="Face expression debug graph"></canvas>
+      <canvas id="handDebug" class="hand-debug-canvas" data-i18n-attr="aria-label:tracker.ui.aria.handDebug" aria-label="Hand finger debug graph"></canvas>
       <ul class="warning-list" id="warningList"></ul>
-      <div class="signal-checklist" aria-label="Camera exposure and lighting checklist">
-        <div class="check-title">lighting checklist</div>
+      <div class="signal-checklist" data-i18n-attr="aria-label:tracker.ui.aria.checklist" aria-label="Camera exposure and lighting checklist">
+        <div class="check-title" data-i18n="tracker.ui.checklist.title">lighting checklist</div>
         <ul>
-          <li id="checkExposure" data-state="idle"><b>wait</b><span>face exposure</span><small>start camera</small></li>
-          <li id="checkFps" data-state="idle"><b>wait</b><span>steady camera fps</span><small>start camera</small></li>
-          <li id="checkBlur" data-state="idle"><b>wait</b><span>low motion blur</span><small>start camera</small></li>
-          <li id="checkConfidence" data-state="idle"><b>wait</b><span>stable landmark confidence</span><small>start camera</small></li>
+          <li id="checkExposure" data-state="idle"><b data-i18n="tracker.ui.checklist.wait">wait</b><span data-i18n="tracker.ui.checklist.exposure">face exposure</span><small data-i18n="tracker.ui.checklist.startCamera">start camera</small></li>
+          <li id="checkFps" data-state="idle"><b data-i18n="tracker.ui.checklist.wait">wait</b><span data-i18n="tracker.ui.checklist.fps">steady camera fps</span><small data-i18n="tracker.ui.checklist.startCamera">start camera</small></li>
+          <li id="checkBlur" data-state="idle"><b data-i18n="tracker.ui.checklist.wait">wait</b><span data-i18n="tracker.ui.checklist.blur">low motion blur</span><small data-i18n="tracker.ui.checklist.startCamera">start camera</small></li>
+          <li id="checkConfidence" data-state="idle"><b data-i18n="tracker.ui.checklist.wait">wait</b><span data-i18n="tracker.ui.checklist.confidence">stable landmark confidence</span><small data-i18n="tracker.ui.checklist.startCamera">start camera</small></li>
         </ul>
       </div>
       <div class="drummer-setup">
         <div class="calibration-guide-head">
-          <strong>Drummer setup</strong>
+          <strong data-i18n="tracker.ui.drummer.title">Drummer setup</strong>
           <output id="drumKitStatus">0/6 zones</output>
         </div>
         <div class="controls">
-          <label class="check"><input type="checkbox" id="chkDrummerMode" />Drummer mode</label>
-          <button id="btnArmDrumZone">Place zone</button>
-          <button id="btnClearDrumZone">Clear zone</button>
-          <button id="btnResetDrumKit">Reset kit</button>
-          <button id="btnCopyDrumObsUrl">Copy OBS overlay URL</button>
+          <label class="check"><input type="checkbox" id="chkDrummerMode" /><span data-i18n="tracker.ui.check.drummerMode">Drummer mode</span></label>
+          <button id="btnArmDrumZone" data-i18n="tracker.ui.btn.placeZone">Place zone</button>
+          <button id="btnClearDrumZone" data-i18n="tracker.ui.btn.clearZone">Clear zone</button>
+          <button id="btnResetDrumKit" data-i18n="tracker.ui.btn.resetKit">Reset kit</button>
+          <button id="btnCopyDrumObsUrl" data-i18n="tracker.ui.btn.copyObsUrl">Copy OBS overlay URL</button>
         </div>
         <div class="form-grid compact">
           <div class="field">
-            <span>zone</span>
+            <span data-i18n="tracker.ui.field.zone">zone</span>
             <select id="selDrumZone">
-              <option value="hihat">Hi-hat</option>
-              <option value="snare">Snare</option>
-              <option value="tom">Tom</option>
-              <option value="ride">Ride</option>
-              <option value="crash">Crash</option>
-              <option value="kick">Kick</option>
+              <option value="hihat" data-i18n="tracker.ui.zone.hihat">Hi-hat</option>
+              <option value="snare" data-i18n="tracker.ui.zone.snare">Snare</option>
+              <option value="tom" data-i18n="tracker.ui.zone.tom">Tom</option>
+              <option value="ride" data-i18n="tracker.ui.zone.ride">Ride</option>
+              <option value="crash" data-i18n="tracker.ui.zone.crash">Crash</option>
+              <option value="kick" data-i18n="tracker.ui.zone.kick">Kick</option>
             </select>
           </div>
           <div class="field">
-            <span>radius</span>
+            <span data-i18n="tracker.ui.field.radius">radius</span>
             <input type="range" id="rngDrumZoneRadius" min="0.03" max="0.18" step="0.005" value="0.085" />
             <output id="outDrumZoneRadius">8.5%</output>
           </div>
@@ -146,31 +149,31 @@
       </div>
       <div class="dataset-capture">
         <div class="calibration-guide-head">
-          <strong>Dataset capture</strong>
+          <strong data-i18n="tracker.ui.dataset.title">Dataset capture</strong>
           <output id="datasetCaptureStatus">0 records</output>
         </div>
         <div class="controls">
-          <label class="check"><input type="checkbox" id="chkDatasetCapture" />Capture at 2 fps</label>
-          <button id="btnCaptureDatasetSample">Capture sample</button>
-          <button id="btnDownloadDataset" disabled>Download NDJSON</button>
-          <button id="btnClearDataset" disabled>Clear dataset</button>
+          <label class="check"><input type="checkbox" id="chkDatasetCapture" /><span data-i18n="tracker.ui.check.datasetCapture">Capture at 2 fps</span></label>
+          <button id="btnCaptureDatasetSample" data-i18n="tracker.ui.btn.captureSample">Capture sample</button>
+          <button id="btnDownloadDataset" disabled data-i18n="tracker.ui.btn.downloadNdjson">Download NDJSON</button>
+          <button id="btnClearDataset" disabled data-i18n="tracker.ui.btn.clearDataset">Clear dataset</button>
         </div>
         <div class="form-grid compact">
           <div class="field">
-            <span>label</span>
+            <span data-i18n="tracker.ui.field.label">label</span>
             <select id="selDatasetLabel">
-              <option value="stick-tip">stick tip</option>
-              <option value="stick-box">stick box</option>
-              <option value="drum-hit">drum hit</option>
-              <option value="hand-contact">hand contact</option>
-              <option value="low-light">low light</option>
-              <option value="motion-blur">motion blur</option>
-              <option value="open-hand">open hand</option>
-              <option value="unlabeled">unlabeled</option>
+              <option value="stick-tip" data-i18n="tracker.ui.datasetLabel.stickTip">stick tip</option>
+              <option value="stick-box" data-i18n="tracker.ui.datasetLabel.stickBox">stick box</option>
+              <option value="drum-hit" data-i18n="tracker.ui.datasetLabel.drumHit">drum hit</option>
+              <option value="hand-contact" data-i18n="tracker.ui.datasetLabel.handContact">hand contact</option>
+              <option value="low-light" data-i18n="tracker.ui.datasetLabel.lowLight">low light</option>
+              <option value="motion-blur" data-i18n="tracker.ui.datasetLabel.motionBlur">motion blur</option>
+              <option value="open-hand" data-i18n="tracker.ui.datasetLabel.openHand">open hand</option>
+              <option value="unlabeled" data-i18n="tracker.ui.datasetLabel.unlabeled">unlabeled</option>
             </select>
           </div>
           <div class="field">
-            <span>license</span>
+            <span data-i18n="tracker.ui.field.license">license</span>
             <input type="text" id="inpDatasetLicense" value="0BSD" />
           </div>
         </div>
@@ -178,62 +181,62 @@
     </section>
 
     <section class="panel">
-      <h2><span class="dot face"></span>Blendshape mixer / 52ch</h2>
+      <h2><span class="dot face"></span><span data-i18n="tracker.ui.panel.mixer">Blendshape mixer / 52ch</span></h2>
       <canvas id="meters" class="meters-canvas"></canvas>
       <div class="form-grid compact">
         <div class="field">
-          <span>selected channel</span>
+          <span data-i18n="tracker.ui.field.selectedChannel">selected channel</span>
           <output id="outChannel">jawOpen</output>
         </div>
         <div class="field">
-          <span>gain</span>
+          <span data-i18n="tracker.ui.field.gain">gain</span>
           <input type="range" id="rngGain" min="0" max="2" step="0.01" value="1" />
         </div>
         <div class="field">
-          <span>deadzone</span>
+          <span data-i18n="tracker.ui.field.deadzone">deadzone</span>
           <input type="range" id="rngDeadzone" min="0" max="0.2" step="0.005" value="0" />
         </div>
         <div class="field">
-          <span>signal group</span>
+          <span data-i18n="tracker.ui.field.signalGroup">signal group</span>
           <select id="selSmoothingGroup">
-            <option value="face">face weights</option>
-            <option value="headRotation">head rotation</option>
-            <option value="headPosition">head position</option>
-            <option value="pose">upper-body pose</option>
-            <option value="hands">hands</option>
+            <option value="face" data-i18n="tracker.ui.group.face">face weights</option>
+            <option value="headRotation" data-i18n="tracker.ui.group.headRotation">head rotation</option>
+            <option value="headPosition" data-i18n="tracker.ui.group.headPosition">head position</option>
+            <option value="pose" data-i18n="tracker.ui.group.pose">upper-body pose</option>
+            <option value="hands" data-i18n="tracker.ui.group.hands">hands</option>
           </select>
         </div>
         <div class="field">
-          <span>preset</span>
+          <span data-i18n="tracker.ui.field.preset">preset</span>
           <select id="selFilterPreset">
-            <option value="responsive">responsive</option>
-            <option value="balanced" selected>balanced</option>
-            <option value="smooth">smooth</option>
-            <option value="custom">custom</option>
+            <option value="responsive" data-i18n="tracker.ui.preset.responsive">responsive</option>
+            <option value="balanced" selected data-i18n="tracker.ui.preset.balanced">balanced</option>
+            <option value="smooth" data-i18n="tracker.ui.preset.smooth">smooth</option>
+            <option value="custom" data-i18n="tracker.ui.preset.custom">custom</option>
           </select>
         </div>
         <div class="field">
-          <span>min cutoff</span>
+          <span data-i18n="tracker.ui.field.minCutoff">min cutoff</span>
           <input type="range" id="rngMinCutoff" min="0.2" max="4" step="0.05" value="1.6" />
         </div>
         <div class="field">
-          <span>beta</span>
+          <span data-i18n="tracker.ui.field.beta">beta</span>
           <input type="range" id="rngBeta" min="0" max="1.5" step="0.01" value="0.4" />
         </div>
         <div class="field">
-          <span>effective</span>
+          <span data-i18n="tracker.ui.field.effective">effective</span>
           <output id="outSmoothingEffective">face 1.60 / 0.40</output>
         </div>
       </div>
       <div class="controls">
-        <button id="btnMuteChannel">Mute channel</button>
-        <button id="btnStartCalibration">Start guided calibration</button>
-        <button id="btnStartGazeCalibration">Start gaze calibration</button>
-        <button id="btnStartHandCalibration">Start hand calibration</button>
-        <button id="btnCalibrateNeutral">Capture neutral</button>
-        <button id="btnExportProfile">Export profile</button>
-        <button id="btnImportProfile">Import profile</button>
-        <button id="btnResetSettings">Reset settings</button>
+        <button id="btnMuteChannel" data-i18n="tracker.ui.btn.muteChannel">Mute channel</button>
+        <button id="btnStartCalibration" data-i18n="tracker.ui.btn.startCalibration">Start guided calibration</button>
+        <button id="btnStartGazeCalibration" data-i18n="tracker.ui.btn.startGazeCalibration">Start gaze calibration</button>
+        <button id="btnStartHandCalibration" data-i18n="tracker.ui.btn.startHandCalibration">Start hand calibration</button>
+        <button id="btnCalibrateNeutral" data-i18n="tracker.ui.btn.captureNeutral">Capture neutral</button>
+        <button id="btnExportProfile" data-i18n="tracker.ui.btn.exportProfile">Export profile</button>
+        <button id="btnImportProfile" data-i18n="tracker.ui.btn.importProfile">Import profile</button>
+        <button id="btnResetSettings" data-i18n="tracker.ui.btn.resetSettings">Reset settings</button>
         <input type="file" id="fileProfile" accept="application/json,.json" hidden />
       </div>
       <div id="calibrationGuide" class="calibration-guide" hidden>
@@ -263,50 +266,50 @@
     </section>
 
     <section class="panel" style="grid-column: 1 / -1;">
-      <h2><span class="dot pose"></span>Transport / signal out</h2>
+      <h2><span class="dot pose"></span><span data-i18n="tracker.ui.panel.transport">Transport / signal out</span></h2>
       <div class="form-grid">
         <div class="field">
-          <span>mode</span>
+          <span data-i18n="tracker.ui.field.mode">mode</span>
           <select id="selMode">
-            <option value="local">local — same browser (BroadcastChannel)</option>
-            <option value="ws">ws — WebSocket relay (relay-node)</option>
-            <option value="wt">wt — WebTransport relay (relay-rs)</option>
+            <option value="local" data-i18n="tracker.ui.mode.local">local — same browser (BroadcastChannel)</option>
+            <option value="ws" data-i18n="tracker.ui.mode.ws">ws — WebSocket relay (relay-node)</option>
+            <option value="wt" data-i18n="tracker.ui.mode.wt">wt — WebTransport relay (relay-rs)</option>
           </select>
         </div>
         <div class="field">
-          <span>room</span>
+          <span data-i18n="tracker.ui.field.room">room</span>
           <input type="text" id="inpRoom" value="demo" />
         </div>
         <div class="field">
-          <span>participant id</span>
+          <span data-i18n="tracker.ui.field.participantId">participant id</span>
           <input type="text" id="inpParticipantId" maxlength="64" autocomplete="off" />
         </div>
         <div class="field">
-          <span>room token</span>
+          <span data-i18n="tracker.ui.field.roomToken">room token</span>
           <input type="password" id="inpToken" autocomplete="off" />
         </div>
         <div class="field wide" id="fieldWsUrl" hidden>
-          <span>websocket relay url</span>
+          <span data-i18n="tracker.ui.field.wsUrl">websocket relay url</span>
           <input type="url" id="inpWsUrl" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://relay.example/ws" />
         </div>
         <div class="field" id="fieldWtUrl" hidden>
-          <span>wt url</span>
+          <span data-i18n="tracker.ui.field.wtUrl">wt url</span>
           <input type="text" id="inpWtUrl" value="https://localhost:4433" />
         </div>
         <div class="field wide" id="fieldWtHash" hidden>
-          <span>cert sha-256 (hex, copy from the relay-rs startup log)</span>
+          <span data-i18n="tracker.ui.field.wtHash">cert sha-256 (hex, copy from the relay-rs startup log)</span>
           <input type="text" id="inpWtHash" placeholder="ab:cd:ef:... or abcdef..." />
         </div>
       </div>
       <div class="controls">
-        <button id="btnConnect">Connect</button>
-        <button id="btnDisconnect" disabled>Disconnect</button>
-        <label class="check"><input type="checkbox" id="chkRecord" />Record .kgm locally</label>
-        <button id="btnDownloadRecording" disabled>Download .kgm</button>
-        <button id="btnDownloadJsonl" disabled>Download JSONL</button>
-        <a id="lnkViewer" href="../viewer/?room=demo" target="_blank">Open viewer in a new tab →</a>
+        <button id="btnConnect" data-i18n="tracker.ui.btn.connect">Connect</button>
+        <button id="btnDisconnect" disabled data-i18n="tracker.ui.btn.disconnect">Disconnect</button>
+        <label class="check"><input type="checkbox" id="chkRecord" /><span data-i18n="tracker.ui.check.record">Record .kgm locally</span></label>
+        <button id="btnDownloadRecording" disabled data-i18n="tracker.ui.btn.downloadKgm">Download .kgm</button>
+        <button id="btnDownloadJsonl" disabled data-i18n="tracker.ui.btn.downloadJsonl">Download JSONL</button>
+        <a id="lnkViewer" href="../viewer/?room=demo" target="_blank" data-i18n="tracker.ui.link.viewer">Open viewer in a new tab →</a>
       </div>
-      <p class="note">In local mode no server is needed. Just open the viewer from the link above in the same browser and it works.</p>
+      <p class="note" data-i18n="tracker.ui.note.local">In local mode no server is needed. Just open the viewer from the link above in the same browser and it works.</p>
     </section>
   </main>
 
