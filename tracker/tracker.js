@@ -84,7 +84,7 @@ import { percentileSample } from '../shared/hud-metrics.js';
 import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import { waitForVideoMetadata, startVideoPlayback } from '../shared/camera-startup.js';
-import { createI18n, loadLanguage } from '../shared/i18n.js';
+import { setupPageI18n } from '../shared/i18n.js';
 import {
   AUDIO_LIPSYNC_TARGET_LATENCY_MS,
   audioLipsyncWithinLatency,
@@ -92,9 +92,42 @@ import {
   fuseAudioLipsyncWeights,
 } from '../shared/audio-lipsync.js';
 
-// Runtime EN/JA localization for failure/guidance strings (#267).
-const i18n = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) });
-const t = i18n.t;
+// Runtime EN/JA localization (#267): static markup carries data-i18n keys, and
+// `t` localizes everything this module renders imperatively. Those imperative
+// renders run after applyTranslations and would otherwise pin the first
+// language, so a toggle replays them all.
+// `bootDone` must be declared above setupPageI18n, which renders synchronously:
+// reading it from the temporal dead zone would abort the module.
+let bootDone = false;
+const { t } = setupPageI18n({
+  onRender: () => {
+    if (!bootDone) return;
+    if (lastStatus) setStatus(lastStatus.key, lastStatus.params);
+    refreshCameras().catch(() => {});
+    updateChannelControls();
+    updateDrumKitUi();
+    updateDatasetCaptureUi();
+    updateSmoothingControls();
+    renderLightingChecklist();
+  },
+});
+
+// The status chip is rendered from a key so a language toggle can replay the
+// message currently on screen instead of resetting it to "idle".
+let lastStatus = { key: 'tracker.status.idle', params: undefined };
+function setStatus(key, params = undefined, chipState = undefined) {
+  lastStatus = { key, params };
+  chip.textContent = t(key, params);
+  if (chipState !== undefined) chip.dataset.state = chipState;
+}
+
+// Already-composed text (URLs, upstream error details) has no key to replay, so
+// a language toggle leaves whatever is on screen alone.
+function setStatusText(text, chipState = undefined) {
+  lastStatus = null;
+  chip.textContent = text;
+  if (chipState !== undefined) chip.dataset.state = chipState;
+}
 
 const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -223,8 +256,7 @@ const state = {
 
 state.transport.addEventListener('status', (/** @type {any} */ ev) => {
   if (ev.detail.state === 'fallback') {
-    chip.textContent = ev.detail.detail;
-    chip.dataset.state = 'idle';
+    setStatusText(ev.detail.detail, 'idle');
   }
 });
 
@@ -331,7 +363,7 @@ function redactPairingTokenFromAddress(query) {
 }
 
 async function loadModels() {
-  chip.textContent = 'loading models...';
+  setStatus('tracker.status.loadingModels');
   await loadMediaPipeTasksVision();
   const assets = await resolveModelAssets();
   const fileset = await FilesetResolver.forVisionTasks(assets.wasmRoot);
@@ -506,8 +538,7 @@ function handleAudioInputError(error) {
   $('chkVoiceAccents').checked = false;
   $('chkAudioLipsync').checked = false;
   saveJson(localStorage, TRACKER_STORAGE_KEY, settings);
-  chip.textContent = `audio input unavailable: ${error?.message || String(error)}`;
-  chip.dataset.state = 'error';
+  setStatus('tracker.error.audioInput', { detail: error?.message || String(error) }, 'error');
 }
 
 function stopVoiceAccents() {
@@ -669,7 +700,7 @@ async function refreshCameras() {
   if (!navigator.mediaDevices?.enumerateDevices) return;
   const selected = $('selCamera').value || settings.cameraId || '';
   const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
-  $('selCamera').replaceChildren(new Option('default camera', ''));
+  $('selCamera').replaceChildren(new Option(t('tracker.ui.option.defaultCamera'), ''));
   devices.forEach((device, index) => {
     const label = device.label || `camera ${index + 1}`;
     $('selCamera').append(new Option(label, device.deviceId));
@@ -1351,18 +1382,16 @@ function captureDatasetSample(capturedBy = 'manual', frame = null, nowMs = perfo
     if (state.datasetCapture.records.length > 12_000) state.datasetCapture.records.shift();
     updateDatasetCaptureUi();
     if (capturedBy !== 'auto') {
-      chip.textContent = `dataset sample ${state.datasetCapture.records.length}`;
-      chip.dataset.state = 'open';
+      setStatus('tracker.status.datasetSample', { n: state.datasetCapture.records.length }, 'open');
     }
   } catch (error) {
-    chip.textContent = `dataset error: ${error.message}`;
-    chip.dataset.state = 'error';
+    setStatus('tracker.error.dataset', { detail: error.message }, 'error');
   }
 }
 
 function updateDatasetCaptureUi() {
   const count = state.datasetCapture.records.length;
-  $('datasetCaptureStatus').textContent = `${count} ${count === 1 ? 'record' : 'records'}`;
+  $('datasetCaptureStatus').textContent = t(count === 1 ? 'tracker.ui.status.record' : 'tracker.ui.status.records', { n: count });
   $('btnDownloadDataset').disabled = count === 0;
   $('btnClearDataset').disabled = count === 0;
 }
@@ -1380,18 +1409,18 @@ function updateStats(nowMs) {
   $('statFilterLag').textContent = estimateOneEuroLagMs(settings.smoothing.face.minCutoff).toFixed(0);
   $('statJitter').textContent = state.dropDetector.rollingJitterMs(2500, nowMs).toFixed(1);
   $('statHands').textContent = state.hasHands ? String(state.hands.length) : '0';
-  $('statVoiceAccent').textContent = settings.voiceAccents ? `${Math.round(state.voice.level * 100)}%` : 'off';
+  $('statVoiceAccent').textContent = settings.voiceAccents ? `${Math.round(state.voice.level * 100)}%` : t('tracker.ui.stat.off');
   const audioLatencyMs = currentAudioLipsyncLatencyMs(nowMs);
   $('statAudioLipsync').textContent = settings.audioLipsync
-    ? `${Math.round((state.voice.lipsync?.speech || 0) * 100)}% ${audioLipsyncWithinLatency(audioLatencyMs) ? `${Math.round(audioLatencyMs)}ms` : 'stale'}`
-    : 'off';
+    ? `${Math.round((state.voice.lipsync?.speech || 0) * 100)}% ${audioLipsyncWithinLatency(audioLatencyMs) ? `${Math.round(audioLatencyMs)}ms` : t('tracker.ui.stat.stale')}`
+    : t('tracker.ui.stat.off');
   const transportStats = state.transport.getStats();
   $('statTransportMode').textContent = transportStats.mode || settings.mode || 'local';
   $('statLatency').textContent = transportStats.latencyMs === null ? '--' : transportStats.latencyMs.toFixed(0);
   $('statTransportDrop').textContent = String(transportStats.droppedOut);
   const rate = (state.transport.bytesOut - state.lastBytesOut) / dt / 1024;
   $('statRate').textContent = rate.toFixed(1);
-  qualityChip.textContent = `${state.quality.state} ${Math.round((state.quality.score || 0) * 100)}%`;
+  qualityChip.textContent = `${t(`tracker.ui.quality.${state.quality.state}`, state.quality.state)} ${Math.round((state.quality.score || 0) * 100)}%`;
   qualityChip.dataset.state = state.quality.state;
   const visibleWarnings = [
     ...state.quality.reasons,
@@ -1417,9 +1446,9 @@ function renderLightingChecklist() {
   const active = state.running || state.quality.state !== 'idle';
   const exposureOk = !hasQualityWarning(WARNING_TAXONOMY.lowLight);
   setChecklistState('checkExposure', active, exposureOk, exposureOk ? exposureStatusHint() : exposureFixHint());
-  setChecklistState('checkFps', active, !hasQualityWarning(WARNING_TAXONOMY.droppedFrames), 'lower resolution or close heavy apps');
-  setChecklistState('checkBlur', active, !hasQualityWarning(WARNING_TAXONOMY.motionBlur), 'slow the motion or raise camera fps');
-  setChecklistState('checkConfidence', active, !hasQualityWarning(WARNING_TAXONOMY.occlusion), 'keep face and hands inside frame');
+  setChecklistState('checkFps', active, !hasQualityWarning(WARNING_TAXONOMY.droppedFrames), t('tracker.ui.hint.lowerResolution'));
+  setChecklistState('checkBlur', active, !hasQualityWarning(WARNING_TAXONOMY.motionBlur), t('tracker.ui.hint.slowMotion'));
+  setChecklistState('checkConfidence', active, !hasQualityWarning(WARNING_TAXONOMY.occlusion), t('tracker.ui.hint.keepInFrame'));
   if (active && !exposureOk) nudgeBrightnessForLowLight().catch(() => {});
 }
 
@@ -1430,14 +1459,14 @@ function hasQualityWarning(code) {
 function setChecklistState(id, active, ok, hint) {
   const item = $(id);
   item.dataset.state = active ? (ok ? 'ok' : 'check') : 'idle';
-  item.querySelector('b').textContent = active ? (ok ? 'ok' : 'check') : 'wait';
-  item.querySelector('small').textContent = active ? (ok ? 'stable' : hint) : 'start camera';
+  item.querySelector('b').textContent = t(active ? (ok ? 'tracker.ui.checklist.ok' : 'tracker.ui.checklist.check') : 'tracker.ui.checklist.wait');
+  item.querySelector('small').textContent = active ? (ok ? t('tracker.ui.checklist.stable') : hint) : t('tracker.ui.checklist.startCamera');
 }
 
 function exposureStatusHint() {
-  if (state.cameraControls.unavailable) return 'manual camera exposure';
-  if (state.cameraControls.attempted.length) return `auto ${state.cameraControls.attempted.join(', ')}`;
-  return `${state.cameraControls.supported.join(', ')} available`;
+  if (state.cameraControls.unavailable) return t('tracker.ui.hint.manualExposure');
+  if (state.cameraControls.attempted.length) return t('tracker.ui.hint.autoControls', { controls: state.cameraControls.attempted.join(', ') });
+  return t('tracker.ui.hint.controlsAvailable', { controls: state.cameraControls.supported.join(', ') });
 }
 
 function exposureFixHint() {
@@ -1555,10 +1584,10 @@ function updateViewerLink() {
 
 function updateChannelControls() {
   const i = state.selectedChannel;
-  $('outChannel').textContent = `${i + 1}. ${ARKIT_52[i]}${profile.muted[i] ? ' (muted)' : ''}`;
+  $('outChannel').textContent = `${i + 1}. ${ARKIT_52[i]}${profile.muted[i] ? ` ${t('tracker.ui.channel.muted')}` : ''}`;
   $('rngGain').value = profile.gains[i];
   $('rngDeadzone').value = profile.deadzones[i];
-  $('btnMuteChannel').textContent = profile.muted[i] ? 'Unmute channel' : 'Mute channel';
+  $('btnMuteChannel').textContent = t(profile.muted[i] ? 'tracker.ui.btn.unmuteChannel' : 'tracker.ui.btn.muteChannel');
   drawMeters();
 }
 
@@ -1580,9 +1609,9 @@ function updateDrumKitUi() {
     $('outDrumZoneRadius').textContent = `${(zone.radius * 100).toFixed(1)}%`;
   }
   const summary = drumKitCalibrationSummary(drumKit);
-  $('drumKitStatus').textContent = `${summary.calibrated}/${summary.total} zones`;
+  $('drumKitStatus').textContent = t('tracker.ui.status.zones', { calibrated: summary.calibrated, total: summary.total });
   $('drumKitStatus').dataset.state = summary.ready ? 'good' : summary.calibrated ? 'degraded' : 'idle';
-  $('btnArmDrumZone').textContent = state.drumPlacementArmed ? 'Cancel placement' : 'Place zone';
+  $('btnArmDrumZone').textContent = t(state.drumPlacementArmed ? 'tracker.ui.btn.cancelPlacement' : 'tracker.ui.btn.placeZone');
   renderDrumZoneList();
 }
 
@@ -1592,7 +1621,7 @@ function renderDrumZoneList() {
     const li = document.createElement('li');
     li.dataset.state = active.has(zone.id) ? 'active' : zone.calibrated ? 'set' : 'idle';
     const label = document.createElement('span');
-    label.textContent = `${zone.label} ${zone.calibrated ? 'set' : 'unset'}`;
+    label.textContent = `${t(`tracker.ui.zone.${zone.id}`, zone.label)} ${t(zone.calibrated ? 'tracker.ui.zone.set' : 'tracker.ui.zone.unset')}`;
     const detail = document.createElement('small');
     detail.textContent = `${(zone.x * 100).toFixed(0)} / ${(zone.y * 100).toFixed(0)} / ${(zone.radius * 100).toFixed(1)}%`;
     li.append(label, detail);
@@ -1620,8 +1649,7 @@ function placeSelectedDrumZoneFromEvent(ev) {
   });
   state.drumPlacementArmed = false;
   updateDrumKitUi();
-  chip.textContent = 'drum zone placed';
-  chip.dataset.state = 'open';
+  setStatus('tracker.status.drumZonePlaced', undefined, 'open');
 }
 
 async function copyDrumObsUrl() {
@@ -1640,12 +1668,14 @@ async function copyDrumObsUrl() {
   url.searchParams.set('drum', '1');
   try {
     await navigator.clipboard.writeText(url.toString());
-    chip.textContent = 'OBS drum overlay URL copied';
-    chip.dataset.state = 'open';
+    setStatus('tracker.status.obsUrlCopied', undefined, 'open');
   } catch {
-    chip.textContent = url.toString();
-    chip.dataset.state = 'open';
+    setStatusText(url.toString(), 'open');
   }
+}
+
+function smoothingGroupLabel(group) {
+  return t(`tracker.ui.group.${group}`, SMOOTHING_GROUPS[group] || group);
 }
 
 function currentSmoothingGroup() {
@@ -1660,7 +1690,7 @@ function updateSmoothingControls() {
   $('selFilterPreset').value = groupSettings.filterPreset || 'custom';
   $('rngMinCutoff').value = groupSettings.minCutoff;
   $('rngBeta').value = groupSettings.beta;
-  $('outSmoothingEffective').textContent = `${SMOOTHING_GROUPS[group]} ${Number(groupSettings.minCutoff).toFixed(2)} / ${Number(groupSettings.beta).toFixed(2)}`;
+  $('outSmoothingEffective').textContent = `${smoothingGroupLabel(group)} ${Number(groupSettings.minCutoff).toFixed(2)} / ${Number(groupSettings.beta).toFixed(2)}`;
 }
 
 function readSmoothingFromUi() {
@@ -1677,7 +1707,7 @@ function readSmoothingFromUi() {
     settings.minCutoff = next.minCutoff;
     settings.beta = next.beta;
   }
-  $('outSmoothingEffective').textContent = `${SMOOTHING_GROUPS[group]} ${next.minCutoff.toFixed(2)} / ${next.beta.toFixed(2)}`;
+  $('outSmoothingEffective').textContent = `${smoothingGroupLabel(group)} ${next.minCutoff.toFixed(2)} / ${next.beta.toFixed(2)}`;
 }
 
 function saveProfile() {
@@ -1688,14 +1718,13 @@ function saveProfile() {
 
 function startGuidedCalibration() {
   if (!state.running) {
-    chip.textContent = 'start tracking before calibration';
-    chip.dataset.state = 'error';
+    setStatus('tracker.status.calibrationNeedsTracking', undefined, 'error');
     return;
   }
   state.calibrationSession = createGuidedCalibrationSession(`guided-${new Date().toISOString()}`, performance.now());
   $('btnStartCalibration').disabled = true;
   $('calibrationGuide').hidden = false;
-  $('calibrationResult').textContent = 'collecting samples';
+  $('calibrationResult').textContent = t('tracker.calib.collectingSamples');
   updateGuidedCalibrationUi({
     done: false,
     elapsedMs: 0,
@@ -1706,8 +1735,7 @@ function startGuidedCalibration() {
     stepRemainingMs: 3000,
     progress: 0,
   });
-  chip.textContent = 'guided calibration';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.calibrationRunning', undefined, 'idle');
 }
 
 function sampleGuidedCalibration(weights) {
@@ -1725,7 +1753,7 @@ function tickGuidedCalibration() {
 }
 
 function updateGuidedCalibrationUi(progress) {
-  $('calibrationStep').textContent = progress.step?.label || 'Calibration';
+  $('calibrationStep').textContent = progress.step?.label || t('tracker.calib.step.calibration');
   $('calibrationTime').textContent = `${Math.max(0, (progress.totalMs - progress.elapsedMs) / 1000).toFixed(1)}s`;
   $('calibrationProgress').value = String(progress.progress || 0);
 }
@@ -1737,9 +1765,8 @@ function finishGuidedCalibration() {
   $('btnStartCalibration').disabled = false;
 
   if (session.neutralSamples.length === 0 || session.rangeSamples.length === 0) {
-    $('calibrationResult').textContent = 'calibration failed: no face samples';
-    chip.textContent = 'calibration failed';
-    chip.dataset.state = 'error';
+    $('calibrationResult').textContent = t('tracker.calib.noFaceSamples');
+    setStatus('tracker.status.calibrationFailed', undefined, 'error');
     return;
   }
 
@@ -1751,9 +1778,8 @@ function finishGuidedCalibration() {
   });
   saveProfile();
   resetFilters();
-  $('calibrationResult').textContent = `saved ${session.neutralSamples.length} neutral / ${session.rangeSamples.length} range samples`;
-  chip.textContent = 'calibration saved';
-  chip.dataset.state = 'open';
+  $('calibrationResult').textContent = t('tracker.calib.saved', { neutral: session.neutralSamples.length, range: session.rangeSamples.length });
+  setStatus('tracker.status.calibrationSaved', undefined, 'open');
 }
 
 function cancelGuidedCalibration(message = 'calibration cancelled') {
@@ -1767,22 +1793,20 @@ function cancelGuidedCalibration(message = 'calibration cancelled') {
 
 function startGazeCalibration() {
   if (!state.running) {
-    chip.textContent = 'start tracking before gaze calibration';
-    chip.dataset.state = 'error';
+    setStatus('tracker.status.gazeCalibrationNeedsTracking', undefined, 'error');
     return;
   }
   state.gazeCalibrationSession = createGazeCalibrationSession(`gaze-${new Date().toISOString()}`, performance.now());
   $('btnStartGazeCalibration').disabled = true;
   $('gazeCalibrationGuide').hidden = false;
-  $('gazeCalibrationResult').textContent = 'collecting iris samples';
+  $('gazeCalibrationResult').textContent = t('tracker.calib.collectingIris');
   updateGazeCalibrationUi({
     elapsedMs: 0,
     totalMs: GAZE_CALIBRATION_TOTAL_MS,
     step: { label: 'Look center' },
     progress: 0,
   });
-  chip.textContent = 'gaze calibration';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.gazeCalibrationRunning', undefined, 'idle');
 }
 
 function sampleGazeCalibration(landmarks) {
@@ -1800,7 +1824,7 @@ function tickGazeCalibration() {
 }
 
 function updateGazeCalibrationUi(progress) {
-  $('gazeCalibrationStep').textContent = progress.step?.label || 'Look center';
+  $('gazeCalibrationStep').textContent = progress.step?.label || t('tracker.calib.step.lookCenter');
   $('gazeCalibrationTime').textContent = `${Math.max(0, (progress.totalMs - progress.elapsedMs) / 1000).toFixed(1)}s`;
   $('gazeCalibrationProgress').value = String(progress.progress || 0);
 }
@@ -1813,17 +1837,15 @@ function finishGazeCalibration() {
 
   const coveredSteps = new Set(session.samples.map((sample) => sample.stepId));
   if (coveredSteps.size < GAZE_CALIBRATION_STEPS.length) {
-    $('gazeCalibrationResult').textContent = `gaze calibration failed: ${coveredSteps.size}/${GAZE_CALIBRATION_STEPS.length} targets`;
-    chip.textContent = 'gaze calibration failed';
-    chip.dataset.state = 'error';
+    $('gazeCalibrationResult').textContent = t('tracker.calib.gazeFailed', { covered: coveredSteps.size, total: GAZE_CALIBRATION_STEPS.length });
+    setStatus('tracker.status.gazeCalibrationFailed', undefined, 'error');
     return;
   }
 
   profile.gaze = buildGazeCalibrationProfile(session.samples);
   saveProfile();
-  $('gazeCalibrationResult').textContent = `saved ${session.samples.length} iris samples`;
-  chip.textContent = 'gaze calibration saved';
-  chip.dataset.state = 'open';
+  $('gazeCalibrationResult').textContent = t('tracker.calib.gazeSaved', { n: session.samples.length });
+  setStatus('tracker.status.gazeCalibrationSaved', undefined, 'open');
 }
 
 function cancelGazeCalibration(message = 'gaze calibration cancelled') {
@@ -1837,22 +1859,20 @@ function cancelGazeCalibration(message = 'gaze calibration cancelled') {
 
 function startHandCalibration() {
   if (!state.running || !state.handsEnabled) {
-    chip.textContent = 'enable hands before hand calibration';
-    chip.dataset.state = 'error';
+    setStatus('tracker.status.handCalibrationNeedsHands', undefined, 'error');
     return;
   }
   state.handCalibrationSession = createHandCalibrationSession(`hand-${new Date().toISOString()}`, performance.now());
   $('btnStartHandCalibration').disabled = true;
   $('handCalibrationGuide').hidden = false;
-  $('handCalibrationResult').textContent = 'collecting hand samples';
+  $('handCalibrationResult').textContent = t('tracker.calib.collectingHands');
   updateHandCalibrationUi({
     elapsedMs: 0,
     totalMs: HAND_CALIBRATION_TOTAL_MS,
     step: { label: 'Open palm' },
     progress: 0,
   });
-  chip.textContent = 'hand calibration';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.handCalibrationRunning', undefined, 'idle');
 }
 
 function sampleHandCalibration(handTargets, nowMs = performance.now()) {
@@ -1870,7 +1890,7 @@ function tickHandCalibration() {
 }
 
 function updateHandCalibrationUi(progress) {
-  $('handCalibrationStep').textContent = progress.step?.label || 'Open palm';
+  $('handCalibrationStep').textContent = progress.step?.label || t('tracker.calib.step.openPalm');
   $('handCalibrationTime').textContent = `${Math.max(0, (progress.totalMs - progress.elapsedMs) / 1000).toFixed(1)}s`;
   $('handCalibrationProgress').value = String(progress.progress || 0);
 }
@@ -1882,9 +1902,8 @@ function finishHandCalibration() {
   $('btnStartHandCalibration').disabled = false;
 
   if (session.openSamples.length === 0 || session.fistSamples.length === 0) {
-    $('handCalibrationResult').textContent = 'hand calibration failed: need open palm and fist samples';
-    chip.textContent = 'hand calibration failed';
-    chip.dataset.state = 'error';
+    $('handCalibrationResult').textContent = t('tracker.calib.handFailed');
+    setStatus('tracker.status.handCalibrationFailed', undefined, 'error');
     return;
   }
 
@@ -1896,9 +1915,8 @@ function finishHandCalibration() {
   });
   saveJson(localStorage, HAND_PROFILE_STORAGE_KEY, handProfile);
   state.handTargetStabilizer.reset();
-  $('handCalibrationResult').textContent = `saved ${session.openSamples.length} open / ${session.fistSamples.length} fist samples`;
-  chip.textContent = 'hand calibration saved';
-  chip.dataset.state = 'open';
+  $('handCalibrationResult').textContent = t('tracker.calib.handSaved', { open: session.openSamples.length, fist: session.fistSamples.length });
+  setStatus('tracker.status.handCalibrationSaved', undefined, 'open');
 }
 
 function cancelHandCalibration(message = 'hand calibration cancelled') {
@@ -1960,8 +1978,7 @@ function clearMeterLongPress() {
 function toggleSelectedChannelMute() {
   profile.muted[state.selectedChannel] = !profile.muted[state.selectedChannel];
   saveProfile();
-  chip.textContent = profile.muted[state.selectedChannel] ? 'channel muted' : 'channel unmuted';
-  chip.dataset.state = 'idle';
+  setStatus(profile.muted[state.selectedChannel] ? 'tracker.status.channelMuted' : 'tracker.status.channelUnmuted', undefined, 'idle');
 }
 
 function startMeterInteraction(ev) {
@@ -2049,14 +2066,12 @@ $('btnStart').addEventListener('click', async () => {
     await startCamera();
     $('stageHint').hidden = true;
     state.running = true;
-    chip.textContent = 'tracking';
-    chip.dataset.state = 'open';
+    setStatus('tracker.status.tracking', undefined, 'open');
     $('btnStop').disabled = false;
     requestAnimationFrame(loop);
   } catch (e) {
     const message = cameraErrorMessage(e);
-    chip.textContent = `error: ${message}`;
-    chip.dataset.state = 'error';
+    setStatus('tracker.error.generic', { detail: message }, 'error');
     $('stageHint').textContent = message;
     $('stageHint').hidden = false;
     $('btnStart').disabled = false;
@@ -2074,8 +2089,7 @@ $('btnStop').addEventListener('click', () => {
     for (const t of video.srcObject.getTracks()) t.stop();
     video.srcObject = null;
   }
-  chip.textContent = 'stopped';
-  chip.dataset.state = 'closed';
+  setStatus('tracker.status.stopped', undefined, 'closed');
   $('btnStart').disabled = false;
   $('btnStop').disabled = true;
   $('stageHint').hidden = false;
@@ -2158,8 +2172,7 @@ $('btnArmDrumZone').addEventListener('click', () => {
     state.handsEnabled = true;
     persistSettings();
     ensureHandLandmarkerIfRunning().catch((error) => {
-      chip.textContent = `hand model error: ${error.message}`;
-      chip.dataset.state = 'error';
+      setStatus('tracker.error.handModel', { detail: error.message }, 'error');
     });
   }
   state.drumPlacementArmed = !state.drumPlacementArmed;
@@ -2167,15 +2180,13 @@ $('btnArmDrumZone').addEventListener('click', () => {
 });
 $('btnClearDrumZone').addEventListener('click', () => {
   updateSelectedDrumZone({ calibrated: false });
-  chip.textContent = 'drum zone cleared';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.drumZoneCleared', undefined, 'idle');
 });
 $('btnResetDrumKit').addEventListener('click', () => {
   state.drumPlacementArmed = false;
   drumKit = createDefaultDrumKitConfig('default');
   saveDrumKit();
-  chip.textContent = 'drum kit reset';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.drumKitReset', undefined, 'idle');
 });
 $('btnCopyDrumObsUrl').addEventListener('click', copyDrumObsUrl);
 
@@ -2245,8 +2256,7 @@ $('btnCalibrateNeutral').addEventListener('click', () => {
   profile.offsets = Array.from(state.raw);
   profile.createdAt = new Date().toISOString();
   saveProfile();
-  chip.textContent = 'neutral captured';
-  chip.dataset.state = 'open';
+  setStatus('tracker.status.neutralCaptured', undefined, 'open');
 });
 $('btnExportProfile').addEventListener('click', () => {
   downloadText('minamo-calibration-profile.json', `${JSON.stringify(profile, null, 2)}\n`);
@@ -2261,11 +2271,10 @@ $('fileProfile').addEventListener('change', async (e) => {
     if (!result.ok) throw new Error(result.errors.join('; '));
     profile = result.profile;
     saveProfile();
-    chip.textContent = result.warnings.length ? `profile imported: ${result.warnings.length} adjustment(s)` : 'profile imported';
-    chip.dataset.state = result.warnings.length ? 'idle' : 'open';
+    if (result.warnings.length) setStatus('tracker.status.profileImportedAdjusted', { n: result.warnings.length }, 'idle');
+    else setStatus('tracker.status.profileImported', undefined, 'open');
   } catch (error) {
-    chip.textContent = `profile import error: ${error.message}`;
-    chip.dataset.state = 'error';
+    setStatus('tracker.error.profileImport', { detail: error.message }, 'error');
   } finally {
     e.target.value = '';
   }
@@ -2286,8 +2295,7 @@ $('btnResetSettings').addEventListener('click', () => {
   applySettingsToUi();
   stopAudioInput();
   resetFilters();
-  chip.textContent = 'settings reset';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.settingsReset', undefined, 'idle');
 });
 
 $('btnResetTracking').addEventListener('click', resetTrackingRuntime);
@@ -2311,13 +2319,11 @@ $('btnConnect').addEventListener('click', async () => {
       pageProtocol: location.protocol,
     });
     const fallback = result.attempts.length ? ` after ${result.attempts.map((attempt) => attempt.mode).join(' → ')}` : '';
-    chip.textContent = `tracking + ${result.mode}:${$('inpRoom').value}${fallback}`;
-    chip.dataset.state = 'open';
+    setStatus('tracker.status.trackingConnected', { mode: result.mode, room: $('inpRoom').value, fallback }, 'open');
     $('btnConnect').disabled = true;
     $('btnDisconnect').disabled = false;
   } catch (e) {
-    chip.textContent = `connect error: ${e.message}`;
-    chip.dataset.state = 'error';
+    setStatus('tracker.error.connect', { detail: e.message }, 'error');
   }
 });
 
@@ -2351,8 +2357,7 @@ $('btnClearDataset').addEventListener('click', () => {
   state.datasetCapture.seq = 0;
   state.datasetCapture.lastAutoCaptureMs = -Infinity;
   updateDatasetCaptureUi();
-  chip.textContent = 'dataset cleared';
-  chip.dataset.state = 'idle';
+  setStatus('tracker.status.datasetCleared', undefined, 'idle');
 });
 
 $('chkRecord').addEventListener('change', (e) => {
@@ -2395,8 +2400,7 @@ window.addEventListener('keydown', (ev) => {
 function resetTrackingRuntime() {
   resetFilters();
   state.nameToIndex = null;
-  chip.textContent = 'tracking reset';
-  chip.dataset.state = state.running ? 'open' : 'idle';
+  setStatus('tracker.status.trackingReset', undefined, state.running ? 'open' : 'idle');
 }
 
 applySettingsToUi();
@@ -2404,3 +2408,5 @@ updateDatasetCaptureUi();
 checkCapabilities();
 refreshCameras().catch(() => {});
 navigator.mediaDevices?.addEventListener?.('devicechange', refreshCameras);
+setStatus('tracker.status.idle', undefined, 'idle');
+bootDone = true;
