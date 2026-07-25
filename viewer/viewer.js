@@ -52,6 +52,7 @@ import {
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { setupPageI18n } from '../shared/i18n.js';
+import { roomLayout, slotOffsetX } from '../shared/room-layout.js';
 
 // Runtime EN/JA localization (#267): static markup carries data-i18n keys and
 // `tr` localizes everything rendered from here. Those imperative renders run
@@ -1066,10 +1067,9 @@ const clock = new THREE.Clock();
 function updateRoomParticipantLayout(nowMs) {
   const snapshots = roomParticipants.snapshot(nowMs);
   const count = snapshots.length;
-  const scale = count > 1 ? Math.max(0.58, 0.9 - (count - 2) * 0.06) : 1;
-  const spacing = count > 4 ? 0.58 : 0.78;
+  const { scale, spacing } = roomLayout(count);
   for (const participant of snapshots) {
-    const slotX = (participant.slot - (count - 1) / 2) * spacing;
+    const slotX = slotOffsetX(participant.slot, count, spacing);
     const runtime = participant.avatar;
     if (!runtime) continue;
     if (runtime.primary) {
