@@ -111,12 +111,33 @@ Two different problems:
 
 ```
 minamo/
-  index.html          landing hub
-  tracker/            webcam -> KGM1 publisher page
-  viewer/             KGM1 -> VRM / built-in bot renderer page
-  shared/             blendshape canon, filters, codec, transport
+  index.html          bilingual site home
+  landing/            30-second demo (mock signals, camera optional)
+  tracker/            webcam -> KGM1-WIRE publisher page
+  viewer/             KGM1-WIRE -> VRM / Inochi2D / layered / built-in bot renderer
+  replay/             .kgm and JSONL recording playback
+  desktop/            Tauri renderer (also served as a web preview)
+  diagnostics/        standalone avatar-mapping and hand-stability pages
+  roadmap/            roadmap page
+
+  shared/             the shipped runtime: blendshape canon, filters, codecs,
+                      transport, i18n, recording, pose/hand/room math
+  src/                typed core used by vitest, benchmarks and diagnostics;
+                      NOT wired into the pages (see #255)
+  types/              ambient type declarations for the browser JS gate
+
   relay-node/         static site + WebSocket relay (compatibility path)
   relay-rs/           WebTransport datagram relay (low-latency path)
+  services/           design skeletons only; nothing here is built or run
+  src-tauri/          Tauri desktop shell (Rust)
+  crates/             kgm1-codec: the KGM1B container codec (Rust)
+  packages/           kgm1-codec-py: the same container codec (Python)
+
   assets/             design system CSS
-  docs/               this file, PROTOCOL.md, BACKLOG.md, design/
+  docs/               this file, PROTOCOL.md, BACKLOG.md, design/, product/
+  issues/             one file per registered GitHub issue
+  prompts/            authoring prompts
+  scripts/            lint, structure verification, coverage gate, tooling
+  tests/              node suite, fixtures, vitest specs
+  third_party/        vendored third-party sources
 ```

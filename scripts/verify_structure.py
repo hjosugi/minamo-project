@@ -1438,6 +1438,29 @@ def validate_transport_contracts() -> None:
     # topology, and no OTP application exists to run (#258). The rule now tracks
     # reality in both directions — the lab criteria may only be claimed once the
     # router is something the build can actually compile and run.
+    # The two backlogs must agree on every checkbox (#266). A bilingual document
+    # corrected in one language only is worse than one corrected in neither: it
+    # looks maintained. KGM-032's lab criteria were fixed in English while the
+    # Japanese twin went on claiming them.
+    backlog_ja = read('docs/BACKLOG.ja.md')
+    def _backlog_states(text):
+        return {
+            match.group(1): re.findall(r'^- \[([ x])\]', match.group(2), flags=re.M)
+            for match in re.finditer(
+                r'^### \[(KGM-[^\]]+)\][^\n]*\n(.*?)(?=^### |\Z)', text, flags=re.M | re.S
+            )
+        }
+    en_states, ja_states = _backlog_states(backlog), _backlog_states(backlog_ja)
+    for item, states in en_states.items():
+        if item not in ja_states:
+            add_error('docs/BACKLOG.ja.md', f'{item} is missing from the Japanese backlog')
+        elif states != ja_states[item]:
+            add_error(
+                'docs/BACKLOG.ja.md',
+                f'{item} acceptance-criteria checkboxes disagree with docs/BACKLOG.md '
+                f'(EN {"".join(states)} vs JA {"".join(ja_states[item])})',
+            )
+
     # KGM1B conformance must stay cross-executed, not hand-copied (#257): one
     # fixture, three readers. Losing any consumer silently reopens the drift.
     vectors = read('tests/fixtures/kgm1b-vectors.txt')
