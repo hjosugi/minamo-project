@@ -135,7 +135,10 @@ mod tests {
                 Err("unsupported version_major"),
                 "version_major {major} must be rejected"
             );
-            let packet = Kgm1Packet { header, payload: vec![1, 2, 3] };
+            let packet = Kgm1Packet {
+                header,
+                payload: vec![1, 2, 3],
+            };
             assert!(
                 Kgm1Packet::decode(&packet.encode()).is_err(),
                 "a packet with version_major {major} must be rejected"
@@ -145,7 +148,10 @@ mod tests {
         // Everything currently in the wild still decodes.
         for major in SUPPORTED_VERSION_MAJORS {
             header.version_major = *major;
-            assert!(Kgm1Header::decode(&header.encode()).is_ok(), "version_major {major} must decode");
+            assert!(
+                Kgm1Header::decode(&header.encode()).is_ok(),
+                "version_major {major} must decode"
+            );
         }
     }
 
