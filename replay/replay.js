@@ -21,6 +21,7 @@ $('fileReplay').addEventListener('change', async (event) => {
   playing = false;
   if (timer) clearTimeout(timer);
   timer = null;
+  closePublishChannel();
   const parsed = await parseReplayFile(file);
   frames = parsed.frames.sort((a, b) => a.t - b.t);
   validationErrors = parsed.errors;
@@ -101,6 +102,7 @@ function pause(label) {
   playing = false;
   if (timer) clearTimeout(timer);
   timer = null;
+  closePublishChannel();
   $('btnPlay').disabled = !canReplay();
   $('btnPause').disabled = true;
   chip.textContent = label;
@@ -160,10 +162,31 @@ function renderReplayValidation(errors, frameCount) {
   }
 }
 
-function publish(record) {
+// Reuse one BroadcastChannel across the whole playback session instead of
+// opening and closing a fresh one for every frame (#259). It is recreated only
+// when the room/token changes and closed when playback stops.
+let publishChannel = null;
+let publishChannelKey = '';
+
+function currentPublishChannel() {
   const room = $('inpRoom').value || 'demo';
   const token = $('inpToken').value || 'open';
-  const channel = new BroadcastChannel(`minamo:${room}:${token}`);
+  const key = `minamo:${room}:${token}`;
+  if (publishChannelKey !== key) {
+    if (publishChannel) publishChannel.close();
+    publishChannel = new BroadcastChannel(key);
+    publishChannelKey = key;
+  }
+  return publishChannel;
+}
+
+function closePublishChannel() {
+  if (publishChannel) publishChannel.close();
+  publishChannel = null;
+  publishChannelKey = '';
+}
+
+function publish(record) {
   const frame = {
     t: Math.round(record.t),
     seq: record.seq,
@@ -175,8 +198,7 @@ function publish(record) {
     pose: record.pose?.points ? { points: record.pose.points } : null,
     hands: record.hands ?? null,
   };
-  channel.postMessage(encodeFrame(frame));
-  channel.close();
+  currentPublishChannel().postMessage(encodeFrame(frame));
 }
 
 function updateViewerLink() {

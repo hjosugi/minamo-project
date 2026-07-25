@@ -42,6 +42,10 @@ import {
   DRUM_DOWNSTROKE_MIN_SPEED_MPS,
   DRUM_MIN_HIT_SPEED_MPS,
   fetchAndVerifyModel,
+  clampFingerState,
+  defaultEye,
+  defaultMouth,
+  finiteFrameGuard,
   finiteNumber,
   finiteVec3Guard,
   fuseVisualHitWithAudio,
@@ -642,6 +646,42 @@ describe('stability layer', () => {
     const flipped = shortestPathQuat(previous, { x: 0, y: 0, z: 0, w: -1 });
     expect(flipped.w).toBe(1);
     expect(slerpQuat(previous, { x: 0, y: 0, z: 0, w: -1 }, 0.5).w).toBeGreaterThan(0.99);
+  });
+
+  it('guards frames/fingers and leaves the input unmutated (#259)', () => {
+    const frame = createEmptyFrame(1, 0);
+    frame.tracking.hands = [];
+    frame.tracking.face = {
+      detected: true,
+      confidence: 1,
+      headRotation: { x: Number.NaN, y: 0, z: 0, w: 1 },
+      leftEye: defaultEye(),
+      rightEye: defaultEye(),
+      mouth: defaultMouth(),
+      blendshapes: { jawOpen: 2, browInnerUp: Number.NaN },
+      warnings: [],
+    };
+    const guarded = finiteFrameGuard(frame);
+    // Output is guarded...
+    expect(guarded.value.tracking.face?.blendshapes.jawOpen).toBe(1);
+    expect(Number.isFinite(guarded.value.tracking.face?.blendshapes.browInnerUp ?? NaN)).toBe(true);
+    expect(Number.isFinite(guarded.value.tracking.face?.headRotation?.x ?? NaN)).toBe(true);
+    // ...the input frame is not mutated (shallow-copy contract)...
+    expect(frame.tracking.face?.blendshapes.jawOpen).toBe(2);
+    expect(Number.isNaN(frame.tracking.face?.blendshapes.browInnerUp ?? 0)).toBe(true);
+    expect(guarded.value.tracking.face).not.toBe(frame.tracking.face);
+    // ...and untouched branches are shared, not needlessly deep-copied.
+    expect(guarded.value.tracking.hands).toBe(frame.tracking.hands);
+
+    const finger = solveHandState({ handedness: 'Right', landmarks: createSyntheticHandLandmarks(0.3, 'Right') }).fingers.index;
+    finger.curl = 5;
+    finger.spread = -9;
+    const clamped = clampFingerState(finger);
+    expect(clamped.value.curl).toBe(1);
+    expect(clamped.value.spread).toBe(-0.55);
+    expect(finger.curl).toBe(5); // input untouched
+    expect(clamped.value.mcp).not.toBe(finger.mcp); // mutated branch is copied
+    expect(clamped.value.tip).toBe(finger.tip); // untouched branch is shared
   });
 });
 

@@ -27,7 +27,16 @@ export interface ClampResult<T> {
 
 export function clampFingerState(finger: FingerState, limits = DEFAULT_FINGER_LIMITS[finger.name]): ClampResult<FingerState> {
   const warnings: string[] = [];
-  const next: FingerState = structuredClone(finger);
+  // Shallow-copy only the nested objects this function mutates instead of a
+  // per-call structuredClone deep copy (#259). tip/tipVelocity/name are shared
+  // by reference — they are never written here, so the input stays unmutated.
+  const next: FingerState = {
+    ...finger,
+    mcp: { ...finger.mcp },
+    contact: { ...finger.contact },
+    ...(finger.pip ? { pip: { ...finger.pip } } : {}),
+    ...(finger.dip ? { dip: { ...finger.dip } } : {}),
+  };
 
   if (next.mcp.flexion !== undefined) {
     const before = next.mcp.flexion;
