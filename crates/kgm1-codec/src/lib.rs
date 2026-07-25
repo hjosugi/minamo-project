@@ -112,6 +112,104 @@ impl Kgm1Packet {
 mod tests {
     use super::*;
 
+    /// Parse the shared conformance fixture (#257).
+    ///
+    /// The Rust side used to check a hex literal hand-copied from the JS test,
+    /// so a JS format change would diverge silently until someone remembered to
+    /// update the copy. Now all three implementations read the same file.
+    fn shared_vectors() -> Vec<Vec<String>> {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/kgm1b-vectors.txt"
+        );
+        let text = std::fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("cannot read {path}: {error}"));
+        let rows: Vec<Vec<String>> = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .map(|line| line.split('|').map(str::to_string).collect())
+            .collect();
+        assert!(!rows.is_empty(), "conformance fixture is empty");
+        rows
+    }
+
+    fn from_hex(hex: &str) -> Vec<u8> {
+        assert!(hex.len().is_multiple_of(2), "odd-length hex: {hex}");
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("invalid hex"))
+            .collect()
+    }
+
+    fn to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn matches_shared_conformance_vectors() {
+        let mut roundtrips = 0;
+        let mut rejects = 0;
+        for row in shared_vectors() {
+            let (kind, name, packet_hex) = (row[0].as_str(), row[1].as_str(), row[2].as_str());
+            let packet_bytes = from_hex(packet_hex);
+            match kind {
+                "roundtrip" => {
+                    let payload = if row[12] == "-" {
+                        Vec::new()
+                    } else {
+                        from_hex(&row[12])
+                    };
+                    let header = Kgm1Header {
+                        version_major: row[3].parse().unwrap(),
+                        version_minor: row[4].parse().unwrap(),
+                        frame_id: row[5].parse().unwrap(),
+                        source_time_ns: row[6].parse().unwrap(),
+                        monotonic_time_ns: row[7].parse().unwrap(),
+                        flags: row[8].parse().unwrap(),
+                        encoding: row[9].parse().unwrap(),
+                        payload_type: row[10].parse().unwrap(),
+                        payload_len: row[11].parse().unwrap(),
+                    };
+                    // Encoding the declared fields must reproduce the vector byte for byte.
+                    let encoded = Kgm1Packet {
+                        header,
+                        payload: payload.clone(),
+                    }
+                    .encode();
+                    assert_eq!(
+                        to_hex(&encoded),
+                        packet_hex,
+                        "vector {name}: encode mismatch"
+                    );
+                    // And decoding it must reproduce the fields and payload.
+                    let decoded = Kgm1Packet::decode(&packet_bytes)
+                        .unwrap_or_else(|error| panic!("vector {name}: decode failed: {error}"));
+                    assert_eq!(decoded.header, header, "vector {name}: header mismatch");
+                    assert_eq!(decoded.payload, payload, "vector {name}: payload mismatch");
+                    roundtrips += 1;
+                }
+                "reject" => {
+                    assert!(
+                        Kgm1Packet::decode(&packet_bytes).is_err(),
+                        "vector {name}: these bytes must be rejected"
+                    );
+                    rejects += 1;
+                }
+                other => panic!("vector {name}: unknown kind {other}"),
+            }
+        }
+        // Guard against a fixture that silently loses its contents.
+        assert!(
+            roundtrips >= 5,
+            "expected several roundtrip vectors, saw {roundtrips}"
+        );
+        assert!(
+            rejects >= 5,
+            "expected several reject vectors, saw {rejects}"
+        );
+    }
+
     #[test]
     fn rejects_unknown_version_major() {
         // A future layout must fail closed rather than be misread as this one (#256).
@@ -175,11 +273,14 @@ mod tests {
 
     #[test]
     fn decodes_js_golden_header_vector() {
-        let bytes = [
-            0x4b, 0x47, 0x4d, 0x31, 0x01, 0x00, 0x07, 0x00, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03,
-            0x02, 0x01, 0x15, 0xcd, 0x07, 0x1d, 0xe3, 0xaa, 0xde, 0x17, 0xea, 0x16, 0xb0, 0x4c,
-            0x02, 0x00, 0x00, 0x00, 0x21, 0x00, 0x03, 0x02, 0x04, 0x00, 0x00, 0x00,
-        ];
+        // The golden bytes used to be a hex literal hand-copied from the JS test,
+        // which is exactly how the two sides could drift apart unnoticed (#257).
+        // They now come from the shared fixture the JS and Python tests also read.
+        let baseline = shared_vectors()
+            .into_iter()
+            .find(|row| row[0] == "roundtrip" && row[1] == "baseline")
+            .expect("shared fixture must contain the 'baseline' vector");
+        let bytes = from_hex(&baseline[2])[..HEADER_LEN].to_vec();
         let header = Kgm1Header::decode(&bytes).unwrap();
         assert_eq!(header.version_major, 1);
         assert_eq!(header.version_minor, 7);
@@ -190,7 +291,7 @@ mod tests {
         assert_eq!(header.encoding, 3);
         assert_eq!(header.payload_type, 2);
         assert_eq!(header.payload_len, 4);
-        assert_eq!(header.encode(), bytes);
+        assert_eq!(header.encode().to_vec(), bytes);
     }
 
     #[test]
