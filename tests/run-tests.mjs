@@ -2153,6 +2153,15 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
         // upstream message must reach the status line untranslated (#267).
         assert.match(elements.get('pairingStatus')?.textContent ?? '', /network is disabled in tests/,
           'desktop surfaces an upstream pairing failure verbatim');
+        // Without a desktop runtime the page renders its own fallback status,
+        // which is ours to localize (#267).
+        assert.equal(elements.get('runtimeStatus')?.textContent, 'Webプレビュー', 'desktop localizes the fallback runtime status');
+        assert.equal(elements.get('vcState')?.textContent, 'デスクトップランタイム未接続', 'desktop localizes the fallback virtual-camera state');
+        // The warn styling used to be chosen by regex-matching English words in
+        // that state string, so localizing it dropped the class entirely. The
+        // fallback now carries an explicit tone.
+        assert.ok(elements.get('cameraStatus')?.appliedClasses.has('err'),
+          'desktop marks the detached virtual camera as an error regardless of language');
       },
     },
   ];
