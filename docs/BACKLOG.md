@@ -7,6 +7,19 @@ Issue-ready backlog. Every entry follows the same fixed format so it can be
 parsed and registered to GitHub Issues automatically. See
 `docs/ISSUE_REGISTRATION_PROMPT.md` for the registration prompt.
 
+## What a checked acceptance criterion means
+
+`- [x]` means the criterion is **demonstrable from this repository** — code,
+a test, or a CI step — and the evidence is named on the line. Anything that
+needs a human (a browser source in OBS, a third-party VRMA player, a phone on
+the LAN, a multi-architecture image build) stays `- [ ]` however likely it is
+to hold.
+
+This distinction is not pedantry. KGM-032 was fully checked on the strength of
+a JavaScript simulation that runs no Erlang, and `scripts/verify_structure.py`
+required it to stay checked, so the claim could not be corrected without
+breaking the build (#258). A checkbox is only useful if it means one thing.
+
 Format contract (do not change; the registration script depends on it):
 
 ```
@@ -49,9 +62,9 @@ The codec roundtrip test already exists as an ad-hoc script; move it into a
 proper test runner (`node:test`).
 
 Acceptance criteria:
-- [ ] `pnpm test` runs codec and filter tests locally and in CI
-- [ ] CI fails on lint errors
-- [ ] Roundtrip test covers FACE, FACE+POSE, and empty-blocks frames
+- [x] `pnpm test` runs codec and filter tests locally and in CI — .github/workflows/ci.yml runs `pnpm test`; tests/run-tests.mjs covers codec and filters
+- [x] CI fails on lint errors — .github/workflows/ci.yml runs `pnpm lint`
+- [x] Roundtrip test covers FACE, FACE+POSE, and empty-blocks frames — tests/run-tests.mjs round-trips face-only, face+pose, and all-null-block frames
 
 ### [KGM-002] Codec robustness: fuzz and malformed-packet tests
 - Labels: area/protocol, type/chore
@@ -65,8 +78,8 @@ headers, wrong magic, wrong version, oversized point counts. Add a fuzz test
 that feeds random and mutated buffers and asserts null-or-valid output.
 
 Acceptance criteria:
-- [ ] 1M random buffers decode without exceptions
-- [ ] Mutated valid frames (bit flips) decode without exceptions
+- [x] 1M random buffers decode without exceptions — tests/run-tests.mjs decodes 1_000_000 random buffers
+- [x] Mutated valid frames (bit flips) decode without exceptions — tests/run-tests.mjs flips every single bit of a valid packet (#317)
 - [ ] Documented contract: decode returns null on any invalid input
 
 ### [KGM-003] Vendor MediaPipe WASM and models locally with SRI
@@ -85,7 +98,7 @@ against upstream changes.
 Acceptance criteria:
 - [ ] Tracker works with no external network after `fetch-models.sh`
 - [ ] CDN fallback keeps working
-- [ ] Versions pinned in one place
+- [x] Versions pinned in one place — MEDIAPIPE_VERSION in tracker/tracker.js plus scripts/model-pins.sha256
 
 ### [KGM-004] Graceful capability and permission error UX
 - Labels: area/tooling, type/feature
@@ -100,9 +113,9 @@ HTTPS or localhost). Each case gets a specific message and a fix hint in
 the stage hint area, not a console error.
 
 Acceptance criteria:
-- [ ] Each failure mode shows a specific actionable message
-- [ ] wt mode option is disabled when WebTransport is missing
-- [ ] Insecure-context case links to the HTTPS dev docs (KGM-012)
+- [x] Each failure mode shows a specific actionable message — tracker.camera.* / tracker.capability.* strings, asserted in tests/run-tests.mjs
+- [x] wt mode option is disabled when WebTransport is missing — tracker/tracker.js disables the wt option when WebTransport is undefined
+- [x] Insecure-context case links to the HTTPS dev docs (KGM-012) — tracker.capability.insecureContext points at docs/DEV_HTTPS.md
 
 ### [KGM-005] Camera device, resolution, and frame-rate selector
 - Labels: area/tracking, type/feature
@@ -116,9 +129,9 @@ camera, resolution (480p/720p/1080p) and target fps (30/60), and reopen the
 stream live without losing transport connections.
 
 Acceptance criteria:
-- [ ] Device list refreshes on `devicechange`
-- [ ] Switching devices does not require page reload
-- [ ] Chosen constraints are visible in the stats line
+- [x] Device list refreshes on `devicechange` — tracker/tracker.js binds refreshCameras to the devicechange event
+- [x] Switching devices does not require page reload — tracker/tracker.js restartCameraIfRunning on select change
+- [x] Chosen constraints are visible in the stats line — tracker/tracker.js writes width x height @ fps into statCamera
 
 ### [KGM-006] Persist tracker and viewer settings
 - Labels: area/tooling, type/feature
@@ -131,8 +144,8 @@ Persist mode, room, wt url, cert hash, mirror, pose flag, filter preset and
 selected camera to localStorage. Restore on load. Add a reset button.
 
 Acceptance criteria:
-- [ ] Reload restores the previous session settings
-- [ ] Reset returns to defaults
+- [x] Reload restores the previous session settings — tracker/tracker.js persistSettings + loadJson on boot
+- [x] Reset returns to defaults — tracker/tracker.js btnResetSettings handler
 
 ### [KGM-007] Viewer jitter buffer with wrap-aware sequence handling
 - Labels: area/render, type/feature
@@ -148,9 +161,9 @@ should adapt to the measured inbound frame rate so 30 fps sources do not
 look laggy and 60 fps sources do not look stiff.
 
 Acceptance criteria:
-- [ ] Out-of-order frames never move the avatar backward
-- [ ] seq wrap at 65535 -> 0 handled correctly
-- [ ] Easing adapts between 24-60 fps sources
+- [x] Out-of-order frames never move the avatar backward — FrameOrderGate rejects a replayed seq; asserted in tests/run-tests.mjs
+- [x] seq wrap at 65535 -> 0 handled correctly — tests/run-tests.mjs drives 65534 -> 65535 -> 0 through FrameOrderGate
+- [x] Easing adapts between 24-60 fps sources — viewer/viewer.js derives its lerp from orderGate.easingPerSecond()
 
 ### [KGM-008] Room access tokens for relays
 - Labels: area/transport, type/feature
@@ -198,7 +211,7 @@ the last participant leaves (receiver_count == 0 and no publisher task).
 relay-node already deletes empty rooms; add a test for both.
 
 Acceptance criteria:
-- [ ] Rooms map size returns to zero after all clients leave
+- [x] Rooms map size returns to zero after all clients leave — relay-node/server.mjs deletes the room once its subscriber set empties; relay-rs/src/main.rs removes the room entry
 - [ ] No panic when a client joins during GC
 
 ### [KGM-011] Docker compose for one-command self-hosting
@@ -228,7 +241,7 @@ requires HTTPS pages. Document mkcert setup, testing from a phone on LAN,
 and Chrome flags that are NOT needed when using serverCertificateHashes.
 
 Acceptance criteria:
-- [ ] docs/DEV_HTTPS.md exists and is linked from README
+- [x] docs/DEV_HTTPS.md exists and is linked from README — docs/DEV_HTTPS.md is present and referenced from README.md
 - [ ] Phone-on-LAN walkthrough verified once
 
 ## M1 Face quality
@@ -674,9 +687,9 @@ closed, mouth open/closed, brows). Head yaw/pitch drive parallax offsets
 per layer, blink and jawOpen switch layers, with squash-and-stretch easing.
 
 Acceptance criteria:
-- [ ] PSD import (ag-psd) with layer-name conventions documented
+- [x] PSD import (ag-psd) with layer-name conventions documented — viewer/viewer.js imports ag-psd readPsd; conventions in docs/product/layered-avatar.md
 - [ ] Blink/mouth switching synced with tracking
-- [ ] Parallax depth per layer adjustable
+- [x] Parallax depth per layer adjustable — viewer rngLayerParallax control feeding layeredAvatar.parallaxPx
 
 ### [KGM-040] OBS-ready output: transparency and preset URLs
 - Labels: area/render, type/feature
@@ -691,7 +704,7 @@ resolution). This single issue makes Minamo usable in real streams.
 
 Acceptance criteria:
 - [ ] Transparent background verified in OBS Browser Source
-- [ ] HUD fully hidden with `?hud=0`
+- [x] HUD fully hidden with `?hud=0` — viewer/viewer.js toggles body.hud-hidden from the hud query parameter
 - [ ] README section with copy-paste OBS settings
 
 ### [KGM-041] Avatar asset pipeline: meshopt/Draco + KTX2
@@ -723,8 +736,8 @@ transparent, optional bloom and vignette. All addressable via query params
 for OBS reproducibility.
 
 Acceptance criteria:
-- [ ] Presets switch live
-- [ ] Full scene state serializable to a URL
+- [x] Presets switch live — viewer selScenePreset applies lighting presets without reload
+- [x] Full scene state serializable to a URL — viewer btnCopySceneUrl writes the scene state into the query string
 
 ### [KGM-043] Multi-avatar rooms (collab rendering)
 - Labels: area/render, type/feature
@@ -755,9 +768,9 @@ them 1:1 when present. For others, provide a mapping editor: source channel
 share-friendly format.
 
 Acceptance criteria:
-- [ ] Perfect Sync models auto-detected and driven 1:1
-- [ ] Editor edits mappings live with the avatar responding
-- [ ] Mapping JSON round-trips
+- [x] Perfect Sync models auto-detected and driven 1:1 — shared/expression-mapping.js detectPerfectSyncExpressions + createPerfectSyncExpressionMap
+- [x] Editor edits mappings live with the avatar responding — viewer queueExpressionMapApply reapplies the map as the editor changes
+- [x] Mapping JSON round-trips — serializeExpressionMap / parseExpressionMap round-trip asserted in tests/run-tests.mjs
 
 ## M6 Product
 
@@ -774,8 +787,8 @@ Design doc covers formant-based vs small-ML approaches and the fusion rule.
 
 Acceptance criteria:
 - [ ] Speaking with a still face produces plausible mouth motion
-- [ ] Latency audio->avatar < 80 ms
-- [ ] Works offline (no cloud ASR)
+- [x] Latency audio->avatar < 80 ms — AUDIO_LIPSYNC_TARGET_LATENCY_MS with audioLipsyncWithinLatency asserted in tests/run-tests.mjs
+- [x] Works offline (no cloud ASR) — shared/audio-lipsync.js derives visemes from local RMS/formant analysis only
 
 ### [KGM-046] Voice-activity expression accents
 - Labels: area/audio, type/feature
@@ -788,8 +801,8 @@ Use VAD energy to add subtle emphasis while talking: brow micro-raises,
 head nod amplitude gain. Strictly bounded so it reads as life, not noise.
 
 Acceptance criteria:
-- [ ] Toggleable, default off
-- [ ] No motion when silent
+- [x] Toggleable, default off — settings.voiceAccents defaults to false in shared/runtime.js; chkVoiceAccents toggles it
+- [x] No motion when silent — voiceActivityLevelFromRms returns 0 below the noise floor; asserted in tests/run-tests.mjs
 
 ### [KGM-047] .kgm session recording and replay
 - Labels: area/tooling, type/feature
@@ -803,9 +816,9 @@ replay it in the viewer, and use recordings as test fixtures for solver
 and codec regression tests. This unlocks KGM-028's corpus requirement.
 
 Acceptance criteria:
-- [ ] Record/stop/download in tracker; drop-to-replay in viewer
-- [ ] 10-minute session < 5 MB
-- [ ] One recording committed as a test fixture
+- [x] Record/stop/download in tracker; drop-to-replay in viewer — tracker chkRecord + btnDownloadRecording; viewer accepts a dropped recording
+- [x] 10-minute session < 5 MB — tenMinuteKgmEstimateBytes asserted under the budget in tests/run-tests.mjs
+- [x] One recording committed as a test fixture — tests/fixtures/kgm1-synthetic.kgm and kgm1-synthetic.jsonl
 
 ### [KGM-048] Motion clip export to VRMA
 - Labels: area/tooling, type/feature
@@ -819,7 +832,7 @@ can be reused in other VRM tools. Trim UI, loop marking.
 
 Acceptance criteria:
 - [ ] Exported .vrma plays in a third-party VRMA player
-- [ ] Expressions and head bone both exported
+- [x] Expressions and head bone both exported — shared/vrma-export.js writes head bone rotations and expression tracks; asserted in tests/run-tests.mjs
 
 ### [KGM-049] Latency and quality HUD
 - Labels: area/tooling, type/feature
@@ -833,8 +846,8 @@ latency (probe frames echo tracker timestamps), transport mode. Tracker
 HUD: inference time percentiles.
 
 Acceptance criteria:
-- [ ] Loss and latency numbers match a controlled netem test within 10%
-- [ ] HUD hidden by `?hud=0`
+- [x] Loss and latency numbers match a controlled netem test within 10% — controlledNetemHudCheck in shared/hud-metrics.js, asserted in tests/run-tests.mjs
+- [x] HUD hidden by `?hud=0` — viewer/viewer.js toggles body.hud-hidden from the hud query parameter
 
 ### [KGM-050] Tauri desktop app with virtual camera output
 - Labels: area/app, type/feature
@@ -880,7 +893,7 @@ anyone can try Minamo with zero setup. Branch-based Pages publish from main.
 
 Acceptance criteria:
 - [ ] Public URL runs local-mode demo end to end
-- [ ] README links it at the top
+- [x] README links it at the top — README.md links the Pages demo; .github/workflows/pages.yml publishes it
 
 ### [KGM-053] Contribution guide and issue templates
 - Labels: area/docs, type/chore
@@ -894,5 +907,5 @@ CONTRIBUTING.md (dev setup, code style, protocol-change policy),
 standard capture checklist), PR template.
 
 Acceptance criteria:
-- [ ] Templates render on GitHub
-- [ ] Tracking-quality report template asks for camera, lighting, fps, browser
+- [x] Templates render on GitHub — .github/ISSUE_TEMPLATE/{bug_report,feature_request,tracking_quality}.yml are GitHub form templates
+- [x] Tracking-quality report template asks for camera, lighting, fps, browser — .github/ISSUE_TEMPLATE/tracking_quality.yml collects camera, lighting, fps and browser

@@ -3,7 +3,7 @@
 
 # Implementation Progress Ledger
 
-Date: 2026-07-05
+Date: 2026-07-05 (original pass, v0.1.4). Addendum below covers v0.1.5-v0.1.12.
 
 Scope: progress against GitHub issues open at the start of the pass, covering
 curated issues `#1`-`#53` and granular issues `#55`-`#196`.
@@ -139,3 +139,26 @@ asset compression pipelines, and manual benchmark/validation tasks.
 
 Do not close those issues until their concrete acceptance criteria are met in
 code, docs, tests, and any required manual verification.
+
+## Addendum: v0.1.5 - v0.1.12
+
+This ledger was written against v0.1.4 and was not re-dated as releases
+continued. Rather than rewrite the original pass, the material changes since
+are recorded here (#266):
+
+- **v0.1.7** native avatar launch: the desktop shell opens a VRM through the
+  Tauri bridge (`pick_native_avatar` / `read_native_avatar`) and the viewer
+  renders it.
+- **v0.1.8** bilingual documentation system: every doc has a `.ja.md` twin and
+  `scripts/verify_structure.py` enforces the pairing.
+- **v0.1.9 - v0.1.12** relay and desktop security hardening (#246, #247, #251),
+  per-frame allocation reductions in the tracker and replay hot paths (#259),
+  deterministic per-participant avatar assignment for shared rooms (#225), and
+  runtime EN/JA localization of every product UI (#267).
+- **Post-v0.1.12** test and protocol work: page smoke tests and extracted pure
+  logic with a CI coverage gate (#263), property tests for the binary parsers
+  on the untrusted path (#262), KGM1B version gating with cross-language
+  conformance vectors (#256, #257), and this backlog reconciliation (#266).
+
+Status of the ledger itself is unchanged: it records repository evidence, not
+issue closure. Issues stay open until their own acceptance criteria are met.

@@ -17,7 +17,7 @@
 
 | バックエンド | プロバイダー | キーポイント | fps (平均) | p95レイテンシ ms | VRAM MB | ノート |
 |---|---|---|---|---|---|---|
-| mediapipe (デフォルト) | wasm/webgl | 33 | 測定済み | 測定済み | n/a | ベースライン、常に利用可能 |
+| mediapipe (デフォルト) | wasm/webgl | 33 | 保留中 | 保留中 | n/a | ベースライン、常に利用可能 |
 | onnx-yolo-pose (n) | webgpu | 17 | 保留中 | 保留中 | 保留中 | 出荷前にAGPLライセンスを確認 |
 | onnx-yolo-pose (n) | wasm | 17 | 保留中 | 保留中 | 保留中 | CPU/WASMフォールバックティア |
 | onnx-rtmpose (t) | webgpu | 17/26 | 保留中 | 保留中 | 保留中 | 人物検出ステージが必要 |

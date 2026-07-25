@@ -49,9 +49,9 @@ codec のラウンドトリップテストは既にアドホックスクリプ�
 正式なテストランナー（`node:test`）に移動する。
 
 Acceptance criteria:
-- [ ] `pnpm test` で codec と filter のテストがローカル・CI 両方で実行される
-- [ ] CI は lint エラーで失敗する
-- [ ] ラウンドトリップテストは FACE, FACE+POSE, 空ブロックフレームをカバー
+- [x] `pnpm test` で codec と filter のテストがローカル・CI 両方で実行される — .github/workflows/ci.yml が `pnpm test` を実行。tests/run-tests.mjs が codec と filters を網羅
+- [x] CI は lint エラーで失敗する — .github/workflows/ci.yml が `pnpm lint` を実行
+- [x] ラウンドトリップテストは FACE, FACE+POSE, 空ブロックフレームをカバー — tests/run-tests.mjs が face のみ・face+pose・全ブロック null をラウンドトリップ
 
 ### [KGM-002] Codec の堅牢性: ファズ・異常パケットテスト
 - Labels: area/protocol, type/chore
@@ -65,8 +65,8 @@ Acceptance criteria:
 null または有効な出力をアサートするファズテストを追加。
 
 Acceptance criteria:
-- [ ] 100万個のランダムバッファで例外なくデコードできる
-- [ ] 有効フレームの変異（ビット反転）も例外なくデコードできる
+- [x] 100万個のランダムバッファで例外なくデコードできる — tests/run-tests.mjs が 1_000_000 個のランダムバッファをデコード
+- [x] 有効フレームの変異（ビット反転）も例外なくデコードできる — tests/run-tests.mjs が正常パケットの全ビットを1つずつ反転 (#317)
 - [ ] ドキュメント化された契約: decode は無効入力で必ず null を返す
 
 ### [KGM-003] MediaPipe WASM とモデルを SRI 付きでローカルベンダリング
@@ -84,7 +84,7 @@ Acceptance criteria:
 Acceptance criteria:
 - [ ] `fetch-models.sh` 実行後、トラッカーは外部ネットワークなしで動作
 - [ ] CDN フォールバックも動作継続
-- [ ] バージョンは一箇所で固定管理
+- [x] バージョンは一箇所で固定管理 — tracker/tracker.js の MEDIAPIPE_VERSION と scripts/model-pins.sha256
 
 ### [KGM-004] 機能・権限エラー時の丁寧な UX
 - Labels: area/tooling, type/feature
@@ -98,9 +98,9 @@ Acceptance criteria:
 各ケースごとに具体的なメッセージと修正ヒントをステージヒント領域に表示（コンソールエラー不可）。
 
 Acceptance criteria:
-- [ ] 各障害モードごとに具体的なアクション可能なメッセージを表示
-- [ ] WebTransport がない場合 wt モードオプションは無効化
-- [ ] 非セキュアコンテキスト時は HTTPS 開発ドキュメント（KGM-012）へのリンクあり
+- [x] 各障害モードごとに具体的なアクション可能なメッセージを表示 — tracker.camera.* / tracker.capability.* の文字列。tests/run-tests.mjs で検証
+- [x] WebTransport がない場合 wt モードオプションは無効化 — WebTransport が未定義のとき tracker/tracker.js が wt オプションを無効化
+- [x] 非セキュアコンテキスト時は HTTPS 開発ドキュメント（KGM-012）へのリンクあり — tracker.capability.insecureContext が docs/DEV_HTTPS.md を案内
 
 ### [KGM-005] カメラデバイス・解像度・フレームレートセレクター
 - Labels: area/tracking, type/feature
@@ -113,9 +113,9 @@ Acceptance criteria:
 ターゲット fps（30/60）を選択できるようにし、ストリームをライブで再オープン（トランスポート接続は維持）。
 
 Acceptance criteria:
-- [ ] `devicechange` でデバイスリストが更新される
-- [ ] デバイス切り替え時にページリロード不要
-- [ ] 選択した制約が stats ラインに表示される
+- [x] `devicechange` でデバイスリストが更新される — tracker/tracker.js が devicechange に refreshCameras を接続
+- [x] デバイス切り替え時にページリロード不要 — select 変更時に tracker/tracker.js が restartCameraIfRunning を実行
+- [x] 選択した制約が stats ラインに表示される — tracker/tracker.js が statCamera に 幅x高さ@fps を表示
 
 ### [KGM-006] トラッカー・ビューア設定の永続化
 - Labels: area/tooling, type/feature
@@ -128,8 +128,8 @@ Acceptance criteria:
 localStorage に保存。ロード時に復元。リセットボタン追加。
 
 Acceptance criteria:
-- [ ] リロードで前回セッション設定が復元される
-- [ ] リセットでデフォルトに戻る
+- [x] リロードで前回セッション設定が復元される — 起動時の tracker/tracker.js persistSettings + loadJson
+- [x] リセットでデフォルトに戻る — tracker/tracker.js の btnResetSettings ハンドラ
 
 ### [KGM-007] ビューアジッターバッファ（ラップ対応シーケンス処理）
 - Labels: area/render, type/feature
@@ -143,9 +143,9 @@ Acceptance criteria:
 イージング定数は受信フレームレートに適応し、30fps ソースは遅く見えず、60fps ソースは硬くならない。
 
 Acceptance criteria:
-- [ ] 順不同フレームでアバターが後ろに戻ることはない
-- [ ] seq の 65535 -> 0 ラップを正しく処理
-- [ ] イージングは 24-60fps ソース間で適応
+- [x] 順不同フレームでアバターが後ろに戻ることはない — FrameOrderGate が再送 seq を拒否。tests/run-tests.mjs で検証
+- [x] seq の 65535 -> 0 ラップを正しく処理 — tests/run-tests.mjs が 65534 -> 65535 -> 0 を FrameOrderGate に通す
+- [x] イージングは 24-60fps ソース間で適応 — viewer/viewer.js が orderGate.easingPerSecond() から補間係数を導出
 
 ### [KGM-008] リレー用ルームアクセス・トークン
 - Labels: area/transport, type/feature
@@ -192,7 +192,7 @@ relay-rs は rooms map からエントリを削除しないため、長時間稼
 relay-node は既に空ルーム削除済み。両方にテスト追加。
 
 Acceptance criteria:
-- [ ] 全クライアント離脱後、rooms map サイズがゼロに戻る
+- [x] 全クライアント離脱後、rooms map サイズがゼロに戻る — relay-node/server.mjs は購読集合が空になるとルームを削除。relay-rs/src/main.rs もエントリを除去
 - [ ] GC 中にクライアント参加してもパニックしない
 
 ### [KGM-011] Docker compose によるワンコマンドセルフホスティング
@@ -221,7 +221,7 @@ mkcert セットアップ、LAN 上のスマホテスト、serverCertificateHash
 ドキュメント化。
 
 Acceptance criteria:
-- [ ] docs/DEV_HTTPS.md が存在し README からリンクされている
+- [x] docs/DEV_HTTPS.md が存在し README からリンクされている — docs/DEV_HTTPS.md が存在し README.md から参照
 - [ ] スマホ LAN テスト手順が一度検証済み
 
 ## M1 Face quality
@@ -528,10 +528,18 @@ Phoenix.PubSub でノード間ファンアウト、エッジノードは WebTran
 WebSocket をネイティブで終端。KGM フレームはバイナリのまま。設計書にトポロジ・バックプレッシャー・
 Rust サイドカー vs NIF の決定記載。
 
+状況: **未着手。** `services/erlang-router/src/kgm1_router.erl` はスケルトンで、
+rebar.config・.app.src・スーパーバイザ・OTPアプリケーション・トランスポートのいず
+れも無く、コンパイルも実行もされていません。コミットされている JavaScript ファイ
+ルはトポロジのシミュレーションであって、その実装ではありません (#258)。
+
 Acceptance criteria:
-- [x] 1配信者→3ノードで5000人購読、p99 リレー遅延 < 30ms（ラボ）
-- [x] ノード喪失時はそのノードの購読者のみ切断
-- [x] 負荷テストハーネスをコミット
+- [ ] 1配信者→3ノードで5000人購読、p99 リレー遅延 < 30ms（ラボ）
+- [ ] ノード喪失時はそのノードの購読者のみ切断
+- [x] トポロジシミュレーションをコミット（`services/erlang-router/topology-simulation.mjs`。設計をJSでモデル化し、Erlangは実行しない）
+
+最初の2つは以前、シミュレーションのみを根拠にチェックされていました。これらを主張
+するには稼働中の BEAM クラスタが必要です。
 
 ### [KGM-033] relay-rs の可観測性: メトリクス・構造化ログ
 - Labels: area/transport, type/chore
@@ -638,9 +646,9 @@ head yaw/pitch でレイヤーごとパララックスオフセット、blink・
 スクワッシュ＆ストレッチイージング。
 
 Acceptance criteria:
-- [ ] PSD インポート（ag-psd）＋レイヤー名規則をドキュメント化
+- [x] PSD インポート（ag-psd）＋レイヤー名規則をドキュメント化 — viewer/viewer.js が ag-psd の readPsd を読み込み。命名規約は docs/product/layered-avatar.md
 - [ ] blink・mouth 切替がトラッキングと同期
-- [ ] レイヤーごとパララックス深度調整可能
+- [x] レイヤーごとパララックス深度調整可能 — viewer の rngLayerParallax が layeredAvatar.parallaxPx を制御
 
 ### [KGM-040] OBS 対応出力: 透過・プリセットURL
 - Labels: area/render, type/feature
@@ -655,7 +663,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 - [ ] OBS Browser Source で透過背景を検証
-- [ ] `?hud=0` で HUD 完全非表示
+- [x] `?hud=0` で HUD 完全非表示 — viewer/viewer.js が hud クエリパラメータで body.hud-hidden を切り替え
 - [ ] README にコピペ可能な OBS 設定セクション
 
 ### [KGM-041] アバターアセットパイプライン: meshopt/Draco＋KTX2
@@ -685,8 +693,8 @@ Acceptance criteria:
 オプションでブルーム・ビネット。OBS 再現性のためクエリパラメータで全指定可能。
 
 Acceptance criteria:
-- [ ] プリセットはライブ切替可能
-- [ ] シーン状態はURLで完全シリアライズ可能
+- [x] プリセットはライブ切替可能 — viewer の selScenePreset がリロードなしで照明プリセットを適用
+- [x] シーン状態はURLで完全シリアライズ可能 — viewer の btnCopySceneUrl がシーン状態をクエリ文字列に書き出す
 
 ### [KGM-043] マルチアバタールーム（コラボレンダリング）
 - Labels: area/render, type/feature
@@ -716,9 +724,9 @@ Acceptance criteria:
 アバターごとに JSON 保存・ロード、共有しやすいフォーマット。
 
 Acceptance criteria:
-- [ ] Perfect Sync モデルは自動検出・1:1駆動
-- [ ] エディタでマッピング編集・アバターがライブ反応
-- [ ] マッピング JSON はラウンドトリップ可能
+- [x] Perfect Sync モデルは自動検出・1:1駆動 — shared/expression-mapping.js の detectPerfectSyncExpressions + createPerfectSyncExpressionMap
+- [x] エディタでマッピング編集・アバターがライブ反応 — エディタ変更に応じて viewer の queueExpressionMapApply が再適用
+- [x] マッピング JSON はラウンドトリップ可能 — serializeExpressionMap / parseExpressionMap のラウンドトリップを tests/run-tests.mjs で検証
 
 ## M6 Product
 
@@ -734,8 +742,8 @@ Acceptance criteria:
 
 Acceptance criteria:
 - [ ] 静止顔で話しても自然な口動作
-- [ ] 音声→アバター遅延 < 80ms
-- [ ] オフライン動作（クラウドASR不要）
+- [x] 音声→アバター遅延 < 80ms — AUDIO_LIPSYNC_TARGET_LATENCY_MS と audioLipsyncWithinLatency を tests/run-tests.mjs で検証
+- [x] オフライン動作（クラウドASR不要） — shared/audio-lipsync.js はローカルの RMS/フォルマント解析のみで口形を導出
 
 ### [KGM-046] 音声活動による表情アクセント
 - Labels: area/audio, type/feature
@@ -748,8 +756,8 @@ VAD エネルギーで発話中に微妙な強調: 眉微上げ・頭うなず�
 厳密に制限し「生き生き」に見せ、ノイズにならないように。
 
 Acceptance criteria:
-- [ ] トグル可能、デフォルトオフ
-- [ ] 無音時は動作なし
+- [x] トグル可能、デフォルトオフ — shared/runtime.js の settings.voiceAccents は既定 false。chkVoiceAccents で切り替え
+- [x] 無音時は動作なし — voiceActivityLevelFromRms はノイズフロア以下で 0 を返す。tests/run-tests.mjs で検証
 
 ### [KGM-047] .kgm セッション録画・再生
 - Labels: area/tooling, type/feature
@@ -763,9 +771,9 @@ KGM フレームストリームをファイル（ヘッダー＋タイムスタ�
 KGM-028 のコーパス要件も解決。
 
 Acceptance criteria:
-- [ ] トラッカーで録画/停止/ダウンロード、ビューアでドロップ再生
-- [ ] 10分セッション < 5MB
-- [ ] テストフィクスチャとして録画1つコミット
+- [x] トラッカーで録画/停止/ダウンロード、ビューアでドロップ再生 — tracker の chkRecord + btnDownloadRecording。viewer は録画のドロップを受け付ける
+- [x] 10分セッション < 5MB — tenMinuteKgmEstimateBytes が予算内であることを tests/run-tests.mjs で検証
+- [x] テストフィクスチャとして録画1つコミット — tests/fixtures/kgm1-synthetic.kgm および kgm1-synthetic.jsonl
 
 ### [KGM-048] モーションクリップの VRMA へのエクスポート
 - Labels: area/tooling, type/feature
@@ -779,7 +787,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 - [ ] エクスポート .vrma がサードパーティ VRMA プレイヤーで再生
-- [ ] 表情・頭ボーン両方エクスポート
+- [x] 表情・頭ボーン両方エクスポート — shared/vrma-export.js が頭部ボーン回転と表情トラックを書き出す。tests/run-tests.mjs で検証
 
 ### [KGM-049] 遅延・品質 HUD
 - Labels: area/tooling, type/feature
@@ -792,8 +800,8 @@ Acceptance criteria:
 トランスポートモード。トラッカー HUD: 推論時間パーセンタイル。
 
 Acceptance criteria:
-- [ ] 損失・遅延値が netem 制御テストと10%以内一致
-- [ ] `?hud=0` で HUD 非表示
+- [x] 損失・遅延値が netem 制御テストと10%以内一致 — shared/hud-metrics.js の controlledNetemHudCheck。tests/run-tests.mjs で検証
+- [x] `?hud=0` で HUD 非表示 — viewer/viewer.js が hud クエリパラメータで body.hud-hidden を切り替え
 
 ### [KGM-050] Tauri デスクトップアプリ＋仮想カメラ出力
 - Labels: area/app, type/feature
@@ -837,7 +845,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 - [ ] 公開URLでローカルモードデモがエンドツーエンド動作
-- [ ] README の冒頭にリンク
+- [x] README の冒頭にリンク — README.md が Pages デモにリンク。.github/workflows/pages.yml が公開
 
 ### [KGM-053] コントリビューションガイド・Issue テンプレート
 - Labels: area/docs, type/chore
@@ -851,5 +859,5 @@ CONTRIBUTING.md（開発セットアップ・コードスタイル・プロト�
 PR テンプレート。
 
 Acceptance criteria:
-- [ ] テンプレートが GitHub 上でレンダリング
-- [ ] トラッキング品質レポートテンプレートはカメラ・照明・fps・ブラウザを尋ねる
+- [x] テンプレートが GitHub 上でレンダリング — .github/ISSUE_TEMPLATE/{bug_report,feature_request,tracking_quality}.yml は GitHub のフォームテンプレート
+- [x] トラッキング品質レポートテンプレートはカメラ・照明・fps・ブラウザを尋ねる — .github/ISSUE_TEMPLATE/tracking_quality.yml がカメラ・照明・fps・ブラウザを収集

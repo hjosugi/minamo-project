@@ -84,12 +84,33 @@ One Euroフィルタリングは、スローモーション中のみ効果的な
 
 ```
 minamo/
-  index.html          ランディングハブ
-  tracker/            ウェブカメラ -> KGM1パブリッシャーページ
-  viewer/             KGM1 -> VRM / 組み込みボットレンダラーページ
-  shared/             ブレンドシェイプの標準、フィルター、コーデック、輸送
-  relay-node/         静的サイト + WebSocket中継（互換性パス）
-  relay-rs/           WebTransportデータグラム中継（低遅延パス）
-  assets/             デザインシステムCSS
-  docs/               このファイル、PROTOCOL.md、BACKLOG.md、design/
+  index.html          バイリンガルのサイトホーム
+  landing/            30秒デモ（モック信号、カメラは任意）
+  tracker/            Webカメラ -> KGM1-WIRE 送信ページ
+  viewer/             KGM1-WIRE -> VRM / Inochi2D / レイヤード / 内蔵ボット描画
+  replay/             .kgm・JSONL 録画の再生
+  desktop/            Tauri のレンダラー（Webプレビューとしても配信）
+  diagnostics/        アバターマッピング・手の安定性の単体ページ
+  roadmap/            ロードマップページ
+
+  shared/             実際に出荷されるランタイム: ブレンドシェイプ正準、フィルタ、
+                      コーデック、トランスポート、i18n、録画、姿勢・手・ルーム計算
+  src/                vitest・ベンチマーク・診断が使う型付きコア。
+                      各ページには接続されていない（#255 参照）
+  types/              ブラウザJS型ゲート用の型宣言
+
+  relay-node/         静的サイト + WebSocketリレー（互換パス）
+  relay-rs/           WebTransportデータグラムリレー（低遅延パス）
+  services/           設計スケルトンのみ。ビルドも実行もされない
+  src-tauri/          Tauri デスクトップシェル（Rust）
+  crates/             kgm1-codec: KGM1Bコンテナのコーデック（Rust）
+  packages/           kgm1-codec-py: 同じコンテナのコーデック（Python）
+
+  assets/             デザインシステムのCSS
+  docs/               本ファイル、PROTOCOL.md、BACKLOG.md、design/、product/
+  issues/             登録済みGitHub Issue ごとのファイル
+  prompts/            執筆用プロンプト
+  scripts/            lint、構造検証、カバレッジゲート、ツール類
+  tests/              nodeスイート、フィクスチャ、vitest スペック
+  third_party/        ベンダリングした第三者ソース
 ```

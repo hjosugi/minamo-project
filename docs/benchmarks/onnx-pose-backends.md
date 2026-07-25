@@ -24,7 +24,7 @@ the harness and table shape are committed so results are comparable.
 
 | Backend | Provider | Keypoints | fps (mean) | p95 latency ms | VRAM MB | Notes |
 |---|---|---|---|---|---|---|
-| mediapipe (default) | wasm/webgl | 33 | measured | measured | n/a | baseline, always available |
+| mediapipe (default) | wasm/webgl | 33 | pending | pending | n/a | baseline, always available |
 | onnx-yolo-pose (n) | webgpu | 17 | pending | pending | pending | check AGPL licensing before shipping |
 | onnx-yolo-pose (n) | wasm | 17 | pending | pending | pending | CPU/WASM fallback tier |
 | onnx-rtmpose (t) | webgpu | 17/26 | pending | pending | pending | needs person-detector stage |
