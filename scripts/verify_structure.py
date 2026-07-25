@@ -1579,7 +1579,7 @@ def validate_replay_validation_ui() -> None:
     for element_id in ['replayValidation', 'replayValidationSummary', 'replayErrors']:
         if f'id="{element_id}"' not in html:
             add_error('replay/index.html', f'missing replay validation element #{element_id}')
-    if 'validationErrors.length === 0' not in js or 'playback disabled' not in js:
+    if 'validationErrors.length === 0' not in js or 'replay.validation.disabled' not in js:
         add_error('replay/replay.js', 'replay playback must be disabled and explained when validation errors exist')
 
 
