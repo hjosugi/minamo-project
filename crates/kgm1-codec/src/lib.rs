@@ -1,3 +1,9 @@
+//! KGM1B: the 40-byte container/recording header.
+//!
+//! Despite the crate name this is **not** the real-time datagram format the
+//! relay forwards (that is KGM1-WIRE, implemented in `shared/codec.js` and
+//! forwarded opaquely). See `docs/PROTOCOL.md` (#256).
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Kgm1Header {
     pub version_major: u16,
@@ -13,6 +19,17 @@ pub struct Kgm1Header {
 
 pub const MAGIC: &[u8; 4] = b"KGM1";
 pub const HEADER_LEN: usize = 40;
+
+/// Major versions this decoder understands, i.e. those it knows describe the
+/// 40-byte layout below (#256). Two are in the wild and mean the same thing:
+/// 0 is what the JS `encodeKgm1bHeader` has always defaulted to, and 1 is the
+/// major in the cross-language golden vector and the tests here.
+///
+/// The point of the gate is to fail closed on a *future* major that changes the
+/// layout: without it, such a packet is decoded as if it were this layout and
+/// its fields are silently misread. Extend this list only together with a
+/// decoder that actually handles the new layout.
+pub const SUPPORTED_VERSION_MAJORS: &[u16] = &[0, 1];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kgm1Packet {
@@ -43,8 +60,12 @@ impl Kgm1Header {
         if &input[0..4] != MAGIC {
             return Err("invalid magic");
         }
+        let version_major = u16::from_le_bytes(input[4..6].try_into().unwrap());
+        if !SUPPORTED_VERSION_MAJORS.contains(&version_major) {
+            return Err("unsupported version_major");
+        }
         Ok(Self {
-            version_major: u16::from_le_bytes(input[4..6].try_into().unwrap()),
+            version_major,
             version_minor: u16::from_le_bytes(input[6..8].try_into().unwrap()),
             frame_id: u64::from_le_bytes(input[8..16].try_into().unwrap()),
             source_time_ns: u64::from_le_bytes(input[16..24].try_into().unwrap()),
@@ -90,6 +111,43 @@ impl Kgm1Packet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_unknown_version_major() {
+        // A future layout must fail closed rather than be misread as this one (#256).
+        let mut header = Kgm1Header {
+            version_major: 1,
+            version_minor: 0,
+            frame_id: 1,
+            source_time_ns: 2,
+            monotonic_time_ns: 3,
+            flags: 0,
+            encoding: 1,
+            payload_type: 0,
+            payload_len: 0,
+        };
+        assert!(Kgm1Header::decode(&header.encode()).is_ok());
+
+        for major in [2u16, 3, 255, u16::MAX] {
+            header.version_major = major;
+            assert_eq!(
+                Kgm1Header::decode(&header.encode()),
+                Err("unsupported version_major"),
+                "version_major {major} must be rejected"
+            );
+            let packet = Kgm1Packet { header, payload: vec![1, 2, 3] };
+            assert!(
+                Kgm1Packet::decode(&packet.encode()).is_err(),
+                "a packet with version_major {major} must be rejected"
+            );
+        }
+
+        // Everything currently in the wild still decodes.
+        for major in SUPPORTED_VERSION_MAJORS {
+            header.version_major = *major;
+            assert!(Kgm1Header::decode(&header.encode()).is_ok(), "version_major {major} must decode");
+        }
+    }
 
     #[test]
     fn round_trip_header() {

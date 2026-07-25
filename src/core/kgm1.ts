@@ -1,3 +1,9 @@
+// KGM1-JSON: the JSON envelope used by the typed core.
+//
+// Distinct from KGM1-WIRE (the datagram codec in shared/codec.js) and from
+// KGM1B (the container header in shared/kgm1b.js), both of which are binary.
+// See docs/PROTOCOL.md (#256).
+
 import type { KGM1Frame } from './types';
 
 export interface KGM1RoomEnvelope {

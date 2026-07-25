@@ -100,9 +100,42 @@ about 1-3 MB/s. Parametric motion is roughly 400x smaller.
   blocking can add latency on loss. Used as the compatibility path.
 - BroadcastChannel: one frame per message. Same-browser demo path.
 
+## Three things are called "KGM1"
+
+The name is overloaded across layers, which has been an interop hazard (#256).
+They are distinct byte layouts and are **not** interchangeable:
+
+| Name | Layout | Magic | Implemented in |
+| --- | --- | --- | --- |
+| **KGM1-WIRE** | real-time datagram, 76-byte face frame — the format this document specifies | `0x4b47` (`"KG"`), `version` byte = 1 | `shared/codec.js` |
+| **KGM1B** | 40-byte container/recording header wrapping an arbitrary payload | `"KGM1"` | `shared/kgm1b.js`, `crates/kgm1-codec`, `packages/kgm1-codec-py` |
+| **KGM1-JSON** | JSON envelope used by the typed `src/` core | string `"KGM1"`, version `"0.1.0"` | `src/core/kgm1.ts` |
+
+The Rust crate named `kgm1-codec` implements **KGM1B**, not the datagram format
+the Rust relay forwards. The relay forwards KGM1-WIRE opaquely.
+
 ## Versioning
 
 `version` is bumped on any incompatible layout change. Decoders MUST drop
-frames with an unknown version. Planned for KGM2 (see docs/design/DD-006):
-smallest-three quaternion packing, delta frames with periodic keyframes, richer
-per-joint hand blocks, and a channel-mask for sparse blendshape updates.
+frames with an unknown version.
+
+- **KGM1-WIRE** rejects any `version` other than 1 (`shared/codec.js`).
+- **KGM1B** rejects any `version_major` outside its supported set. Two majors
+  are in the wild and describe the same 40-byte layout: `0`, the long-standing
+  JS encoder default, and `1`, the major in the cross-language golden vector.
+  All three implementations share that set and a conformance test asserts they
+  agree on rejecting an unknown major — a decoder that accepts one its peers
+  reject is the interop hazard the golden vector exists to prevent.
+
+Planned for KGM2 (see docs/design/DD-006): smallest-three quaternion packing,
+delta frames with periodic keyframes, richer per-joint hand blocks, and a
+channel-mask for sparse blendshape updates.
+
+### Timestamp wrap
+
+KGM1-WIRE stores `t` as a `u32` of milliseconds (`frame.t >>> 0`). Since the
+source is `performance.now()`, which counts from page load, the field wraps
+after ~49.7 days of continuous uptime. Transport latency is computed from this
+value, so a session running that long would see one bogus latency sample at the
+wrap. No session is expected to last that long, and widening the field is a
+KGM2 concern rather than a KGM1 fix — it would be an incompatible layout change.
