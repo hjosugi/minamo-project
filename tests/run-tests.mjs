@@ -882,12 +882,17 @@ function kgm2FaceFrame(seq, overrides = {}) {
 }
 
 {
+  // This checks the DD-005 *topology simulation*, which is plain JavaScript and
+  // runs no Erlang (#258). A pass says the modelled design has the intended
+  // latency and isolation properties; it says nothing about a relay
+  // implementation, because there is not one.
+  //
   // NODE_V8_COVERAGE is inherited by child processes, so under `pnpm coverage`
   // this helper would write its own partial profile into the same temp
   // directory and get merged with the suite's. That made the coverage totals
   // depend on process timing — the same commit passed on one CI run and failed
-  // on the next. This is a load harness, not code under test, so it is excluded.
-  const out = execFileSync('node', ['services/erlang-router/load-test.mjs'], {
+  // on the next. It is not code under test, so it is excluded.
+  const out = execFileSync('node', ['services/erlang-router/topology-simulation.mjs'], {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, NODE_V8_COVERAGE: '' },
@@ -895,7 +900,7 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const result = JSON.parse(out);
   assert.equal(result.subscribers, 5000);
   assert.equal(result.nodes, 3);
-  assert.ok(result.p99Ms < 30, `BEAM cluster load harness p99 ${result.p99Ms} ms`);
+  assert.ok(result.p99Ms < 30, `DD-005 topology simulation p99 ${result.p99Ms} ms`);
   assert.equal(result.localOnlyDrop, true, 'node loss drops only local subscribers');
   assert.equal(result.pass, true);
 }

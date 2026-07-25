@@ -19,15 +19,20 @@ Responsibilities:
 The MVP can run fully in the browser. This service is for remote collaboration
 and production scaling.
 
-## Load Harness
+## Topology simulation
+
+> **This runs no Erlang.** It is a JavaScript model of the DD-005 design, not a
+> test of `src/kgm1_router.erl`, which is not compiled or run by any path in
+> this repository. A passing run is evidence about the *design*, not about a
+> working clustered relay (#258).
 
 Run from the repository root:
 
 ```sh
-node services/erlang-router/load-test.mjs
+node services/erlang-router/topology-simulation.mjs
 ```
 
-The committed harness models the DD-005 topology: 3 nodes, 5,000 subscribers,
+The committed simulation models the DD-005 topology: 3 nodes, 5,000 subscribers,
 one publisher, newest-only local subscriber mailboxes, and node-loss isolation.
 It fails if p99 relay fan-out latency is >= 30 ms or if a failed node affects
 non-local subscribers.
