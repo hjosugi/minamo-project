@@ -49,13 +49,43 @@ import {
   parseMotionJsonl,
   saveJson,
 } from '../shared/runtime.js';
-import { createI18n, loadLanguage } from '../shared/i18n.js';
+import { setupPageI18n } from '../shared/i18n.js';
 
-// Runtime EN/JA localization for status/error strings (#267).
-const tr = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) }).t;
+// Runtime EN/JA localization (#267): static markup carries data-i18n keys and
+// `tr` localizes everything rendered from here. Those imperative renders run
+// after applyTranslations, so a toggle replays them.
+// `bootDone` must be declared above setupPageI18n, which renders synchronously:
+// reading it from the temporal dead zone would abort the module.
+let bootDone = false;
+const { t: tr } = setupPageI18n({
+  onRender: () => {
+    if (!bootDone) return;
+    if (lastStatus) setStatus(lastStatus.key, lastStatus.params, lastStatus.chipState);
+    refreshParticipantSelector();
+    refreshExpressionMapEditor();
+    updateDrumOverlayVisibility();
+  },
+});
 
 /** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
+
+// The status chip renders from a key so a language toggle can replay the
+// message currently on screen instead of resetting it. Already-composed text
+// (a copied URL, an upstream transport detail) goes through setStatusText,
+// which clears the key so a toggle leaves it alone.
+let lastStatus = null;
+function setStatus(key, params, chipState) {
+  lastStatus = { key, params, chipState };
+  chip.textContent = tr(key, params);
+  chip.dataset.state = chipState;
+}
+function setStatusText(text, chipState) {
+  lastStatus = null;
+  chip.textContent = text;
+  chip.dataset.state = chipState;
+}
+
 const tauriGlobal = /** @type {any} */ (window).__TAURI__;
 const tauriInvoke = tauriGlobal?.core?.invoke;
 const tauriListen = tauriGlobal?.event?.listen;
@@ -355,7 +385,7 @@ function setLayeredAvatarLayers(entries, label) {
   layeredAvatar.parallaxPx = Number($('rngLayerParallax').value) || layeredAvatar.manifest.parallaxPx;
   if (vrm?.scene) vrm.scene.visible = false;
   bot.group.visible = !layeredAvatar.active && !vrm;
-  $('statAvatar').textContent = layeredAvatar.active ? `layered ${label}` : 'built-in bot';
+  $('statAvatar').textContent = layeredAvatar.active ? tr('viewer.ui.avatar.layered', { label }) : tr('viewer.ui.avatar.builtInBot');
 }
 
 async function loadLayeredPngFiles(files) {
@@ -488,13 +518,11 @@ async function loadInochi2DFile(file) {
     configureInochiExpressionMapping(file.name, nextRuntime.listParams());
     const modelName = nextRuntime.metadata?.name || file.name;
     $('statAvatar').textContent = `${modelName} (Inochi2D)`;
-    chip.textContent = tr('viewer.status.inochiLoaded', { name: modelName });
-    chip.dataset.state = 'open';
+    setStatus('viewer.status.inochiLoaded', { name: modelName }, 'open');
     refreshParticipantSelector();
   } catch (error) {
     nextRuntime.dispose();
-    chip.textContent = formatInochi2DError(error);
-    chip.dataset.state = 'error';
+    setStatusText(formatInochi2DError(error), 'error');
   }
 }
 
@@ -735,14 +763,14 @@ function refreshParticipantSelector() {
     const option = document.createElement('option');
     option.value = id;
     const runtime = id === primaryParticipantId ? primaryRuntimeHandle : additionalParticipantRuntimes.get(id);
-    const avatarLabel = runtime?.primary ? (vrm ? $('statAvatar').textContent : 'built-in bot') : runtime?.avatarLabel || 'built-in bot';
+    const avatarLabel = runtime?.primary ? (vrm ? $('statAvatar').textContent : tr('viewer.ui.avatar.builtInBot')) : runtime?.avatarLabel || tr('viewer.ui.avatar.builtInBot');
     option.textContent = `${id} — ${avatarLabel}`;
     return option;
   });
   if (!options.length) {
     const option = document.createElement('option');
     option.value = '';
-    option.textContent = 'first participant';
+    option.textContent = tr('viewer.ui.option.firstParticipant');
     options.push(option);
   }
   select.replaceChildren(...options);
@@ -785,21 +813,19 @@ function configureExpressionMapping(label = 'avatar') {
 function refreshExpressionMapEditor() {
   $('txtExpressionMap').value = serializeExpressionMap(expressionMap);
   $('statMapping').textContent = inochi
-    ? `Inochi2D ${expressionMap.targets.length}/${availableExpressionNames.length} parameters`
+    ? tr('viewer.ui.mapping.inochi', { n: expressionMap.targets.length, total: availableExpressionNames.length })
     : perfectSyncState.active
-    ? `Perfect Sync ${perfectSyncState.matched.length}/52`
-    : `fallback ${expressionMap.targets.length} targets`;
+    ? tr('viewer.ui.mapping.perfectSync', { n: perfectSyncState.matched.length })
+    : tr('viewer.ui.mapping.fallback', { n: expressionMap.targets.length });
 }
 
 function applyExpressionMapFromEditor() {
   try {
     expressionMap = parseExpressionMap($('txtExpressionMap').value);
-    $('statMapping').textContent = `${expressionMap.targets.length} mapped targets`;
-    chip.textContent = tr('viewer.status.mappingApplied');
-    chip.dataset.state = 'open';
+    $('statMapping').textContent = tr('viewer.ui.mapping.mapped', { n: expressionMap.targets.length });
+    setStatus('viewer.status.mappingApplied', undefined, 'open');
   } catch (err) {
-    chip.textContent = tr('viewer.error.mapping', { detail: err.message });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.mapping', { detail: err.message }, 'error');
   }
 }
 
@@ -1025,8 +1051,7 @@ transport.addEventListener('participant-frame', (/** @type {any} */ ev) => {
 });
 
 transport.addEventListener('status', (/** @type {any} */ ev) => {
-  chip.textContent = ev.detail.detail || ev.detail.state;
-  chip.dataset.state = ev.detail.state;
+  setStatusText(ev.detail.detail || ev.detail.state, ev.detail.state);
 });
 
 // ---------------------------------------------------------------- render loop
@@ -1070,11 +1095,10 @@ function render() {
     try {
       applyInochi2D(dt);
     } catch (error) {
-      chip.textContent = formatInochi2DError(error);
-      chip.dataset.state = 'error';
+      setStatusText(formatInochi2DError(error), 'error');
       disposeInochiAvatar();
       bot.group.visible = true;
-      $('statAvatar').textContent = 'built-in bot (Inochi2D error)';
+      $('statAvatar').textContent = tr('viewer.ui.avatar.builtInBotInochiError');
       applyBot(dt);
     }
   } else if (layeredAvatar.active) applyLayeredAvatar();
@@ -1130,7 +1154,7 @@ function updateDrumOverlay() {
   if (!handNodes.length) {
     const empty = document.createElement('span');
     empty.className = 'hand';
-    empty.textContent = 'hands waiting';
+    empty.textContent = tr('viewer.ui.drum.handsWaiting');
     handNodes.push(empty);
   }
   drumOverlayHands.replaceChildren(...handNodes);
@@ -1268,11 +1292,9 @@ async function copySceneUrl() {
   const url = serializeViewerSceneUrl();
   try {
     await navigator.clipboard.writeText(url);
-    chip.textContent = tr('viewer.status.sceneUrlCopied');
-    chip.dataset.state = 'open';
+    setStatus('viewer.status.sceneUrlCopied', undefined, 'open');
   } catch {
-    chip.textContent = url;
-    chip.dataset.state = 'open';
+    setStatusText(url, 'open');
   }
 }
 
@@ -1336,11 +1358,9 @@ $('fileExpressionMap').addEventListener('change', async (e) => {
   try {
     expressionMap = parseExpressionMap(await file.text());
     refreshExpressionMapEditor();
-    chip.textContent = tr('viewer.status.mappingLoaded', { name: file.name });
-    chip.dataset.state = 'open';
+    setStatus('viewer.status.mappingLoaded', { name: file.name }, 'open');
   } catch (err) {
-    chip.textContent = tr('viewer.error.mapping', { detail: err.message });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.mapping', { detail: err.message }, 'error');
   } finally {
     e.target.value = '';
   }
@@ -1366,8 +1386,7 @@ $('btnConnect').addEventListener('click', async () => {
       pageProtocol: location.protocol,
     });
   } catch (e) {
-    chip.textContent = tr('viewer.error.connect', { detail: e.message });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.connect', { detail: e.message }, 'error');
   }
 });
 
@@ -1404,8 +1423,7 @@ async function loadVrmFile(file, participantId = $('selAvatarParticipant')?.valu
     if (participantId) await loadVrmForParticipant(participantId, url, file.name);
     else await loadVrmFromUrl(url, file.name);
   } catch (err) {
-    chip.textContent = formatAvatarLoadError(err);
-    chip.dataset.state = 'error';
+    setStatusText(formatAvatarLoadError(err), 'error');
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -1427,8 +1445,7 @@ async function loadNativeAvatar(value) {
   const info = normalizeNativeAvatarInfo(value);
   if (!info || !tauriInvoke || info.revision <= nativeAvatarRequestedRevision) return;
   nativeAvatarRequestedRevision = info.revision;
-  chip.textContent = tr('viewer.status.loadingNativeAvatar', { name: info.name });
-  chip.dataset.state = 'idle';
+  setStatus('viewer.status.loadingNativeAvatar', { name: info.name }, 'idle');
   try {
     const bytes = await tauriInvoke('read_native_avatar', { revision: info.revision });
     if (info.revision !== nativeAvatarRequestedRevision) return;
@@ -1437,8 +1454,7 @@ async function loadNativeAvatar(value) {
     else await loadVrmFile(file);
   } catch (error) {
     if (info.revision !== nativeAvatarRequestedRevision) return;
-    chip.textContent = tr('viewer.error.nativeAvatar', { detail: error instanceof Error ? error.message : String(error) });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.nativeAvatar', { detail: error instanceof Error ? error.message : String(error) }, 'error');
   }
 }
 
@@ -1451,8 +1467,7 @@ async function initializeNativeAvatarBridge() {
     window.addEventListener('beforeunload', () => nativeAvatarUnlisten?.(), { once: true });
     await loadNativeAvatar(await tauriInvoke('native_avatar_info'));
   } catch (error) {
-    chip.textContent = tr('viewer.error.nativeBridge', { detail: error instanceof Error ? error.message : String(error) });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.nativeBridge', { detail: error instanceof Error ? error.message : String(error) }, 'error');
   }
 }
 
@@ -1475,8 +1490,7 @@ async function loadLayeredFiles(files) {
     }
     return await loadLayeredPngFiles(list);
   } catch (err) {
-    chip.textContent = tr('viewer.error.layeredAvatar', { detail: err.message });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.layeredAvatar', { detail: err.message }, 'error');
     return false;
   }
 }
@@ -1488,8 +1502,7 @@ async function loadReplayFile(file) {
       : parseMotionJsonl(await file.text());
     startReplay(frames, file.name);
   } catch (err) {
-    chip.textContent = tr('viewer.error.replay', { detail: err.message });
-    chip.dataset.state = 'error';
+    setStatus('viewer.error.replay', { detail: err.message }, 'error');
   }
 }
 
@@ -1511,8 +1524,7 @@ function startReplay(frames, label) {
   lastStats = performance.now();
   const token = replayToken;
   let index = 0;
-  chip.textContent = `replay ${label}`;
-  chip.dataset.state = 'open';
+  setStatus('viewer.status.replay', { label }, 'open');
 
   const step = () => {
     if (token !== replayToken) return;
@@ -1521,8 +1533,7 @@ function startReplay(frames, label) {
     index++;
     if (index >= frames.length) {
       replayTimer = null;
-      chip.textContent = `replay complete: ${label}`;
-      chip.dataset.state = 'idle';
+      setStatus('viewer.status.replayComplete', { label }, 'idle');
       return;
     }
     const dt = Number(frames[index].t) - Number(frame.t);
@@ -1553,8 +1564,7 @@ document.addEventListener('drop', async (e) => {
 // ?vrm=<url> loads a model directly (must be CORS-accessible)
 if (params.get('vrm')) {
   loadVrmFromUrl(params.get('vrm'), params.get('vrm').split('/').pop()).catch((e) => {
-    chip.textContent = formatAvatarLoadError(e);
-    chip.dataset.state = 'error';
+    setStatusText(formatAvatarLoadError(e), 'error');
   });
 }
 
@@ -1567,8 +1577,7 @@ if (params.get('inochi')) {
     })
     .then((blob) => loadInochi2DFile(new File([blob], params.get('inochi').split('/').pop() || 'avatar.inp')))
     .catch((error) => {
-      chip.textContent = formatInochi2DError(error);
-      chip.dataset.state = 'error';
+      setStatusText(formatInochi2DError(error), 'error');
     });
 }
 
@@ -1638,3 +1647,5 @@ function applyLockedCamera() {
   camera.position.set(0, 1.42, 1.4);
   camera.lookAt(0, 1.38, 0);
 }
+
+bootDone = true;

@@ -2,14 +2,32 @@ import { encodeFrame } from '../shared/codec.js';
 import { parseKgmRecording } from '../shared/kgm-recording.js';
 import { parseRecordingJsonl } from '../shared/recording.js';
 import { VRMA_MIME, exportVrmaFromFrames } from '../shared/vrma-export.js';
-import { createI18n, loadLanguage } from '../shared/i18n.js';
+import { setupPageI18n } from '../shared/i18n.js';
 
-// Runtime EN/JA localization (#267).
-const t = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) }).t;
+// Runtime EN/JA localization (#267). `bootDone` must be declared above
+// setupPageI18n, which renders synchronously: reading it from the temporal
+// dead zone would abort the module.
+let bootDone = false;
+const { t } = setupPageI18n({
+  onRender: () => {
+    if (!bootDone) return;
+    if (lastStatus) setStatus(lastStatus.key, lastStatus.params, lastStatus.chipState);
+    renderReplayValidation(validationErrors, frames.length);
+  },
+});
 
 /** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
 const chip = $('statusChip');
+
+// The status chip renders from a key so a language toggle can replay the
+// message currently on screen instead of resetting it.
+let lastStatus = null;
+function setStatus(key, params, chipState) {
+  lastStatus = { key, params, chipState };
+  chip.textContent = t(key, params);
+  chip.dataset.state = chipState;
+}
 
 let frames = [];
 let cursor = 0;
@@ -18,6 +36,9 @@ let timer = null;
 let startedAt = 0;
 let baseT = 0;
 let validationErrors = [];
+// Until a file is parsed the validation panel shows its neutral "no recording"
+// copy; a language toggle must re-render that, not the empty-recording result.
+let loadedOnce = false;
 
 $('fileReplay').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
@@ -29,6 +50,7 @@ $('fileReplay').addEventListener('change', async (event) => {
   const parsed = await parseReplayFile(file);
   frames = parsed.frames.sort((a, b) => a.t - b.t);
   validationErrors = parsed.errors;
+  loadedOnce = true;
   cursor = 0;
   baseT = frames[0]?.t ?? 0;
   $('statFrames').textContent = String(frames.length);
@@ -42,8 +64,9 @@ $('fileReplay').addEventListener('change', async (event) => {
   $('btnReset').disabled = !canReplay();
   $('btnExportVrma').disabled = !canReplay();
   renderReplayValidation(validationErrors, frames.length);
-  chip.textContent = validationErrors.length ? t('replay.status.blocked', { n: validationErrors.length }) : (frames.length ? t('replay.status.loaded') : t('replay.status.empty'));
-  chip.dataset.state = validationErrors.length || !frames.length ? 'error' : 'open';
+  const loadedState = validationErrors.length || !frames.length ? 'error' : 'open';
+  if (validationErrors.length) setStatus('replay.status.blocked', { n: validationErrors.length }, loadedState);
+  else setStatus(frames.length ? 'replay.status.loaded' : 'replay.status.empty', undefined, loadedState);
 });
 
 $('btnPlay').addEventListener('click', () => {
@@ -52,8 +75,7 @@ $('btnPlay').addEventListener('click', () => {
   startedAt = performance.now() - ((frames[cursor]?.t ?? baseT) - baseT);
   $('btnPlay').disabled = true;
   $('btnPause').disabled = false;
-  chip.textContent = t('replay.status.playing');
-  chip.dataset.state = 'open';
+  setStatus('replay.status.playing', undefined, 'open');
   tick();
 });
 
@@ -75,11 +97,9 @@ $('btnExportVrma').addEventListener('click', () => {
     });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     downloadBytes(`minamo-motion-${stamp}.vrma`, bytes, VRMA_MIME);
-    chip.textContent = t('replay.status.vrmaExported');
-    chip.dataset.state = 'open';
+    setStatus('replay.status.vrmaExported', undefined, 'open');
   } catch (error) {
-    chip.textContent = t('replay.error.vrmaExport', { detail: error.message });
-    chip.dataset.state = 'error';
+    setStatus('replay.error.vrmaExport', { detail: error.message }, 'error');
   }
 });
 
@@ -109,8 +129,7 @@ function pause(label) {
   closePublishChannel();
   $('btnPlay').disabled = !canReplay();
   $('btnPause').disabled = true;
-  chip.textContent = t('replay.status.' + label, label);
-  chip.dataset.state = label === 'finished' ? 'closed' : 'idle';
+  setStatus(`replay.status.${label}`, undefined, label === 'finished' ? 'closed' : 'idle');
 }
 
 function canReplay() {
@@ -145,6 +164,11 @@ function renderReplayValidation(errors, frameCount) {
   list.replaceChildren();
 
   if (!errors.length) {
+    if (!frameCount && !loadedOnce) {
+      panel.dataset.state = 'idle';
+      summary.textContent = t('replay.validation.noRecording');
+      return;
+    }
     panel.dataset.state = frameCount ? 'open' : 'empty';
     summary.textContent = frameCount
       ? t('replay.validation.ready', { n: frameCount })
@@ -156,12 +180,12 @@ function renderReplayValidation(errors, frameCount) {
   summary.textContent = t('replay.validation.disabled', { n: errors.length });
   for (const error of errors.slice(0, 20)) {
     const li = document.createElement('li');
-    li.textContent = `line ${error.line ?? '?'}: ${(error.errors ?? []).join('; ')}`;
+    li.textContent = t('replay.validation.line', { line: error.line ?? '?', detail: (error.errors ?? []).join('; ') });
     list.appendChild(li);
   }
   if (errors.length > 20) {
     const li = document.createElement('li');
-    li.textContent = `and ${errors.length - 20} more error(s)`;
+    li.textContent = t('replay.validation.more', { n: errors.length - 20 });
     list.appendChild(li);
   }
 }
@@ -210,3 +234,6 @@ function updateViewerLink() {
   if ($('inpToken').value) params.set('token', $('inpToken').value);
   $('lnkViewer').href = `../viewer/?${params.toString()}`;
 }
+
+setStatus('replay.status.idle', undefined, 'idle');
+bootDone = true;

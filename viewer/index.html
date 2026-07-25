@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="referrer" content="no-referrer" />
-  <title>Minamo Viewer</title>
+  <title data-i18n="viewer.ui.title">Minamo Viewer</title>
   <link rel="stylesheet" href="../assets/minamo.css" />
   <style>
     html, body { height: 100%; overflow: hidden; }
@@ -49,6 +49,9 @@
       backdrop-filter: blur(6px);
       background: rgba(22, 26, 44, 0.88);
     }
+    /* The narrow HUD cannot fit the wordmark, language toggle and status chip
+       on one line, so let the row wrap instead of overflowing the panel. */
+    .hud .topbar { flex-wrap: wrap; row-gap: 6px; }
     .hud .stats { margin-top: 8px; }
     body.hud-hidden .hud { display: none; }
     .drum-overlay {
@@ -123,11 +126,14 @@
         <span class="wordmark" style="font-size:16px;">Minamo</span>
         <span class="page-name">viewer</span>
         <span class="spacer"></span>
+        <button id="langToggle" type="button" class="lang-toggle" data-i18n="lang.toggle" data-i18n-attr="aria-label:lang.toggle.aria">日本語</button>
+        <!-- statusChip has no data-i18n: viewer.js renders it from a key it can
+             replay, so a language toggle keeps the live message on screen. -->
         <span class="status-chip" id="statusChip" data-state="idle">idle</span>
       </div>
       <div class="form-grid">
         <div class="field">
-          <span>mode</span>
+          <span data-i18n="viewer.ui.field.mode">mode</span>
           <select id="selMode">
             <option value="local">local</option>
             <option value="ws">ws</option>
@@ -135,58 +141,58 @@
           </select>
         </div>
         <div class="field">
-          <span>room</span>
+          <span data-i18n="viewer.ui.field.room">room</span>
           <input type="text" id="inpRoom" value="demo" />
         </div>
         <div class="field">
-          <span>scene</span>
+          <span data-i18n="viewer.ui.field.scene">scene</span>
           <select id="selScenePreset">
-            <option value="soft">soft key</option>
-            <option value="anime">anime rim</option>
-            <option value="flat">flat</option>
+            <option value="soft" data-i18n="viewer.ui.scene.soft">soft key</option>
+            <option value="anime" data-i18n="viewer.ui.scene.anime">anime rim</option>
+            <option value="flat" data-i18n="viewer.ui.scene.flat">flat</option>
           </select>
         </div>
         <div class="field">
-          <span>background</span>
+          <span data-i18n="viewer.ui.field.background">background</span>
           <input type="color" id="inpBgColor" value="#0f1220" />
         </div>
         <div class="field">
-          <span>room token</span>
+          <span data-i18n="viewer.ui.field.roomToken">room token</span>
           <input type="password" id="inpToken" autocomplete="off" />
         </div>
         <div class="field wide" id="fieldWsUrl" hidden>
-          <span>websocket relay url</span>
+          <span data-i18n="viewer.ui.field.wsUrl">websocket relay url</span>
           <input type="url" id="inpWsUrl" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://relay.example/ws" />
         </div>
         <div class="field" id="fieldWtUrl" hidden>
-          <span>wt url</span>
+          <span data-i18n="viewer.ui.field.wtUrl">wt url</span>
           <input type="text" id="inpWtUrl" value="https://localhost:4433" />
         </div>
         <div class="field wide" id="fieldWtHash" hidden>
-          <span>cert sha-256 (hex)</span>
+          <span data-i18n="viewer.ui.field.wtHash">cert sha-256 (hex)</span>
           <input type="text" id="inpWtHash" />
         </div>
       </div>
       <div class="controls">
-        <button id="btnConnect" class="primary">Connect</button>
-        <button id="btnCenter">Center</button>
-        <button id="btnLoadVrm">Open VRM / GLB</button>
-        <button id="btnLoadInochi">Open INP / INX</button>
+        <button id="btnConnect" class="primary" data-i18n="viewer.ui.btn.connect">Connect</button>
+        <button id="btnCenter" data-i18n="viewer.ui.btn.center">Center</button>
+        <button id="btnLoadVrm" data-i18n="viewer.ui.btn.openVrm">Open VRM / GLB</button>
+        <button id="btnLoadInochi" data-i18n="viewer.ui.btn.openInochi">Open INP / INX</button>
         <label class="field" style="min-width: 160px;">
-          <span>avatar participant</span>
+          <span data-i18n="viewer.ui.field.avatarParticipant">avatar participant</span>
           <select id="selAvatarParticipant">
-            <option value="">first participant</option>
+            <option value="" data-i18n="viewer.ui.option.firstParticipant">first participant</option>
           </select>
         </label>
-        <button id="btnLoadLayered">Open PNG/PSD</button>
-        <button id="btnCopySceneUrl">Copy URL</button>
-        <label class="check"><input type="checkbox" id="chkTransparent" />Transparent</label>
-        <label class="check"><input type="checkbox" id="chkArmSolver" checked />Arm solver</label>
-        <label class="check"><input type="checkbox" id="chkDrumOverlay" />Drum overlay</label>
-        <label class="check"><input type="checkbox" id="chkBloom" />Bloom</label>
-        <label class="check"><input type="checkbox" id="chkVignette" />Vignette</label>
+        <button id="btnLoadLayered" data-i18n="viewer.ui.btn.openLayered">Open PNG/PSD</button>
+        <button id="btnCopySceneUrl" data-i18n="viewer.ui.btn.copyUrl">Copy URL</button>
+        <label class="check"><input type="checkbox" id="chkTransparent" /><span data-i18n="viewer.ui.check.transparent">Transparent</span></label>
+        <label class="check"><input type="checkbox" id="chkArmSolver" checked /><span data-i18n="viewer.ui.check.armSolver">Arm solver</span></label>
+        <label class="check"><input type="checkbox" id="chkDrumOverlay" /><span data-i18n="viewer.ui.check.drumOverlay">Drum overlay</span></label>
+        <label class="check"><input type="checkbox" id="chkBloom" /><span data-i18n="viewer.ui.check.bloom">Bloom</span></label>
+        <label class="check"><input type="checkbox" id="chkVignette" /><span data-i18n="viewer.ui.check.vignette">Vignette</span></label>
         <label class="field" style="min-width: 130px;">
-          <span>parallax</span>
+          <span data-i18n="viewer.ui.field.parallax">parallax</span>
           <input id="rngLayerParallax" type="range" min="0" max="48" step="1" value="18" />
         </label>
         <input type="file" id="fileVrm" accept=".vrm,.glb,model/gltf-binary" hidden />
@@ -194,31 +200,31 @@
         <input type="file" id="fileLayeredAvatar" accept=".png,.psd" multiple hidden />
       </div>
       <div class="stats">
-        <span>recv <b id="statFps">--</b> fps</span>
-        <span>in <b id="statRate">--</b> KB/s</span>
-        <span>mode <b id="statTransportMode">local</b></span>
-        <span>latency <b id="statLatency">--</b> ms</span>
-        <span>loss <b id="statLoss">0.0</b>%</span>
-        <span>reorder <b id="statReorder">0</b></span>
-        <span>avatar <b id="statAvatar">built-in bot</b></span>
-        <span>participants <b id="statParticipants">0</b></span>
+        <span><span data-i18n="viewer.ui.stat.recv">recv</span> <b id="statFps">--</b> fps</span>
+        <span><span data-i18n="viewer.ui.stat.in">in</span> <b id="statRate">--</b> KB/s</span>
+        <span><span data-i18n="viewer.ui.stat.mode">mode</span> <b id="statTransportMode">local</b></span>
+        <span><span data-i18n="viewer.ui.stat.latency">latency</span> <b id="statLatency">--</b> ms</span>
+        <span><span data-i18n="viewer.ui.stat.loss">loss</span> <b id="statLoss">0.0</b>%</span>
+        <span><span data-i18n="viewer.ui.stat.reorder">reorder</span> <b id="statReorder">0</b></span>
+        <span><span data-i18n="viewer.ui.stat.avatar">avatar</span> <b id="statAvatar" data-i18n="viewer.ui.avatar.builtInBot">built-in bot</b></span>
+        <span><span data-i18n="viewer.ui.stat.participants">participants</span> <b id="statParticipants">0</b></span>
       </div>
       <details class="mapping-editor" open>
-        <summary>Mapping <b id="statMapping">fallback</b></summary>
+        <summary><span data-i18n="viewer.ui.mapping.summary">Mapping</span> <b id="statMapping">fallback</b></summary>
         <textarea id="txtExpressionMap" rows="8" spellcheck="false"></textarea>
         <div class="controls">
-          <button id="btnApplyMapping">Apply</button>
-          <button id="btnImportMapping">Load</button>
-          <button id="btnExportMapping">Save</button>
-          <button id="btnResetMapping">Reset</button>
+          <button id="btnApplyMapping" data-i18n="viewer.ui.btn.apply">Apply</button>
+          <button id="btnImportMapping" data-i18n="viewer.ui.btn.load">Load</button>
+          <button id="btnExportMapping" data-i18n="viewer.ui.btn.save">Save</button>
+          <button id="btnResetMapping" data-i18n="viewer.ui.btn.reset">Reset</button>
           <input type="file" id="fileExpressionMap" accept=".json,application/json" hidden />
         </div>
       </details>
-      <p class="note">Drop a VRM/GLB, INP/INX, PSD, layered PNG set, or tracker JSONL recording.</p>
+      <p class="note" data-i18n="viewer.ui.note">Drop a VRM/GLB, INP/INX, PSD, layered PNG set, or tracker JSONL recording.</p>
     </div>
   </div>
 
-  <div class="dropveil">drop .vrm, .glb, .inp, .inx, .psd, .png set, or .jsonl</div>
+  <div class="dropveil" data-i18n="viewer.ui.dropveil">drop .vrm, .glb, .inp, .inx, .psd, .png set, or .jsonl</div>
 
   <script type="importmap">
   {

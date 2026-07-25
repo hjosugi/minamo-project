@@ -1665,7 +1665,9 @@ def validate_latency_quality_hud_contracts() -> None:
     for needle in ['computeLossPercent(orderGate.lost, orderGate.accepted)', 'statLatency', 'statTransportMode']:
         if needle not in viewer:
             add_error('viewer/viewer.js', f'missing viewer latency/loss HUD contract: {needle}')
-    if '<span>loss <b id="statLoss">0.0</b>%</span>' not in viewer_html:
+    # The label itself is localized (#267), so match the reading and its unit
+    # rather than a fixed English string.
+    if not re.search(r'<b id="statLoss">[^<]*</b>%', viewer_html):
         add_error('viewer/index.html', 'viewer HUD must label packet loss as a percentage')
     for needle in ['controlledNetemHudCheck', 'computeLossPercent(10, 90)', 'latencyWithinTolerance(54, 50, 10)', 'percentileSample([4, 8, 16, 32, 64], 0.95)']:
         if needle not in tests:
