@@ -25,22 +25,38 @@ export function finiteVec3Guard(value: Vec3, fallback: Vec3): StabilityResult<Ve
 
 export function finiteFrameGuard(frame: KGM1Frame, previous?: KGM1Frame): StabilityResult<KGM1Frame> {
   const warnings: string[] = [];
-  const next = structuredClone(frame);
-  const face = next.tracking.face;
+  const face = frame.tracking.face;
   const previousFace = previous?.tracking.face;
-  if (face?.headRotation) {
-    const guarded = finiteQuatGuard(face.headRotation, previousFace?.headRotation ?? { x: 0, y: 0, z: 0, w: 1 });
-    face.headRotation = guarded.value;
-    warnings.push(...guarded.warnings);
-  }
+
+  // Copy only the parts this guard rewrites (face.headRotation, face.blendshapes,
+  // quality.warnings) rather than a whole-frame structuredClone per call (#259).
+  // hands/drums/clock/eyes/mouth are shared by reference and never mutated here,
+  // so the input frame is left untouched.
+  let nextFace = face;
   if (face) {
+    let headRotation = face.headRotation;
+    if (face.headRotation) {
+      const guarded = finiteQuatGuard(face.headRotation, previousFace?.headRotation ?? { x: 0, y: 0, z: 0, w: 1 });
+      headRotation = guarded.value;
+      warnings.push(...guarded.warnings);
+    }
+    const blendshapes: Record<string, number> = {};
     for (const [name, value] of Object.entries(face.blendshapes)) {
       const guarded = finiteNumber(value, previousFace?.blendshapes[name] ?? 0);
-      face.blendshapes[name] = clamp(guarded.value, 0, 1);
+      blendshapes[name] = clamp(guarded.value, 0, 1);
       warnings.push(...guarded.warnings.map((warning) => `${warning}:${name}`));
     }
+    nextFace = { ...face, blendshapes, ...(headRotation ? { headRotation } : {}) };
   }
-  next.quality.warnings = [...new Set([...next.quality.warnings, ...warnings])];
+
+  const next: KGM1Frame = {
+    ...frame,
+    tracking: { ...frame.tracking, ...(nextFace ? { face: nextFace } : {}) },
+    quality: {
+      ...frame.quality,
+      warnings: [...new Set([...frame.quality.warnings, ...warnings])],
+    },
+  };
   return { value: next, warnings };
 }
 

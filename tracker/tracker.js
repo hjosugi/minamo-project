@@ -155,6 +155,7 @@ const state = {
   raw: new Float32Array(NUM_CHANNELS),
   quat: [0, 0, 0, 1],
   pos: [0, 0, 0.4],
+  _posScratch: new Float32Array(3), // reused by the head-position filter (#259)
   posePoints: new Float32Array(NUM_POSE_POINTS * 3),
   hasPose: false,
   hasHands: false,
@@ -828,9 +829,14 @@ function loop() {
       state.weightFilter.filter(state.weights, tSec);
       state.quat = state.quatFilter.filter(quat, tSec);
       const stabilizedPos = state.headPositionStabilizer.stabilize(pos, nowMs, { leanRangeCm: settings.headLeanRangeCm });
-      const p = new Float32Array(stabilizedPos);
-      state.posFilter.filter(p, tSec);
-      state.pos = [p[0], p[1], p[2]];
+      // Reuse a scratch buffer + mutate state.pos in place instead of allocating
+      // a Float32Array and a new array every frame (#259). state.pos is consumed
+      // synchronously (encode / dataset capture), like the reused state.weights.
+      state._posScratch.set(stabilizedPos);
+      state.posFilter.filter(state._posScratch, tSec);
+      state.pos[0] = state._posScratch[0];
+      state.pos[1] = state._posScratch[1];
+      state.pos[2] = state._posScratch[2];
       shouldSendFace = true;
     } else {
       const lossState = state.trackingLossSmoother.update(false, state.weights, nowMs);
