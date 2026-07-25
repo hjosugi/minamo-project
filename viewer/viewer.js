@@ -9,7 +9,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { VRMUtils } from '@pixiv/three-vrm';
 
-import { createVrmLoader, formatAvatarLoadError } from './avatar-loader.js';
+import { createVrmLoader, describeAvatarLoadError } from './avatar-loader.js';
 
 import { ARKIT_52, CHANNEL_INDEX, NUM_CHANNELS } from '../shared/blendshapes.js';
 import { decodeFrame } from '../shared/codec.js';
@@ -25,7 +25,7 @@ import {
 } from '../shared/expression-mapping.js';
 import {
   Inochi2DRuntime,
-  formatInochi2DError,
+  describeInochi2DError,
   isInochi2DFile,
 } from './inochi2d-runtime.js';
 import { parseKgmRecording } from '../shared/kgm-recording.js';
@@ -87,6 +87,12 @@ function setStatusText(text, chipState) {
   lastStatus = null;
   chip.textContent = text;
   chip.dataset.state = chipState;
+}
+
+// Avatar and Inochi2D loaders return {key, params} rather than a sentence, so
+// their guidance is localized and survives a language toggle (#307).
+function setStatusFromDescriptor(descriptor) {
+  setStatus(descriptor.key, descriptor.params, 'error');
 }
 
 // Imported from @tauri-apps/api rather than read off the global IPC bridge, so
@@ -529,7 +535,7 @@ async function loadInochi2DFile(file) {
     refreshParticipantSelector();
   } catch (error) {
     nextRuntime.dispose();
-    setStatusText(formatInochi2DError(error), 'error');
+    setStatusFromDescriptor(describeInochi2DError(error));
   }
 }
 
@@ -1101,7 +1107,7 @@ function render() {
     try {
       applyInochi2D(dt);
     } catch (error) {
-      setStatusText(formatInochi2DError(error), 'error');
+      setStatusFromDescriptor(describeInochi2DError(error));
       disposeInochiAvatar();
       bot.group.visible = true;
       $('statAvatar').textContent = tr('viewer.ui.avatar.builtInBotInochiError');
@@ -1429,7 +1435,7 @@ async function loadVrmFile(file, participantId = $('selAvatarParticipant')?.valu
     if (participantId) await loadVrmForParticipant(participantId, url, file.name);
     else await loadVrmFromUrl(url, file.name);
   } catch (err) {
-    setStatusText(formatAvatarLoadError(err), 'error');
+    setStatusFromDescriptor(describeAvatarLoadError(err));
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -1570,7 +1576,7 @@ document.addEventListener('drop', async (e) => {
 // ?vrm=<url> loads a model directly (must be CORS-accessible)
 if (params.get('vrm')) {
   loadVrmFromUrl(params.get('vrm'), params.get('vrm').split('/').pop()).catch((e) => {
-    setStatusText(formatAvatarLoadError(e), 'error');
+    setStatusFromDescriptor(describeAvatarLoadError(e));
   });
 }
 
@@ -1583,7 +1589,7 @@ if (params.get('inochi')) {
     })
     .then((blob) => loadInochi2DFile(new File([blob], params.get('inochi').split('/').pop() || 'avatar.inp')))
     .catch((error) => {
-      setStatusText(formatInochi2DError(error), 'error');
+      setStatusFromDescriptor(describeInochi2DError(error));
     });
 }
 

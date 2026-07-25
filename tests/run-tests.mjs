@@ -57,7 +57,7 @@ import {
 } from '../scripts/inspect-glb.mjs';
 import {
   AVATAR_DECODER_SUPPORT,
-  formatAvatarLoadError,
+  describeAvatarLoadError,
 } from '../viewer/avatar-loader.js';
 import {
   EXPRESSION_MAPPING_SCHEMA,
@@ -72,7 +72,7 @@ import {
 import {
   INOX2D_UPSTREAM_REVISION,
   Inochi2DRuntime,
-  formatInochi2DError,
+  describeInochi2DError,
   inspectInochi2DFile,
   isInochi2DFile,
 } from '../viewer/inochi2d-runtime.js';
@@ -1744,7 +1744,7 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(isInochi2DFile('avatar.vrm'), false);
   assert.match(INOX2D_UPSTREAM_REVISION, /^[a-f0-9]{40}$/);
   assert.throws(() => inspectInochi2DFile(new Uint8Array(12)), /magic/);
-  assert.match(formatInochi2DError(new Error('BC7 texture encoding is not supported yet')), /Re-export with PNG or TGA/);
+  assert.equal(describeInochi2DError(new Error('BC7 texture encoding is not supported yet')).key, 'viewer.error.inochi.bc7');
 
   let canvasRemoved = false;
   let contextLost = false;
@@ -1860,13 +1860,32 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(AVATAR_DECODER_SUPPORT.ktx2, 'KHR_texture_basisu');
   assert.equal(AVATAR_DECODER_SUPPORT.meshopt, 'EXT_meshopt_compression');
   assert.equal(AVATAR_DECODER_SUPPORT.draco, 'KHR_draco_mesh_compression');
-  assert.match(formatAvatarLoadError(new Error('KTX2Loader: transcoder failed')), /KTX2 texture decode failed/);
-  assert.match(formatAvatarLoadError(new Error('MeshoptDecoder rejected stream')), /Meshopt geometry decode failed/);
-  assert.match(formatAvatarLoadError(new Error('DRACOLoader bad data')), /Draco geometry decode failed/);
-  assert.match(formatAvatarLoadError(new Error('Unexpected end of JSON input')), /corrupt or is not a valid VRM\/GLB/);
-  const redacted = formatAvatarLoadError(new Error('fetch https://example.test/avatar.vrm?token=secret failed'));
-  assert.ok(!redacted.includes('secret'));
-  assert.match(redacted, /could not be loaded/);
+  // The loaders classify a failure into an i18n key; the caller renders it in the
+  // reader's language and can replay it on a language toggle (#307).
+  assert.equal(describeAvatarLoadError(new Error('KTX2Loader: transcoder failed')).key, 'viewer.error.avatar.ktx2');
+  assert.equal(describeAvatarLoadError(new Error('MeshoptDecoder rejected stream')).key, 'viewer.error.avatar.meshopt');
+  assert.equal(describeAvatarLoadError(new Error('DRACOLoader bad data')).key, 'viewer.error.avatar.draco');
+  assert.equal(describeAvatarLoadError(new Error('Unexpected end of JSON input')).key, 'viewer.error.avatar.corrupt');
+  assert.equal(describeAvatarLoadError(new Error('boom')).key, 'viewer.error.avatar.generic');
+
+  // The upstream detail still reaches the reader, and a URL secret still does not.
+  const redacted = describeAvatarLoadError(new Error('fetch https://example.test/avatar.vrm?token=secret failed'));
+  assert.equal(redacted.key, 'viewer.error.avatar.network');
+  assert.ok(!redacted.params.detail.includes('secret'), 'a query-string secret must stay redacted');
+
+  // Every branch must render in both languages with the detail interpolated.
+  for (const describe of [describeAvatarLoadError, describeInochi2DError]) {
+    for (const probe of ['KTX2Loader failed', 'MeshoptDecoder failed', 'DRACOLoader failed',
+      'Unexpected end of JSON input', 'fetch failed', 'BC7 unsupported', 'WebGL2 missing', 'whatever']) {
+      const descriptor = describe(new Error(probe));
+      for (const lang of SUPPORTED_LANGUAGES) {
+        const rendered = createI18n({ lang }).t(descriptor.key, descriptor.params);
+        assert.notEqual(rendered, descriptor.key, `${descriptor.key} is missing from the ${lang} table`);
+        assert.ok(rendered.includes(probe), `${lang} ${descriptor.key} must include the upstream detail`);
+        assert.ok(!rendered.includes('{detail}'), `${lang} ${descriptor.key} left its token uninterpolated`);
+      }
+    }
+  }
 }
 
 {

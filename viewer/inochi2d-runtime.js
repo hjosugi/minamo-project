@@ -58,19 +58,22 @@ export function isInochi2DFile(filename) {
   return INOCHI2D_SUPPORTED_EXTENSIONS.some((extension) => String(filename || '').toLowerCase().endsWith(extension));
 }
 
-/** @param {unknown} error */
-export function formatInochi2DError(error) {
-  const message = errorMessage(error);
-  if (/BC7/i.test(message)) {
-    return `Inochi2D load failed: BC7 puppet textures are not supported by the pinned Inox2D WebGL backend. Re-export with PNG or TGA textures. (${message})`;
-  }
-  if (/WebGL2|context/i.test(message)) {
-    return `Inochi2D load failed: WebGL2 with a stencil buffer is required. Check browser GPU diagnostics. (${message})`;
-  }
-  if (/magic|truncated|payload|JSON|parse/i.test(message)) {
-    return `Inochi2D load failed: the puppet is corrupt or not a supported .inp/.inx file. (${message})`;
-  }
-  return `Inochi2D load failed. The pinned Inox2D backend may not support a feature used by this puppet. (${message})`;
+/**
+ * Classify an Inochi2D load failure into an i18n key plus the upstream detail
+ * (#307). A descriptor rather than a composed string, for the same reasons as
+ * describeAvatarLoadError: the caller localizes it, and the key lets a language
+ * toggle replay it.
+ *
+ * @param {unknown} error
+ * @returns {{key: string, params: {detail: string}}}
+ */
+export function describeInochi2DError(error) {
+  const detail = errorMessage(error);
+  const params = { detail };
+  if (/BC7/i.test(detail)) return { key: 'viewer.error.inochi.bc7', params };
+  if (/WebGL2|context/i.test(detail)) return { key: 'viewer.error.inochi.webgl2', params };
+  if (/magic|truncated|payload|JSON|parse/i.test(detail)) return { key: 'viewer.error.inochi.corrupt', params };
+  return { key: 'viewer.error.inochi.generic', params };
 }
 
 export class Inochi2DRuntime {
