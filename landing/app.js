@@ -13,6 +13,16 @@ const fpsEl = document.getElementById('fps');
 const confidenceEl = document.getElementById('confidence');
 const hitsEl = document.getElementById('hits');
 
+// Demo state is declared before the i18n bootstrap below, which reads `running`
+// on its first render — leaving it here would hit the temporal dead zone and
+// abort the whole module.
+let running = false;
+let frames = 0;
+let lastFpsTime = performance.now();
+let fps = 0;
+let hits = 0;
+let lastHitBucket = -1;
+
 // Runtime EN/JA localization (#267): navigator.language with a persisted manual
 // override, applied to every [data-i18n] node.
 const i18n = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) });
@@ -31,13 +41,6 @@ document.getElementById('langToggle')?.addEventListener('click', () => {
 });
 
 renderLanguage();
-
-let running = false;
-let frames = 0;
-let lastFpsTime = performance.now();
-let fps = 0;
-let hits = 0;
-let lastHitBucket = -1;
 
 async function startCamera() {
   try {
