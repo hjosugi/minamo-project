@@ -2256,9 +2256,47 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     {
       file: '../replay/replay.js',
       bound: ['btnPlay', 'btnPause', 'btnReset', 'langToggle'],
-      check: ({ elements }) => {
-        assert.equal(elements.get('statusChip')?.textContent, '待機中', 'replay renders its initial status from a key');
-        assert.equal(elements.get('statusChip')?.dataset.state, 'idle', 'replay starts idle');
+      // Beyond loading, replay is driven end-to-end with a real recording:
+      // file input -> parse+validate -> play -> encode -> BroadcastChannel.
+      drive: async ({ document }) => {
+        const initialStatus = document.getElementById('statusChip').textContent;
+        const fileInput = document.getElementById('fileReplay');
+        const onChange = fileInput.listeners.get('change')?.[0];
+        assert.ok(onChange, 'replay must bind a change handler to its file input');
+        // A File-like object: replay only needs name + text().
+        const jsonl = fs.readFileSync(path.join(root, 'tests/fixtures/kgm1-synthetic.jsonl'), 'utf8');
+        await onChange({ target: { files: [{ name: 'synthetic.jsonl', text: async () => jsonl }] } });
+        const loadedStatus = document.getElementById('statusChip').textContent;
+        const play = document.getElementById('btnPlay');
+        assert.equal(play.disabled, false, 'a valid recording must enable playback');
+        // Frame timestamps are in the past, so the first tick drains the clip.
+        await play.listeners.get('click')[0]();
+        for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setImmediate(resolve));
+        return { initialStatus, loadedStatus, frameCount: Number(document.getElementById('statFrames').textContent) };
+      },
+      check: ({ elements, broadcasts, observed }) => {
+        assert.equal(observed.initialStatus, '待機中', 'replay renders its initial status from a key');
+        assert.equal(observed.loadedStatus, '読み込み完了', 'a valid recording reports as loaded');
+        assert.ok(observed.frameCount > 0, 'replay must report the loaded frame count');
+
+        const posted = broadcasts.flatMap((channel) => channel.messages);
+        assert.ok(posted.length > 0, 'playing a valid recording must broadcast at least one frame');
+        assert.ok(broadcasts.every((channel) => channel.name.startsWith('minamo:')),
+          `replay must publish on a namespaced channel, saw ${broadcasts.map((c) => c.name).join(', ')}`);
+
+        // What went on the wire must be a real KGM1 frame the viewer can decode.
+        const decoded = decodeFrame(posted[0]);
+        assert.ok(decoded, 'the broadcast payload must decode as a KGM1 frame');
+        assert.ok(decoded.face, 'a replayed frame must carry a face block');
+        assert.equal(decoded.face.weights.length, NUM_CHANNELS, 'a decoded frame carries the full blendshape channel set');
+        assert.equal(decoded.face.quat.length, 4, 'a decoded frame carries a head-pose quaternion');
+        assert.ok([...decoded.face.quat].every(Number.isFinite) && [...decoded.face.pos].every(Number.isFinite),
+          'decoded pose values must be finite');
+        assert.ok([...decoded.face.weights].every((w) => w >= 0 && w <= 1),
+          'decoded blendshape weights must stay normalized');
+
+        assert.equal(elements.get('statusChip')?.textContent, '完了', 'a drained clip reports finished');
+        assert.ok(broadcasts.every((channel) => channel.closed), 'replay must close its channel when playback stops');
       },
     },
     {
@@ -2293,19 +2331,24 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
 
   for (const page of pages) {
     let loadError = null;
-    const { elements, documentElement } = await withStubbedDom(async () => {
+    let observed = {};
+    const { elements, documentElement, broadcasts } = await withStubbedDom(async (ctx) => {
       try {
         await import(page.file);
       } catch (error) {
         loadError = error;
+        return;
       }
+      // `drive` runs while the stubs are still installed, so a page can be
+      // exercised for real; anything it returns reaches `check` below.
+      if (page.drive) observed = (await page.drive(ctx)) ?? {};
     }, { language: 'ja-JP' });
     assert.equal(loadError, null, `${page.file} threw while loading: ${loadError?.stack || ''}`);
     assert.equal(documentElement.lang, 'ja', `${page.file} applies the detected language to <html lang>`);
     for (const id of page.bound) {
       assert.ok(elements.get(id)?.listeners.has('click'), `${page.file} left #${id} without a click handler`);
     }
-    page.check?.({ elements });
+    page.check?.({ elements, broadcasts, observed });
   }
 
   // Async work a page started during import can outlive the stubbed window and
