@@ -5,6 +5,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Cancel superseded runs on the same ref so a rapid push does not queue behind
+# stale builds (faster feedback, fewer wasted minutes).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   js:
     runs-on: ubuntu-latest
@@ -39,6 +45,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # Cache the crate registry + build outputs so wtransport/quinn are not
+      # recompiled from scratch every run.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            relay-rs
       - run: cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
       - run: cargo build --locked --manifest-path relay-rs/Cargo.toml --release
@@ -61,6 +74,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      # The Tauri dep tree is the slowest compile in CI; cache it across runs.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - name: Install Tauri Linux dependencies
         run: |
           sudo apt-get update
@@ -73,9 +90,13 @@ jobs:
       - run: cargo check --locked --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      # The full release bundle is the slowest step; PRs and feature branches get
+      # cargo check/clippy/test above, and the bundle is built on main and tags.
       - name: Build the desktop bundle (deb)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         run: pnpm exec tauri build --bundles deb
       - name: Upload the desktop bundle
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
         uses: actions/upload-artifact@v4
         with:
           name: minamo-studio-deb
