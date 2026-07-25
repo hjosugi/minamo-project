@@ -1,0 +1,34 @@
+# KGM1B cross-language conformance vectors (#257).
+#
+# Consumed by all three implementations so a format change cannot pass in one
+# language while silently diverging in another:
+#   - JS     tests/run-tests.mjs
+#   - Python packages/kgm1-codec-py (via `python3 -m kgm1_codec verify-vectors`)
+#   - Rust   crates/kgm1-codec (tests::matches_shared_conformance_vectors)
+#
+# The Rust crate has no dependencies, not even dev ones, which is worth keeping
+# for a protocol codec that may be vendored or audited. So this is a pipe-
+# delimited text file rather than JSON: every language parses it with a split
+# and no library.
+#
+# Columns:
+#   kind|name|packetHex|versionMajor|versionMinor|frameId|sourceTimeNs|
+#   monotonicTimeNs|flags|encoding|payloadType|payloadLen|payloadHex
+#
+# kind=roundtrip  encoding the fields MUST produce packetHex, and decoding
+#                 packetHex MUST reproduce the fields and payload.
+# kind=reject     decoding packetHex MUST fail. Field columns are "-".
+#
+# A "-" payloadHex means an empty payload.
+roundtrip|baseline|4b474d3101000700080706050403020115cd071de3aade17ea16b04c020000002100030204000000cafebabe|1|7|72623859790382856|1720000000123456789|9876543210|33|3|2|4|cafebabe
+roundtrip|legacy-major-zero|4b474d31000001000000000000000000000000000000000000000000000000000000010000000000|0|1|0|0|0|0|1|0|0|-
+roundtrip|empty-payload|4b474d31010000000100000000000000020000000000000003000000000000000000000000000000|1|0|1|2|3|0|0|0|0|-
+roundtrip|all-flag-bits|4b474d3101000000070000000000000008000000000000000900000000000000ffffffff0200000000ff|1|0|7|8|9|65535|255|255|2|00ff
+roundtrip|max-u64-fields|4b474d310100ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0100000001|1|65535|18446744073709551615|18446744073709551615|18446744073709551615|65535|255|255|1|01
+roundtrip|payload-256-bytes|4b474d31010002002a000000000000002b000000000000002c000000000000000100010100010000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff|1|2|42|43|44|1|1|1|256|000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff
+reject|future-version-major-2|4b474d3102000000010000000000000001000000000000000100000000000000000000000400000001020304|-|-|-|-|-|-|-|-|-|-
+reject|future-version-major-max|4b474d31ffff0000010000000000000001000000000000000100000000000000000000000100000001|-|-|-|-|-|-|-|-|-|-
+reject|bad-magic|b4474d3101000000010000000000000001000000000000000100000000000000000000000400000001020304|-|-|-|-|-|-|-|-|-|-
+reject|header-truncated|4b474d310100000001000000000000000100000000000000010000000000000000000000040000|-|-|-|-|-|-|-|-|-|-
+reject|payload-shorter-than-declared|4b474d3101000000000000000000000000000000000000000000000000000000000001004000000000000000|-|-|-|-|-|-|-|-|-|-
+reject|empty-input||-|-|-|-|-|-|-|-|-|-

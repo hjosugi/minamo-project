@@ -541,6 +541,64 @@ function kgm2FaceFrame(seq, overrides = {}) {
       'the Python decoder must reject an unknown major with a clear reason');
   }
   assert.ok(pythonRejected, 'the Python decoder accepted an unknown version_major');
+
+  // Shared conformance vectors (#257). The Rust side used to check a hex literal
+  // hand-copied from this file, so a JS format change would diverge silently
+  // until someone remembered to update the copy. All three implementations now
+  // read tests/fixtures/kgm1b-vectors.txt; Rust does so in its own test, and the
+  // Python check is driven from here so one `pnpm test` covers all three.
+  const vectorPath = path.join(root, 'tests/fixtures/kgm1b-vectors.txt');
+  const vectorRows = fs.readFileSync(vectorPath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => line.split('|'));
+  let vectorRoundtrips = 0;
+  let vectorRejects = 0;
+  for (const row of vectorRows) {
+    const [kind, name, packetHex] = row;
+    const packetBytes = hexToBytes(packetHex);
+    if (kind === 'roundtrip') {
+      const payload = row[12] === '-' ? new Uint8Array() : hexToBytes(row[12]);
+      const header = {
+        versionMajor: Number(row[3]),
+        versionMinor: Number(row[4]),
+        frameId: BigInt(row[5]),
+        sourceTimeNs: BigInt(row[6]),
+        monotonicTimeNs: BigInt(row[7]),
+        flags: Number(row[8]),
+        encoding: Number(row[9]),
+        payloadType: Number(row[10]),
+        payloadLen: Number(row[11]),
+      };
+      assert.equal(bytesToHex(new Uint8Array(encodeKgm1bPacket(header, payload))), packetHex,
+        `vector ${name}: encode mismatch`);
+      const decoded = decodeKgm1bPacket(packetBytes);
+      assert.ok(decoded, `vector ${name}: decode failed`);
+      assert.equal(decoded.header.frameId, header.frameId, `vector ${name}: frameId mismatch`);
+      assert.equal(decoded.header.sourceTimeNs, header.sourceTimeNs, `vector ${name}: sourceTimeNs mismatch`);
+      assert.equal(decoded.header.flags, header.flags, `vector ${name}: flags mismatch`);
+      assert.equal(decoded.header.payloadLen, header.payloadLen, `vector ${name}: payloadLen mismatch`);
+      assert.deepEqual(Array.from(decoded.payload), Array.from(payload), `vector ${name}: payload mismatch`);
+      vectorRoundtrips += 1;
+    } else if (kind === 'reject') {
+      assert.equal(decodeKgm1bPacket(packetBytes), null, `vector ${name}: these bytes must be rejected`);
+      vectorRejects += 1;
+    } else {
+      assert.fail(`vector ${name}: unknown kind ${kind}`);
+    }
+  }
+  // Guard against a fixture that silently loses its contents.
+  assert.ok(vectorRoundtrips >= 5, `expected several roundtrip vectors, saw ${vectorRoundtrips}`);
+  assert.ok(vectorRejects >= 5, `expected several reject vectors, saw ${vectorRejects}`);
+
+  const pyVectors = JSON.parse(execFileSync('python3', ['-m', 'kgm1_codec', 'verify-vectors', vectorPath], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, PYTHONPATH: path.join(root, 'packages/kgm1-codec-py'), NODE_V8_COVERAGE: '' },
+  }));
+  assert.equal(pyVectors.roundtrip, vectorRoundtrips, 'Python and JS must agree on the roundtrip vector count');
+  assert.equal(pyVectors.reject, vectorRejects, 'Python and JS must agree on the reject vector count');
 }
 
 {

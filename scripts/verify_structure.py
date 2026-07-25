@@ -1438,6 +1438,26 @@ def validate_transport_contracts() -> None:
     # topology, and no OTP application exists to run (#258). The rule now tracks
     # reality in both directions — the lab criteria may only be claimed once the
     # router is something the build can actually compile and run.
+    # KGM1B conformance must stay cross-executed, not hand-copied (#257): one
+    # fixture, three readers. Losing any consumer silently reopens the drift.
+    vectors = read('tests/fixtures/kgm1b-vectors.txt')
+    vector_rows = [
+        line for line in vectors.splitlines()
+        if line.strip() and not line.startswith('#')
+    ]
+    if sum(1 for line in vector_rows if line.startswith('roundtrip|')) < 5:
+        add_error('tests/fixtures/kgm1b-vectors.txt', 'needs several roundtrip conformance vectors')
+    if sum(1 for line in vector_rows if line.startswith('reject|')) < 5:
+        add_error('tests/fixtures/kgm1b-vectors.txt', 'needs several reject conformance vectors')
+    for path, needle, why in [
+        ('tests/run-tests.mjs', 'kgm1b-vectors.txt', 'JS must read the shared conformance vectors'),
+        ('tests/run-tests.mjs', 'verify-vectors', 'JS must drive the Python vector check'),
+        ('crates/kgm1-codec/src/lib.rs', 'matches_shared_conformance_vectors', 'Rust must read the shared conformance vectors'),
+        ('packages/kgm1-codec-py/kgm1_codec/__main__.py', 'def verify_vectors', 'Python must expose the vector check'),
+    ]:
+        if needle not in read(path):
+            add_error(path, why)
+
     kgm032 = backlog.split('### [KGM-032]', 1)[1].split('\n### ', 1)[0]
     router_is_buildable = any(
         (ROOT / 'services' / 'erlang-router' / name).exists()
