@@ -156,6 +156,8 @@ export async function withStubbedDom(body, options = {}) {
 
   const store = new Map();
   if (stored) for (const [key, value] of Object.entries(stored)) store.set(key, value);
+  /** Every BroadcastChannel the page opened, with the messages it posted. */
+  const broadcasts = [];
 
   const globals = {
     document: doc,
@@ -186,13 +188,20 @@ export async function withStubbedDom(body, options = {}) {
     getComputedStyle: () => new Proxy({}, {
       get: (_target, prop) => (prop === 'getPropertyValue' ? () => '' : ''),
     }),
-    // A no-op BroadcastChannel keeps local-mode transports inert.
+    // BroadcastChannel is local-mode transport, so nothing leaves the process.
+    // Posted messages are recorded on `broadcasts` so a test can drive a page
+    // end-to-end and inspect what it actually put on the wire.
     BroadcastChannel: class {
-      constructor(name) { this.name = name; }
-      postMessage() {}
+      constructor(name) {
+        this.name = name;
+        this.closed = false;
+        broadcasts.push(this);
+        this.messages = [];
+      }
+      postMessage(message) { this.messages.push(message); }
       addEventListener() {}
       removeEventListener() {}
-      close() {}
+      close() { this.closed = true; }
     },
     Option: class {
       constructor(text = '', value = '') {
@@ -215,11 +224,11 @@ export async function withStubbedDom(body, options = {}) {
 
   armLateFailureCapture();
   try {
-    const result = await body({ document: doc, documentElement, elements, byId });
+    const result = await body({ document: doc, documentElement, elements, byId, broadcasts });
     // Let async work started during import settle while the stubs are still
     // installed, so a continuation sees the stub rather than a restored global.
     for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
-    return { result, elements, documentElement };
+    return { result, elements, documentElement, broadcasts };
   } finally {
     for (const undo of restore.reverse()) undo();
   }
