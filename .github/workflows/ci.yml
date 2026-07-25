@@ -31,6 +31,8 @@ jobs:
         run: pnpm test
       - name: Coverage gate for the shipped runtime
         run: pnpm coverage
+      - name: Privacy invariant (no raw webcam upload)
+        run: node scripts/check-privacy-invariants.mjs
       - name: Verify repository structure
         run: pnpm verify
       - name: TypeScript strict gate
