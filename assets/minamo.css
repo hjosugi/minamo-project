@@ -603,7 +603,9 @@ output {
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
-.site-kicker > span {
+/* Only the leading span is the decorative rule; later spans carry translated
+   text (#267) and must render normally. */
+.site-kicker > span:first-child {
   display: inline-block;
   width: 28px;
   height: 1px;

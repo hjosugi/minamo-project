@@ -3,53 +3,54 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Minamoは、普通のWebカメラだけでアバターを動かす、ローカルファーストのモーショントラッキング基盤です。ブラウザデモをすぐ試せます。" />
-  <title>Minamo — Webカメラでアバターを動かす</title>
+  <meta name="description" data-i18n-attr="content:site.meta.description" content="Minamoは、普通のWebカメラだけでアバターを動かす、ローカルファーストのモーショントラッキング基盤です。ブラウザデモをすぐ試せます。" />
+  <title data-i18n="site.meta.title">Minamo — Webカメラでアバターを動かす</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./assets/minamo.css" />
 </head>
 <body class="site-home">
-  <a class="site-skip" href="#main">本文へ移動</a>
+  <a class="site-skip" href="#main" data-i18n="site.skip">本文へ移動</a>
 
-  <header class="site-nav" aria-label="メインナビゲーション">
-    <a class="site-brand" href="./" aria-label="Minamo ホーム">
+  <header class="site-nav" data-i18n-attr="aria-label:site.aria.nav" aria-label="メインナビゲーション">
+    <a class="site-brand" href="./" data-i18n-attr="aria-label:site.aria.home" aria-label="Minamo ホーム">
       <span class="wordmark">Mina<span class="mirror">mo</span></span>
       <span>v0.1.12</span>
     </a>
     <nav>
-      <a href="#about">Minamoとは</a>
-      <a href="#try">試す</a>
-      <a href="#status">現在地</a>
-      <a href="./docs/PAGES_DEMO.ja.md">Docs</a>
+      <a href="#about" data-i18n="site.nav.about">Minamoとは</a>
+      <a href="#try" data-i18n="site.nav.try">試す</a>
+      <a href="#status" data-i18n="site.nav.status">現在地</a>
+      <a href="./docs/PAGES_DEMO.ja.md" data-i18n-attr="href:site.docs.pagesDemo.href">Docs</a>
       <a href="https://github.com/hjosugi/minamo-project">GitHub</a>
+      <button id="langToggle" type="button" class="lang-toggle" data-i18n="lang.toggle" data-i18n-attr="aria-label:lang.toggle.aria">English</button>
     </nav>
   </header>
 
   <main id="main">
     <section class="site-hero" aria-labelledby="hero-title">
       <div class="site-hero-copy">
-        <p class="site-kicker"><span></span> Local-first avatar tracking</p>
-        <h1 id="hero-title">普通のWebカメラから、<br /><em>自然なアバターの動き</em>へ。</h1>
-        <p class="site-lead">
+        <p class="site-kicker"><span></span> <span data-i18n="site.hero.kicker">Local-first avatar tracking</span></p>
+        <h1 id="hero-title"><span data-i18n="site.hero.title1">普通のWebカメラから、</span><br /><em data-i18n="site.hero.titleEm">自然なアバターの動き</em><span data-i18n="site.hero.title2">へ。</span></h1>
+        <p class="site-lead" data-i18n="site.hero.lead">
           Minamoは、顔・目・口・手・指・上半身、そしてドラム演奏までを扱う
           オープンなトラッキング基盤です。映像は端末内で処理し、外へ送るのは小さなモーションデータだけです。
         </p>
         <div class="site-actions">
           <a class="site-button site-button-primary" href="./landing/">
-            <span>30秒デモを試す</span><small>カメラなしでも動作</small>
+            <span data-i18n="site.hero.demoCta">30秒デモを試す</span><small data-i18n="site.hero.demoNote">カメラなしでも動作</small>
           </a>
           <a class="site-button" href="./tracker/">
-            <span>実トラッカーを開く</span><small>カメラ許可が必要</small>
+            <span data-i18n="site.hero.trackerCta">実トラッカーを開く</span><small data-i18n="site.hero.trackerNote">カメラ許可が必要</small>
           </a>
         </div>
-        <ul class="site-trust" aria-label="特徴">
-          <li><b>LOCAL</b> 映像をアップロードしない</li>
-          <li><b>OPEN</b> 0BSDライセンス</li>
-          <li><b>WEB</b> インストール不要のデモ</li>
+        <ul class="site-trust" data-i18n-attr="aria-label:site.aria.features" aria-label="特徴">
+          <li><b>LOCAL</b> <span data-i18n="site.trust.local">映像をアップロードしない</span></li>
+          <li><b>OPEN</b> <span data-i18n="site.trust.open">0BSDライセンス</span></li>
+          <li><b>WEB</b> <span data-i18n="site.trust.web">インストール不要のデモ</span></li>
         </ul>
       </div>
 
-      <div class="signal-stage" aria-label="カメラからアバターへモーション信号が伝わるイメージ">
+      <div class="signal-stage" data-i18n-attr="aria-label:site.aria.signalStage" aria-label="カメラからアバターへモーション信号が伝わるイメージ">
         <div class="signal-stage-head">
           <span>LIVE SIGNAL PREVIEW</span>
           <span class="signal-live"><i></i> LOCAL</span>
@@ -72,86 +73,86 @@
 
     <section id="about" class="site-section site-about">
       <div class="site-section-heading">
-        <p class="site-kicker">What it is</p>
-        <h2>カメラ映像を、配信で使える動きに変える。</h2>
+        <p class="site-kicker" data-i18n="site.about.kicker">What it is</p>
+        <h2 data-i18n="site.about.heading">カメラ映像を、配信で使える動きに変える。</h2>
       </div>
-      <div class="site-flow" aria-label="Minamoの処理の流れ">
+      <div class="site-flow" data-i18n-attr="aria-label:site.aria.flow" aria-label="Minamoの処理の流れ">
         <article>
           <span>01</span>
-          <h3>Webカメラで検出</h3>
-          <p>顔の表情、頭の向き、手や指のランドマークをブラウザ内で取得します。</p>
+          <h3 data-i18n="site.flow.1.title">Webカメラで検出</h3>
+          <p data-i18n="site.flow.1.body">顔の表情、頭の向き、手や指のランドマークをブラウザ内で取得します。</p>
         </article>
         <div class="site-flow-arrow" aria-hidden="true">→</div>
         <article>
           <span>02</span>
-          <h3>破綻しにくく安定化</h3>
-          <p>フィルタ、速度制限、解剖学的制約、遮蔽復帰でガタつきや不自然な曲がりを抑えます。</p>
+          <h3 data-i18n="site.flow.2.title">破綻しにくく安定化</h3>
+          <p data-i18n="site.flow.2.body">フィルタ、速度制限、解剖学的制約、遮蔽復帰でガタつきや不自然な曲がりを抑えます。</p>
         </article>
         <div class="site-flow-arrow" aria-hidden="true">→</div>
         <article>
           <span>03</span>
-          <h3>好きなアバターへ</h3>
-          <p>VRM、実験的なInochi2D、レイヤー画像、OBS向け表示へモーションを渡します。</p>
+          <h3 data-i18n="site.flow.3.title">好きなアバターへ</h3>
+          <p data-i18n="site.flow.3.body">VRM、実験的なInochi2D、レイヤー画像、OBS向け表示へモーションを渡します。</p>
         </article>
       </div>
     </section>
 
     <section id="try" class="site-section site-try">
       <div class="site-section-heading">
-        <p class="site-kicker">Try it now</p>
-        <h2>まずは、いちばん簡単な入口から。</h2>
-        <p>データのアップロードやアカウント作成はありません。用途に合わせて3つの入口を選べます。</p>
+        <p class="site-kicker" data-i18n="site.try.kicker">Try it now</p>
+        <h2 data-i18n="site.try.heading">まずは、いちばん簡単な入口から。</h2>
+        <p data-i18n="site.try.lead">データのアップロードやアカウント作成はありません。用途に合わせて3つの入口を選べます。</p>
       </div>
       <div class="site-try-grid">
         <a class="site-try-card featured" href="./landing/">
-          <span class="site-badge">おすすめ</span>
-          <b>UIデモ</b>
-          <h3>カメラなしでも30秒で試す</h3>
-          <p>顔・手・ドラム信号のモック可視化を起動します。カメラを許可すると背景に重ねて確認できます。</p>
-          <strong>デモを開く →</strong>
+          <span class="site-badge" data-i18n="site.try.badge.recommended">おすすめ</span>
+          <b data-i18n="site.try.demo.name">UIデモ</b>
+          <h3 data-i18n="site.try.demo.title">カメラなしでも30秒で試す</h3>
+          <p data-i18n="site.try.demo.body">顔・手・ドラム信号のモック可視化を起動します。カメラを許可すると背景に重ねて確認できます。</p>
+          <strong data-i18n="site.try.demo.cta">デモを開く →</strong>
         </a>
         <a class="site-try-card" href="./tracker/">
-          <span class="site-badge">実データ</span>
+          <span class="site-badge" data-i18n="site.try.badge.realData">実データ</span>
           <b>Tracker</b>
-          <h3>実際のWebカメラで動かす</h3>
-          <p>トラッカーを開始し、localモードで接続。別タブのViewerへ同一ブラウザ内で送信します。</p>
-          <strong>Trackerを開く →</strong>
+          <h3 data-i18n="site.try.tracker.title">実際のWebカメラで動かす</h3>
+          <p data-i18n="site.try.tracker.body">トラッカーを開始し、localモードで接続。別タブのViewerへ同一ブラウザ内で送信します。</p>
+          <strong data-i18n="site.try.tracker.cta">Trackerを開く →</strong>
         </a>
         <a class="site-try-card" href="./viewer/">
-          <span class="site-badge">出力</span>
+          <span class="site-badge" data-i18n="site.try.badge.output">出力</span>
           <b>Viewer</b>
-          <h3>アバター表示を確認する</h3>
-          <p>内蔵ボットから始め、VRM / GLB / Inochi2Dファイルや記録済みJSONLをローカルで読み込めます。</p>
-          <strong>Viewerを開く →</strong>
+          <h3 data-i18n="site.try.viewer.title">アバター表示を確認する</h3>
+          <p data-i18n="site.try.viewer.body">内蔵ボットから始め、VRM / GLB / Inochi2Dファイルや記録済みJSONLをローカルで読み込めます。</p>
+          <strong data-i18n="site.try.viewer.cta">Viewerを開く →</strong>
         </a>
       </div>
-      <p class="site-demo-note"><b>デモについて:</b> UIデモの骨格と数値はシミュレーションです。実際のMediaPipeトラッキングを試す場合はTrackerを使用してください。</p>
+      <p class="site-demo-note"><b data-i18n="site.try.note.label">デモについて:</b> <span data-i18n="site.try.note.body">UIデモの骨格と数値はシミュレーションです。実際のMediaPipeトラッキングを試す場合はTrackerを使用してください。</span></p>
     </section>
 
     <section id="status" class="site-section site-status">
       <div class="site-section-heading">
-        <p class="site-kicker">Release status</p>
-        <h2>動くものと、まだ実験中のもの。</h2>
+        <p class="site-kicker" data-i18n="site.status.kicker">Release status</p>
+        <h2 data-i18n="site.status.heading">動くものと、まだ実験中のもの。</h2>
       </div>
       <div class="site-status-grid">
         <article class="ready">
           <span>READY TO TRY</span>
-          <h3>ブラウザで確認できる</h3>
+          <h3 data-i18n="site.status.ready.title">ブラウザで確認できる</h3>
           <ul>
-            <li>顔52ch・頭部姿勢のWebトラッカー</li>
-            <li>ローカル送信、記録、リプレイ</li>
-            <li>VRM / GLBビューアとOBS向け表示</li>
-            <li>品質警告とキャリブレーション</li>
+            <li data-i18n="site.status.ready.1">顔52ch・頭部姿勢のWebトラッカー</li>
+            <li data-i18n="site.status.ready.2">ローカル送信、記録、リプレイ</li>
+            <li data-i18n="site.status.ready.3">VRM / GLBビューアとOBS向け表示</li>
+            <li data-i18n="site.status.ready.4">品質警告とキャリブレーション</li>
           </ul>
         </article>
         <article class="experimental">
           <span>EXPERIMENTAL</span>
-          <h3>環境ごとの検証が必要</h3>
+          <h3 data-i18n="site.status.experimental.title">環境ごとの検証が必要</h3>
           <ul>
-            <li>Inochi2D WASM描画</li>
-            <li>WebTransport・スマートフォン連携</li>
-            <li>ドラム・ペダルの実機精度</li>
-            <li>OS別の仮想カメラ出力</li>
+            <li data-i18n="site.status.experimental.1">Inochi2D WASM描画</li>
+            <li data-i18n="site.status.experimental.2">WebTransport・スマートフォン連携</li>
+            <li data-i18n="site.status.experimental.3">ドラム・ペダルの実機精度</li>
+            <li data-i18n="site.status.experimental.4">OS別の仮想カメラ出力</li>
           </ul>
         </article>
       </div>
@@ -159,23 +160,25 @@
 
     <section class="site-section site-docs">
       <div class="site-section-heading">
-        <p class="site-kicker">Documentation</p>
-        <h2>試したあとに読むもの。</h2>
+        <p class="site-kicker" data-i18n="site.docs.kicker">Documentation</p>
+        <h2 data-i18n="site.docs.heading">試したあとに読むもの。</h2>
       </div>
       <div class="site-doc-links">
-        <a href="./docs/PAGES_DEMO.ja.md"><span>01</span><b>Pagesデモガイド</b><small>デモと実トラッカーの違い</small></a>
-        <a href="./docs/QUICKSTART.ja.md"><span>02</span><b>Quick Start</b><small>ローカル起動と接続</small></a>
-        <a href="./docs/ARCHITECTURE.ja.md"><span>03</span><b>Architecture</b><small>現在の実装構成</small></a>
-        <a href="./docs/PROTOCOL.ja.md"><span>04</span><b>KGM1 Protocol</b><small>モーションデータ仕様</small></a>
-        <a href="./roadmap/"><span>05</span><b>Roadmap</b><small>今後の実装計画</small></a>
+        <a href="./docs/PAGES_DEMO.ja.md" data-i18n-attr="href:site.docs.pagesDemo.href"><span>01</span><b data-i18n="site.docs.pagesDemo.title">Pagesデモガイド</b><small data-i18n="site.docs.pagesDemo.note">デモと実トラッカーの違い</small></a>
+        <a href="./docs/QUICKSTART.ja.md" data-i18n-attr="href:site.docs.quickstart.href"><span>02</span><b>Quick Start</b><small data-i18n="site.docs.quickstart.note">ローカル起動と接続</small></a>
+        <a href="./docs/ARCHITECTURE.ja.md" data-i18n-attr="href:site.docs.architecture.href"><span>03</span><b>Architecture</b><small data-i18n="site.docs.architecture.note">現在の実装構成</small></a>
+        <a href="./docs/PROTOCOL.ja.md" data-i18n-attr="href:site.docs.protocol.href"><span>04</span><b>KGM1 Protocol</b><small data-i18n="site.docs.protocol.note">モーションデータ仕様</small></a>
+        <a href="./roadmap/"><span>05</span><b>Roadmap</b><small data-i18n="site.docs.roadmap.note">今後の実装計画</small></a>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <span class="wordmark">Mina<span class="mirror">mo</span></span>
-    <p>Local-first, privacy-first avatar tracking.</p>
+    <p data-i18n="site.footer.tagline">Local-first, privacy-first avatar tracking.</p>
     <div><a href="https://github.com/hjosugi/minamo-project">GitHub</a><a href="./LICENSE">0BSD</a></div>
   </footer>
+
+  <script type="module" src="./site.js"></script>
 </body>
 </html>
