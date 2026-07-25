@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { withStubbedDom } from './helpers/dom-stub.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import {
@@ -2109,47 +2110,75 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
 }
 
 {
-  // The landing entry module must survive a bare page load. It shipped broken
-  // once (`renderLanguage()` read `running` from its temporal dead zone, which
-  // aborted the whole module and left the demo button inert), so load it here
-  // against a stubbed DOM to catch any top-level throw.
-  const listeners = new Map();
-  const stubElement = () => ({
-    textContent: '',
-    hidden: false,
-    style: {},
-    classList: { add() {}, remove() {}, toggle() {} },
-    dataset: {},
-    getContext: () => new Proxy({}, { get: () => () => {} }),
-    getAttribute: () => null,
-    setAttribute() {},
-    addEventListener(type, fn) { listeners.set(type, fn); },
-    play: () => Promise.resolve(),
-    querySelectorAll: () => [],
-  });
-  const documentElement = { lang: '' };
-  const restore = [];
-  const stub = (name, value) => {
-    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
-    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
-    restore.push(() => (previous ? Object.defineProperty(globalThis, name, previous) : delete globalThis[name]));
-  };
-  stub('document', {
-    documentElement,
-    getElementById: () => stubElement(),
-    querySelectorAll: () => [],
-    addEventListener() {},
-  });
-  stub('navigator', { language: 'ja-JP', mediaDevices: { getUserMedia: () => Promise.reject(new Error('no camera')) } });
-  stub('localStorage', { getItem: () => null, setItem() {} });
-  stub('requestAnimationFrame', () => 0);
-  stub('cancelAnimationFrame', () => {});
-  try {
-    await import('../landing/app.js');
-  } finally {
-    for (const undo of restore.reverse()) undo();
+  // Every shipped page entry module must survive a bare page load (#263).
+  //
+  // This is the one failure mode nothing else catches: the bundle builds, both
+  // typechecks pass, and the page silently does nothing in the browser.
+  // landing/app.js shipped exactly that in v0.1.11/v0.1.12 — `renderLanguage()`
+  // read `running` from its temporal dead zone, so the module aborted before
+  // binding a single listener and "Start the demo" was inert (fixed in #302).
+  //
+  // Each module is imported for real against a stub DOM, then checked for a
+  // sign of life so this stays a smoke test rather than a bare import.
+  // `bound` names controls whose click handler must exist once the module has
+  // loaded. A top-level throw leaves them unbound — that is the whole failure
+  // mode, so it is what gets asserted.
+  const pages = [
+    {
+      file: '../landing/app.js',
+      bound: ['startDemo', 'langToggle'],
+    },
+    {
+      file: '../replay/replay.js',
+      bound: ['btnPlay', 'btnPause', 'btnReset', 'langToggle'],
+      check: ({ elements }) => {
+        assert.equal(elements.get('statusChip')?.textContent, '待機中', 'replay renders its initial status from a key');
+        assert.equal(elements.get('statusChip')?.dataset.state, 'idle', 'replay starts idle');
+      },
+    },
+    {
+      file: '../tracker/tracker.js',
+      bound: ['btnStart', 'btnStop', 'btnConnect', 'langToggle'],
+      check: ({ elements }) => {
+        assert.equal(elements.get('statusChip')?.textContent, '待機中', 'tracker renders its initial status from a key');
+        assert.equal(elements.get('statusChip')?.dataset.state, 'idle', 'tracker starts idle');
+      },
+    },
+    {
+      file: '../desktop/desktop.js',
+      bound: ['refreshStatus', 'btnExpirePairing', 'langToggle'],
+      check: ({ elements }) => {
+        assert.equal(elements.get('pairingCountdown')?.textContent, '未生成', 'desktop renders the pairing countdown from a key');
+        // The stub refuses network access, so the pairing request fails; the
+        // upstream message must reach the status line untranslated (#267).
+        assert.match(elements.get('pairingStatus')?.textContent ?? '', /network is disabled in tests/,
+          'desktop surfaces an upstream pairing failure verbatim');
+      },
+    },
+  ];
+
+  for (const page of pages) {
+    let loadError = null;
+    const { elements, documentElement } = await withStubbedDom(async () => {
+      try {
+        await import(page.file);
+      } catch (error) {
+        loadError = error;
+      }
+    }, { language: 'ja-JP' });
+    assert.equal(loadError, null, `${page.file} threw while loading: ${loadError?.stack || ''}`);
+    assert.equal(documentElement.lang, 'ja', `${page.file} applies the detected language to <html lang>`);
+    for (const id of page.bound) {
+      assert.ok(elements.get(id)?.listeners.has('click'), `${page.file} left #${id} without a click handler`);
+    }
+    page.check?.({ elements });
   }
-  assert.equal(documentElement.lang, 'ja', 'landing bootstrap applies the detected language to <html lang>');
+
+  // viewer/viewer.js is deliberately absent: it constructs a THREE.WebGLRenderer
+  // at module scope, which needs a real WebGL context (three dies inside
+  // WebGLCapabilities reading shader precision). Stubbing enough GL to get past
+  // that would assert against the stub, not against three, so the viewer is
+  // covered by extracting its pure logic instead — see #263.
 }
 
 console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, i18n, and shortcut tests passed.`);
