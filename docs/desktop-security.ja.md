@@ -51,29 +51,40 @@ frame-ancestors 'none'
 ### innerHTML シンクの除去
 
 `desktop/desktop.js` はページ状態の行を `innerHTML` テンプレート補間で組み立てて
-いました(コードベース唯一のシンク)。現在は 2 つの `<span>` 子要素を
-`textContent` で構築するため、状態文字列がマークアップを注入できません。
+いました。現在は 2 つの `<span>` 子要素を `textContent` で構築します。
 
-## 計画中(パッケージ済みアプリや CI シークレットが必要)
+`viewer/drum-overlay.html` もドラムゾーンのラベルで同じパターンでした
+(`el.innerHTML = \`<div><div>${zone.label}</div>…\``)。これらのラベルは同ファイル
+内のハードコードされたレイアウト定数に由来するため悪用可能ではありませんでした
+が、最後に残っていた補間シンクであり、この不変条件はすべての箇所で成立してこそ
+意味があります。現在はノードを構築して `textContent` を設定します。コードベース
+に `innerHTML` の補間は残っていません。
 
 ### `withGlobalTauri` の無効化
 
-`app.withGlobalTauri` はまだ `true` で、IPC ブリッジ全体を `window.__TAURI__` に
-露出し、注入コンテンツの影響範囲を広げます。無効化は実機での検証が必要な協調的
-変更です:
+`app.withGlobalTauri` は `false` になり、IPC ブリッジは window オブジェクトに
+露出しなくなりました。レンダラー側は API を import します:
 
-1. `@tauri-apps/api` を依存に追加。
-2. `desktop/desktop.js`: `window.__TAURI__?.core?.invoke` を
-   `import { invoke } from '@tauri-apps/api/core'` に置換し、Tauri 有無で
-   ガードして web プレビューのフォールバックを維持:
-   `const isTauri = '__TAURI_INTERNALS__' in window;`
-3. `viewer/viewer.js`: `core.invoke` と `event.listen` の両方を同様に
-   (`import { listen } from '@tauri-apps/api/event'`)。
-4. `withGlobalTauri: false` に設定し、現在 `true` を必須とする
-   `scripts/verify_structure.py` のアサーションを更新。
-5. パッケージ済みアプリで desktop status・phone pairing・native-avatar bridge を
-   動作確認。`__TAURI_INTERNALS__` は `withGlobalTauri` に関係なく Tauri v2 が
-   注入しますが、実行時に確認が必要です。
+- `desktop/desktop.js` — `import { invoke, isTauri } from '@tauri-apps/api/core'`
+- `viewer/viewer.js` — 上記に加え、native-avatar bridge 用に
+  `import { listen } from '@tauri-apps/api/event'`
+
+Tauri 上かどうかは internals グローバルを覗くのではなく、公式の `isTauri()`
+ヘルパーで判定します。Tauri webview 外では false を返し、両ハンドルは null の
+ままなので、既存の web プレビュー用フォールバックがそのまま動作します
+(このパスはページのスモークテストでカバーされています。#263)。
+
+`scripts/verify_structure.py` は以前 `withGlobalTauri: true` を必須としていました
+が、現在は `false` を必須とし、両レンダラーが `@tauri-apps/api/core` から import
+していることを要求し、再び window オブジェクト経由でブリッジを読んだ場合は失敗
+します。
+
+> **要検証:** IPC パス自体は CI では実行できません(バンドルはビルドしますが
+> 起動はしないため)。リリース前にパッケージ済みアプリで desktop status・
+> phone pairing・viewer の native-avatar の open/read ブリッジを動作確認して
+> ください。
+
+## 計画中(CI シークレットが必要)
 
 ### 署名付き自動アップデータ
 
