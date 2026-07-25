@@ -563,19 +563,28 @@ function kgm2FaceFrame(seq, overrides = {}) {
   // single round, and only a contended one escalates.
   const SMALLEST_THREE_BUDGET_US = 1;
   const SMALLEST_THREE_MAX_ROUNDS = 25;
-  const timings = [];
-  let bestUsPerQuat = Infinity;
-  while (timings.length < SMALLEST_THREE_MAX_ROUNDS && bestUsPerQuat >= SMALLEST_THREE_BUDGET_US) {
-    const round = measureSmallestThree();
-    timings.push(round);
-    bestUsPerQuat = Math.min(bestUsPerQuat, round);
+  // Under V8 coverage the same code measures ~2.7x slower (every round lands at
+  // 1.10-1.27 us, tightly clustered — instrumentation overhead, not noise), so a
+  // wall-clock budget there would only measure the profiler. `pnpm coverage`
+  // re-runs this whole suite, and `pnpm test` already enforces the budget
+  // uninstrumented, so skip rather than invent a second threshold.
+  if (process.env.NODE_V8_COVERAGE) {
+    console.log('SKIP: smallest-three throughput budget (meaningless under V8 coverage instrumentation)');
+  } else {
+    const timings = [];
+    let bestUsPerQuat = Infinity;
+    while (timings.length < SMALLEST_THREE_MAX_ROUNDS && bestUsPerQuat >= SMALLEST_THREE_BUDGET_US) {
+      const round = measureSmallestThree();
+      timings.push(round);
+      bestUsPerQuat = Math.min(bestUsPerQuat, round);
+    }
+    assert.ok(
+      bestUsPerQuat < SMALLEST_THREE_BUDGET_US,
+      `smallest-three JS encode+decode best of ${timings.length} rounds was ${bestUsPerQuat.toFixed(3)} us/quat, `
+      + `over the ${SMALLEST_THREE_BUDGET_US} us budget `
+      + `(rounds: ${timings.map((value) => value.toFixed(3)).join(', ')}); sink=${packedSink}`,
+    );
   }
-  assert.ok(
-    bestUsPerQuat < SMALLEST_THREE_BUDGET_US,
-    `smallest-three JS encode+decode best of ${timings.length} rounds was ${bestUsPerQuat.toFixed(3)} us/quat, `
-    + `over the ${SMALLEST_THREE_BUDGET_US} us budget `
-    + `(rounds: ${timings.map((value) => value.toFixed(3)).join(', ')}); sink=${packedSink}`,
-  );
 
   const encoder = new Kgm2FaceEncoder({ keyframeInterval: 30 });
   const decoder = new Kgm2FaceDecoder();
@@ -848,7 +857,16 @@ function kgm2FaceFrame(seq, overrides = {}) {
 }
 
 {
-  const out = execFileSync('node', ['services/erlang-router/load-test.mjs'], { cwd: root, encoding: 'utf8' });
+  // NODE_V8_COVERAGE is inherited by child processes, so under `pnpm coverage`
+  // this helper would write its own partial profile into the same temp
+  // directory and get merged with the suite's. That made the coverage totals
+  // depend on process timing — the same commit passed on one CI run and failed
+  // on the next. This is a load harness, not code under test, so it is excluded.
+  const out = execFileSync('node', ['services/erlang-router/load-test.mjs'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, NODE_V8_COVERAGE: '' },
+  });
   const result = JSON.parse(out);
   assert.equal(result.subscribers, 5000);
   assert.equal(result.nodes, 3);
@@ -2179,6 +2197,17 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.ok(Math.abs(Math.abs(half[0]) - 1) < 1e-9, `two quarter turns must compose to a half turn, got ${half}`);
   assert.ok(Math.abs(Math.hypot(...applyPitchOffset([0.3, 0.2, 0.1, 0.9], 0.4)) - 1) < 1e-9,
     'applyPitchOffset must renormalize');
+
+  // Both helpers divide by `Math.hypot(...) || 1`. That guard is unreachable for
+  // finite input — some component is always non-zero — but a NaN entry makes
+  // hypot NaN, which is falsy, so the fallback fires. Pinning it documents that
+  // `??` guards missing entries while NaN still propagates, and keeps the branch
+  // covered rather than sitting as a permanent hole.
+  assert.deepEqual(mat4ToQuat([Number.NaN, ...Array(15).fill(0)]).map(Number.isNaN), [true, true, true, true],
+    'a NaN matrix entry propagates rather than being silently repaired');
+  // Only the components the NaN actually reaches go bad: x and w mix, y and z do not.
+  assert.deepEqual(applyPitchOffset([Number.NaN, 0, 0, 1], 0.5).map(Number.isNaN), [true, false, false, true],
+    'a NaN quaternion component propagates into the components that mix with it');
 
   // Finger geometry. A straight chain has no curl; a folded one approaches 1.
   const straight = [{ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 2, z: 0 }, { x: 0, y: 3, z: 0 }];

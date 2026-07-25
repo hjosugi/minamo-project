@@ -4,9 +4,8 @@
 // Two different jobs, so two different thresholds:
 //
 //  * The modules extracted out of tracker.js / viewer.js are pure and were
-//    extracted precisely so they could be tested. They are held near 100% —
-//    if a branch there goes uncovered, the extraction stopped paying for
-//    itself.
+//    extracted precisely so they could be tested. They are held at 100% — if a
+//    branch there goes uncovered, the extraction stopped paying for itself.
 //  * Everything else in shared/ gets a floor well under today's numbers. The
 //    point is to stop a silent slide, not to force a number: transport.js in
 //    particular needs real sockets and sits around 40%.
@@ -20,7 +19,7 @@ const SUMMARY = path.join(ROOT, 'coverage', 'coverage-summary.json');
 
 // Extracted in #312; these are pure functions with no excuse for dead branches.
 const STRICT_FILES = {
-  'shared/pose-math.js': { statements: 100, branches: 90, functions: 100, lines: 100 },
+  'shared/pose-math.js': { statements: 100, branches: 100, functions: 100, lines: 100 },
   'shared/hand-math.js': { statements: 100, branches: 100, functions: 100, lines: 100 },
   'shared/room-layout.js': { statements: 100, branches: 100, functions: 100, lines: 100 },
 };
