@@ -116,6 +116,7 @@ import {
 import {
   LEGACY_PARTICIPANT_ID,
   RoomParticipantStore,
+  assignParticipantAvatars,
   createParticipantId,
   decodeRoomFrame,
   encodeRoomFrame,
@@ -739,6 +740,32 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const reconnected = store.ingest('bob', { seq: 0, direction: 'down' }, 1310);
   assert.equal(reconnected.generation, 2, 'reconnect creates one fresh generation');
   assert.equal(store.participants.size, 2, 'reconnect does not leave a duplicate participant');
+}
+
+{
+  // Per-participant avatar-file assignment for shared rooms (#225): distinct,
+  // deterministic, and stable across frames.
+  const pool = ['vrm-a.vrm', 'vrm-b.vrm', 'vrm-c.vrm'];
+  const first = assignParticipantAvatars(['bob', 'alice'], pool);
+  assert.deepEqual([...first.entries()], [['alice', 'vrm-a.vrm'], ['bob', 'vrm-b.vrm']],
+    'each source gets a distinct avatar, ordered deterministically by id');
+
+  // A new participant keeps everyone else's avatar stable and takes a free one.
+  const second = assignParticipantAvatars(['bob', 'alice', 'carol'], pool, first);
+  assert.equal(second.get('alice'), 'vrm-a.vrm');
+  assert.equal(second.get('bob'), 'vrm-b.vrm');
+  assert.equal(second.get('carol'), 'vrm-c.vrm');
+
+  // When a participant leaves, its avatar frees up and a newcomer reuses it.
+  const third = assignParticipantAvatars(['alice', 'carol', 'dave'], pool, second);
+  assert.equal(third.get('alice'), 'vrm-a.vrm');
+  assert.equal(third.get('carol'), 'vrm-c.vrm');
+  assert.equal(third.get('dave'), 'vrm-b.vrm', 'the freed avatar is reused, not left idle');
+
+  // Pool smaller than the room: assignments cycle instead of going empty.
+  const crowded = assignParticipantAvatars(['a', 'b', 'c'], ['only.vrm']);
+  assert.deepEqual([...new Set(crowded.values())], ['only.vrm']);
+  assert.equal(assignParticipantAvatars(['a'], []).get('a'), null, 'empty pool yields no avatar');
 }
 
 {

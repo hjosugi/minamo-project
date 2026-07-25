@@ -133,6 +133,43 @@ export class RoomParticipantStore {
   }
 }
 
+// Deterministically give each active participant a distinct avatar from a pool,
+// keeping a participant's avatar stable across frames and freeing it for reuse
+// when that participant leaves (#225). `previous` is the last result, threaded
+// back in so assignments persist. Returns Map<participantId, avatar|null>.
+export function assignParticipantAvatars(participantIds, pool, previous = new Map()) {
+  const ids = [...participantIds].sort((a, b) => String(a).localeCompare(String(b)));
+  const items = Array.isArray(pool) ? pool.filter((item) => item != null) : [];
+  const assignments = new Map();
+  const used = new Set();
+  // 1) Preserve each still-present participant's prior avatar when it is valid
+  //    and not already claimed, so avatars do not shuffle every frame.
+  for (const id of ids) {
+    const prior = previous.get(id);
+    if (prior != null && items.includes(prior) && !used.has(prior)) {
+      assignments.set(id, prior);
+      used.add(prior);
+    }
+  }
+  // 2) Assign the remaining participants the first free pool entry; if the pool
+  //    is smaller than the room, cycle so avatars still differ where possible.
+  let cycle = 0;
+  for (const id of ids) {
+    if (assignments.has(id)) continue;
+    const free = items.find((item) => !used.has(item));
+    if (free != null) {
+      assignments.set(id, free);
+      used.add(free);
+    } else if (items.length) {
+      assignments.set(id, items[cycle % items.length]);
+      cycle += 1;
+    } else {
+      assignments.set(id, null);
+    }
+  }
+  return assignments;
+}
+
 function toUint8Array(value) {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
