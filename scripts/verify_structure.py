@@ -921,7 +921,10 @@ def validate_protocol_v2_contracts() -> None:
     for needle in [
         '1_000_000',
         'smallest-three quaternion max angular error',
-        'medianUsPerQuat < 1',
+        # The estimator changed from a median to the fastest round (#306); what
+        # must persist is a budgeted throughput check, not the old expression.
+        'SMALLEST_THREE_BUDGET_US',
+        'bestUsPerQuat < SMALLEST_THREE_BUDGET_US',
         'KGM2 delta/keyframe average reduction',
         'delta with missing base keyframe is rejected',
         'idle-face delta frame',
