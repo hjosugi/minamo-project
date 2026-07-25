@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const include = new Set(['.js', '.mjs', '.ts', '.html', '.css', '.md', '.yml', '.yaml', '.json', '.rs']);
-const skipDirs = new Set(['.git', 'node_modules', 'dist', 'target', '.wrangler', 'vendor']);
+const skipDirs = new Set(['.git', 'node_modules', 'dist', 'target', '.wrangler', 'vendor', 'coverage']);
 const skipPaths = new Set([path.join(root, 'src-tauri', 'gen')]);
 const failures = [];
 
