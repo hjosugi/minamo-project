@@ -131,6 +131,10 @@ import {
   RoomParticipantStore,
   assignParticipantAvatars,
   createParticipantId,
+  MAX_PARTICIPANT_ID_BYTES,
+  ROOM_FRAME_HEADER_BYTES,
+  ROOM_FRAME_MAGIC,
+  ROOM_FRAME_VERSION,
   decodeRoomFrame,
   encodeRoomFrame,
   normalizeParticipantId,
@@ -2149,6 +2153,202 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(setupPageI18n({ doc, storage, navigatorLanguage: 'en-US' }).i18n.lang, 'ja');
   // No toggle button and no document must not throw.
   setupPageI18n({ doc: { documentElement: {}, getElementById: () => null, querySelectorAll: () => [] }, storage });
+}
+
+{
+  // Property tests for the binary parsers on the untrusted path (#262).
+  //
+  // Every decoder here is fed straight from a network datagram, so the contract
+  // is the same for all of them: a hostile or corrupt packet must be rejected,
+  // never throw, and never be mistaken for a valid one. decodeFrame already had
+  // a random-buffer smoke test; these cover the parsers that had none, and add
+  // the structure-aware cases random bytes almost never reach — truncation at
+  // every byte offset, and a single flipped bit in an otherwise valid packet.
+
+  const propertyRandom = deterministicRandom(0x5eed1234);
+  const randomBytes = (length) => {
+    const bytes = new Uint8Array(length);
+    for (let i = 0; i < length; i++) bytes[i] = Math.floor(propertyRandom() * 256);
+    return bytes;
+  };
+
+  // Each decoder, with a builder for a structurally valid packet.
+  const kgm2Sample = (() => {
+    const encoder = new Kgm2FaceEncoder({ keyframeInterval: 4 });
+    const weights = new Float32Array(NUM_CHANNELS).fill(0.25);
+    return new Uint8Array(encoder.encode({ t: 1000, seq: 1, face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights } }));
+  })();
+  const kgm1bSample = new Uint8Array(encodeKgm1bPacket(
+    { versionMajor: 1, versionMinor: 0, frameId: 3, sourceTimeNs: 1n, monotonicTimeNs: 2n, flags: 0, encoding: 0, payloadType: 0 },
+    new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]),
+  ));
+  const roomSample = new Uint8Array(encodeRoomFrame('performer-a', encodeFrame({ t: 5, seq: 5, face: null, pose: null, hands: null })));
+
+  const parsers = [
+    { name: 'decodeFrame', decode: (bytes) => decodeFrame(bytes), valid: new Uint8Array(encodeFrame({ t: 1, seq: 1, face: null, pose: null, hands: null })) },
+    { name: 'decodeKgm1bHeader', decode: (bytes) => decodeKgm1bHeader(bytes), valid: kgm1bSample },
+    { name: 'decodeKgm1bPacket', decode: (bytes) => decodeKgm1bPacket(bytes), valid: kgm1bSample },
+    { name: 'decodeRoomFrame', decode: (bytes) => decodeRoomFrame(bytes), valid: roomSample },
+    // A fresh decoder per call: keyframe state must not make a later packet throw.
+    { name: 'Kgm2FaceDecoder.decode', decode: (bytes) => new Kgm2FaceDecoder().decode(bytes), valid: kgm2Sample },
+  ];
+
+  for (const parser of parsers) {
+    // 1. Arbitrary bytes never throw, at every length that matters.
+    for (let round = 0; round < 4000; round++) {
+      const bytes = randomBytes(Math.floor(propertyRandom() * 96));
+      assert.doesNotThrow(() => parser.decode(bytes), `${parser.name} threw on random bytes: ${bytes}`);
+    }
+
+    // 2. Degenerate and wrong-typed inputs are rejected rather than trusted.
+    for (const input of [new Uint8Array(), new Uint8Array([0]), new Uint8Array(4), 'not bytes', null, undefined, 42, {}]) {
+      assert.doesNotThrow(() => parser.decode(input), `${parser.name} threw on ${JSON.stringify(String(input))}`);
+    }
+
+    // 3. The valid sample decodes, and every prefix of it is handled.
+    assert.ok(parser.decode(parser.valid), `${parser.name} must accept its own valid sample`);
+    for (let cut = 0; cut < parser.valid.byteLength; cut++) {
+      assert.doesNotThrow(() => parser.decode(parser.valid.slice(0, cut)),
+        `${parser.name} threw on a ${cut}-byte truncation of a valid packet`);
+    }
+
+    // 4. Flipping any single bit must still be handled — this reaches parser
+    //    states random bytes never do, because the magic/version survive.
+    for (let byte = 0; byte < parser.valid.byteLength; byte++) {
+      for (let bit = 0; bit < 8; bit++) {
+        const mutated = parser.valid.slice();
+        mutated[byte] ^= 1 << bit;
+        assert.doesNotThrow(() => parser.decode(mutated),
+          `${parser.name} threw after flipping bit ${bit} of byte ${byte}`);
+      }
+    }
+  }
+
+  // 5. Round-trip: a frame that survives encode->decode must keep its identity.
+  for (let round = 0; round < 500; round++) {
+    const weights = new Float32Array(NUM_CHANNELS);
+    for (let i = 0; i < NUM_CHANNELS; i++) weights[i] = propertyRandom();
+    const seq = Math.floor(propertyRandom() * 65535);
+    const t = Math.floor(propertyRandom() * 1e6);
+    const decoded = decodeFrame(encodeFrame({ t, seq, face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights }, pose: null, hands: null }));
+    assert.equal(decoded.seq, seq, 'seq must survive a round trip');
+    assert.equal(decoded.t, t, 't must survive a round trip');
+    for (let i = 0; i < NUM_CHANNELS; i++) {
+      // Weights are quantized to a byte, so equality is to within one step.
+      assert.ok(Math.abs(decoded.face.weights[i] - weights[i]) <= 1 / 255 + 1e-9,
+        `weight ${i} drifted beyond one quantization step`);
+    }
+  }
+
+  // 6. E2EE: no tampering ever yields plaintext (#262). Every single-bit flip in
+  //    a sealed packet must be rejected with the same opaque failure — never
+  //    return data, never leak which part of the packet was wrong.
+  const e2eeKey = await deriveRoomKey('property-test secret', 'fuzz-room');
+  const plainFrame = new Uint8Array(encodeFrame({ t: 42, seq: 9, face: null, pose: null, hands: null }));
+  const sealedFrame = await encryptE2eeFrame(plainFrame, e2eeKey);
+  const sealedBytes = sealedFrame instanceof Uint8Array ? sealedFrame : new Uint8Array(sealedFrame);
+  assert.deepEqual(await decryptE2eeFrame(sealedBytes, e2eeKey), plainFrame, 'an untampered packet must round-trip');
+
+  // Sample bit positions across the nonce, ciphertext and tag rather than all of
+  // them: each attempt is a full AES-GCM operation.
+  for (let byte = 0; byte < sealedBytes.byteLength; byte += 3) {
+    const bit = byte % 8;
+    const tampered = sealedBytes.slice();
+    tampered[byte] ^= 1 << bit;
+    let failed = false;
+    try {
+      await decryptE2eeFrame(tampered, e2eeKey);
+    } catch (error) {
+      failed = true;
+      assert.match(error.message, /wrong room key or corrupted frame/,
+        `tampering at byte ${byte} must fail with the generic message, got: ${error.message}`);
+    }
+    assert.ok(failed, `tampering byte ${byte} bit ${bit} was accepted as authentic`);
+  }
+
+  // Truncation must be rejected too, and never as a successful decrypt.
+  for (let cut = 0; cut < sealedBytes.byteLength; cut += 5) {
+    await assert.rejects(() => decryptE2eeFrame(sealedBytes.slice(0, cut), e2eeKey), undefined,
+      `a ${cut}-byte truncation was accepted`);
+  }
+
+  // 7. A hostile participant id must never survive decoding. Random bytes almost
+  //    never produce a well-formed envelope, so these are crafted: correct magic
+  //    and version, with an attacker-chosen id. An id reaches the DOM (the
+  //    viewer's participant selector) and is used for avatar keying, so it must
+  //    come back sanitized or not at all.
+  const craftEnvelope = (idBytes, frameBytes = new Uint8Array([1, 2, 3, 4])) => {
+    const packet = new Uint8Array(ROOM_FRAME_HEADER_BYTES + idBytes.length + frameBytes.length);
+    packet.set(ROOM_FRAME_MAGIC, 0);
+    packet[4] = ROOM_FRAME_VERSION;
+    packet[5] = idBytes.length;
+    packet.set(idBytes, ROOM_FRAME_HEADER_BYTES);
+    packet.set(frameBytes, ROOM_FRAME_HEADER_BYTES + idBytes.length);
+    return packet;
+  };
+  const hostileIds = [
+    '../../etc/passwd',
+    '..\\..\\windows',
+    '<script>alert(1)</script>',
+    'a/b/c',
+    'id with spaces',
+    'id\u0000withnull',
+    'id\nwith\nnewlines',
+    '../',
+    '.',
+    '..',
+    'ドラム',
+    'a'.repeat(MAX_PARTICIPANT_ID_BYTES),
+  ];
+  for (const hostile of hostileIds) {
+    const idBytes = new TextEncoder().encode(hostile);
+    if (idBytes.length === 0 || idBytes.length > MAX_PARTICIPANT_ID_BYTES) continue;
+    const decoded = decodeRoomFrame(craftEnvelope(idBytes));
+    if (decoded === null) continue; // rejecting outright is a valid answer
+    assert.match(decoded.participantId, /^[A-Za-z0-9._-]+$/,
+      `decodeRoomFrame returned an unsanitized participant id for ${JSON.stringify(hostile)}: `
+      + `${JSON.stringify(decoded.participantId)}`);
+    assert.ok(!decoded.participantId.includes('..'),
+      `decodeRoomFrame let a path-traversal id through: ${JSON.stringify(decoded.participantId)}`);
+    assert.equal(decoded.participantId, normalizeParticipantId(decoded.participantId, ''),
+      'a decoded participant id must already be in normalized form');
+  }
+  // Invalid id lengths must be rejected rather than read out of bounds.
+  for (const idLength of [0, MAX_PARTICIPANT_ID_BYTES + 1, 255]) {
+    const packet = new Uint8Array(ROOM_FRAME_HEADER_BYTES + 8);
+    packet.set(ROOM_FRAME_MAGIC, 0);
+    packet[4] = ROOM_FRAME_VERSION;
+    packet[5] = idLength;
+    assert.equal(decodeRoomFrame(packet), null, `an id length of ${idLength} must be rejected`);
+  }
+
+  // 8. A container must never report more payload than it actually carries.
+  //    Dropping this bounds check is the classic length-field bug, and
+  //    ArrayBuffer.slice clamps silently, so "it did not throw" proves nothing.
+  const kgm1bHeaderOf = (payloadLen, actualPayload) => {
+    const head = new Uint8Array(encodeKgm1bHeader({
+      versionMajor: 1, versionMinor: 0, frameId: 1, sourceTimeNs: 0n, monotonicTimeNs: 0n,
+      flags: 0, encoding: 0, payloadType: 0, payloadLen,
+    }));
+    const out = new Uint8Array(head.byteLength + actualPayload.byteLength);
+    out.set(head, 0);
+    out.set(actualPayload, head.byteLength);
+    return out;
+  };
+  for (const [claimed, actual] of [[64, 8], [1, 0], [0xffffffff, 16], [100, 99]]) {
+    const packet = kgm1bHeaderOf(claimed, new Uint8Array(actual));
+    assert.equal(decodeKgm1bPacket(packet), null,
+      `a packet claiming ${claimed} payload bytes while carrying ${actual} must be rejected`);
+  }
+  // And when it is accepted, the payload it hands back must match the header.
+  for (const size of [0, 1, 8, 64, 255]) {
+    const payload = randomBytes(size);
+    const decodedPacket = decodeKgm1bPacket(kgm1bHeaderOf(size, payload));
+    assert.ok(decodedPacket, `a well-formed ${size}-byte payload must decode`);
+    assert.equal(decodedPacket.payload.byteLength, decodedPacket.header.payloadLen,
+      'the payload handed back must be exactly as long as the header declares');
+    assert.deepEqual(decodedPacket.payload, payload, 'the payload must round-trip byte for byte');
+  }
 }
 
 {
