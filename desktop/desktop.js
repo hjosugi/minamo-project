@@ -18,33 +18,62 @@ const { t: tr } = setupPageI18n({
   onRender: () => {
     if (!bootDone) return;
     if (lastPairingStatus) setPairingStatus(lastPairingStatus.key, lastPairingStatus.params);
-    if (lastStatus) renderStatus(lastStatus);
+    renderStatus(currentStatus());
     refreshPairingLabels();
   },
 });
 
-// The pairing status line and the last desktop status payload are remembered so
-// a language toggle can re-render them instead of stranding stale English.
+// The pairing status line and the source of the last status render are
+// remembered so a language toggle can rebuild them instead of stranding stale
+// English.
 let lastPairingStatus = null;
-let lastStatus = null;
 let lastInactiveLabelKey = '';
+/** @type {{kind: 'fallback'} | {kind: 'runtime', status: any} | {kind: 'error', message: string | null}} */
+let lastStatusSource = { kind: 'fallback' };
 
 const invoke = window.__TAURI__?.core?.invoke;
 
-const fallbackStatus = {
-  runtime: 'web preview',
-  pages: [
-    { name: 'Tracker', route: 'tracker/index.html', bundled: true },
-    { name: 'Viewer', route: 'viewer/index.html', bundled: true },
-    { name: 'Replay', route: 'replay/index.html', bundled: true },
-  ],
-  virtualCamera: {
-    os: navigator.platform || 'browser',
-    backend: 'Tauri command unavailable',
-    device: 'browser preview',
-    state: 'desktop runtime not attached',
-  },
-};
+// Shown whenever the desktop runtime is absent — which is how this page renders
+// on GitHub Pages and under `pnpm dev`, so it is the common case. These strings
+// are ours, so they are built per render rather than frozen at module load,
+// letting a language toggle rebuild them (#267).
+function fallbackStatus() {
+  return {
+    runtime: tr('desktop.ui.status.webPreview'),
+    pages: [
+      { name: tr('desktop.ui.btn.tracker'), route: 'tracker/index.html', bundled: true },
+      { name: tr('desktop.ui.btn.viewer'), route: 'viewer/index.html', bundled: true },
+      { name: tr('desktop.ui.btn.replay'), route: 'replay/index.html', bundled: true },
+    ],
+    virtualCamera: {
+      os: navigator.platform || tr('desktop.fallback.browser'),
+      backend: tr('desktop.fallback.tauriUnavailable'),
+      device: tr('desktop.fallback.browserPreview'),
+      state: tr('desktop.fallback.notAttached'),
+      // Explicit tone: once the state text is localized it can no longer be
+      // classified by matching English words.
+      tone: 'err',
+    },
+  };
+}
+
+// Rebuild the payload the status panel should currently show. Anything the
+// desktop runtime supplied is replayed verbatim (still English — see #307);
+// anything we own is re-translated.
+function currentStatus() {
+  if (lastStatusSource.kind === 'runtime') return lastStatusSource.status;
+  const base = fallbackStatus();
+  if (lastStatusSource.kind === 'error') {
+    return {
+      ...base,
+      virtualCamera: {
+        ...base.virtualCamera,
+        state: lastStatusSource.message ?? tr('desktop.fallback.statusError'),
+      },
+    };
+  }
+  return base;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -70,7 +99,8 @@ async function command(name, payload) {
 }
 
 async function readStatus() {
-  if (!invoke) return fallbackStatus;
+  // null means "no desktop runtime"; the caller renders the localized fallback.
+  if (!invoke) return null;
   return command('desktop_status');
 }
 
@@ -92,11 +122,10 @@ function renderPages(pages) {
 }
 
 function renderStatus(status) {
-  lastStatus = status;
   setText('runtimeStatus', status.runtime);
   renderPages(status.pages || []);
 
-  const camera = status.virtualCamera || fallbackStatus.virtualCamera;
+  const camera = status.virtualCamera || fallbackStatus().virtualCamera;
   setText('vcOs', camera.os);
   setText('vcBackend', camera.backend);
   setText('vcDevice', camera.device);
@@ -105,23 +134,25 @@ function renderStatus(status) {
   const cameraStatus = $('cameraStatus');
   if (cameraStatus) {
     cameraStatus.textContent = camera.state;
-    cameraStatus.classList.toggle('ok', /loaded|ready|visible/i.test(camera.state));
-    cameraStatus.classList.toggle('err', /not installed|unavailable/i.test(camera.state));
+    // Prefer an explicit tone; fall back to sniffing the runtime's own English
+    // state string, which is all the Tauri payload gives us today (#307).
+    const tone = camera.tone
+      ?? (/loaded|ready|visible/i.test(camera.state) ? 'ok'
+        : /not installed|unavailable/i.test(camera.state) ? 'err' : '');
+    cameraStatus.classList.toggle('ok', tone === 'ok');
+    cameraStatus.classList.toggle('err', tone === 'err');
   }
 }
 
 async function refreshStatus() {
   try {
-    renderStatus(await readStatus());
+    const status = await readStatus();
+    lastStatusSource = status ? { kind: 'runtime', status } : { kind: 'fallback' };
   } catch (error) {
-    renderStatus({
-      ...fallbackStatus,
-      virtualCamera: {
-        ...fallbackStatus.virtualCamera,
-        state: error instanceof Error ? error.message : 'status error',
-      },
-    });
+    // An upstream Error message has no key to re-translate, so keep it verbatim.
+    lastStatusSource = { kind: 'error', message: error instanceof Error ? error.message : null };
   }
+  renderStatus(currentStatus());
 }
 
 function bindLaunchButtons() {

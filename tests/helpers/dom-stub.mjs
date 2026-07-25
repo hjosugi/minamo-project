@@ -49,7 +49,21 @@ export function createStubElement(tagName = 'div', id = '') {
     options: [],
     children,
     listeners,
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    // Recorded rather than ignored: styling that keys off class toggles is easy
+    // to break silently (see the desktop virtual-camera tone), so tests can
+    // assert on it.
+    appliedClasses: new Set(),
+    classList: {
+      add(name) { element.appliedClasses.add(name); },
+      remove(name) { element.appliedClasses.delete(name); },
+      toggle(name, force) {
+        const on = force === undefined ? !element.appliedClasses.has(name) : Boolean(force);
+        if (on) element.appliedClasses.add(name);
+        else element.appliedClasses.delete(name);
+        return on;
+      },
+      contains: (name) => element.appliedClasses.has(name),
+    },
     getContext: () => stubContext(),
     getAttribute: (name) => (name in attributes ? attributes[name] : null),
     setAttribute: (name, value) => { attributes[name] = String(value); },
