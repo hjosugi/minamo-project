@@ -26,6 +26,16 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted);
 }
 .brand { color: var(--text); font-weight: 900; letter-spacing: .14em; margin-right: auto; }
+.lang-toggle {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  font: inherit;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+.lang-toggle:hover { color: var(--text); }
 .hero { min-height: 100vh; }
 .hero-grid {
   display: grid;

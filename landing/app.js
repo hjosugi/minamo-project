@@ -1,3 +1,10 @@
+import {
+  applyTranslations,
+  createI18n,
+  loadLanguage,
+  saveLanguage,
+} from '../shared/i18n.js';
+
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
@@ -5,6 +12,25 @@ const startButton = document.getElementById('startDemo');
 const fpsEl = document.getElementById('fps');
 const confidenceEl = document.getElementById('confidence');
 const hitsEl = document.getElementById('hits');
+
+// Runtime EN/JA localization (#267): navigator.language with a persisted manual
+// override, applied to every [data-i18n] node.
+const i18n = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) });
+
+function renderLanguage() {
+  document.documentElement.lang = i18n.lang;
+  applyTranslations(document, i18n.t);
+  if (running) startButton.textContent = i18n.t('landing.demo.running');
+}
+
+document.getElementById('langToggle')?.addEventListener('click', () => {
+  const next = i18n.lang === 'ja' ? 'en' : 'ja';
+  i18n.setLang(next);
+  saveLanguage(globalThis.localStorage, next);
+  renderLanguage();
+});
+
+renderLanguage();
 
 let running = false;
 let frames = 0;
@@ -157,7 +183,7 @@ function loop(now) {
 
 startButton.addEventListener('click', async () => {
   running = true;
-  startButton.textContent = 'デモ実行中';
+  startButton.textContent = i18n.t('landing.demo.running');
   startButton.disabled = true;
   await startCamera();
   requestAnimationFrame(loop);

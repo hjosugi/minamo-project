@@ -12,90 +12,92 @@
     <header class="hero">
       <nav class="nav">
         <a class="brand" href="../">MINAMO</a>
-        <a href="#quickstart">試し方</a>
-        <a href="#tracking">表示する信号</a>
-        <a href="../tracker/">実トラッカー</a>
-        <a href="../docs/PAGES_DEMO.ja.md">Docs</a>
+        <a href="#quickstart" data-i18n="landing.nav.tryIt">試し方</a>
+        <a href="#tracking" data-i18n="landing.nav.signals">表示する信号</a>
+        <a href="../tracker/" data-i18n="landing.nav.tracker">実トラッカー</a>
+        <a href="../docs/PAGES_DEMO.ja.md" data-i18n="landing.nav.docs">Docs</a>
+        <button id="langToggle" type="button" class="lang-toggle" data-i18n="lang.toggle" data-i18n-attr="aria-label:lang.toggle.aria">English</button>
       </nav>
       <section class="hero-grid">
         <div>
-          <p class="eyebrow">Camera optional · mock signal demo</p>
-          <h1>顔、指、ドラム。<br />まずは動くところを30秒で。</h1>
-          <p class="lead">
+          <p class="eyebrow" data-i18n="landing.hero.eyebrow">Camera optional · mock signal demo</p>
+          <h1><span data-i18n="landing.hero.title1">顔、指、ドラム。</span><br /><span data-i18n="landing.hero.title2">まずは動くところを30秒で。</span></h1>
+          <p class="lead" data-i18n="landing.hero.lead">
             Minamoが扱う顔・手・ドラム信号を可視化するUIデモです。
             カメラを許可すると映像の上に重なり、許可しなくてもモックアニメーションだけで動きます。
           </p>
           <p class="disclosure">
-            このページの骨格と数値はシミュレーションです。実際のMediaPipe推論は
-            <a href="../tracker/">Tracker</a> で試せます。
+            <span data-i18n="landing.hero.disclosurePre">このページの骨格と数値はシミュレーションです。実際のMediaPipe推論は</span>
+            <a href="../tracker/">Tracker</a>
+            <span data-i18n="landing.hero.disclosurePost">で試せます。</span>
           </p>
           <div class="cta-row">
-            <button id="startDemo">デモを開始</button>
-            <a class="button secondary" href="../tracker/">実トラッカーを開く</a>
-            <a class="button secondary" href="../docs/QUICKSTART.ja.md">手順を読む</a>
+            <button id="startDemo" data-i18n="landing.hero.startDemo">デモを開始</button>
+            <a class="button secondary" href="../tracker/" data-i18n="landing.hero.openTracker">実トラッカーを開く</a>
+            <a class="button secondary" href="../docs/QUICKSTART.ja.md" data-i18n="landing.hero.readSteps">手順を読む</a>
           </div>
           <div class="metrics">
-            <div><strong id="fps">0</strong><span>demo fps</span></div>
-            <div><strong id="confidence">0.00</strong><span>mock confidence</span></div>
-            <div><strong id="hits">0</strong><span>mock drum hits</span></div>
+            <div><strong id="fps">0</strong><span data-i18n="landing.metrics.fps">demo fps</span></div>
+            <div><strong id="confidence">0.00</strong><span data-i18n="landing.metrics.confidence">mock confidence</span></div>
+            <div><strong id="hits">0</strong><span data-i18n="landing.metrics.hits">mock drum hits</span></div>
           </div>
         </div>
         <div class="demo-card">
           <video id="video" autoplay muted playsinline></video>
           <canvas id="overlay" width="960" height="540"></canvas>
-          <div class="demo-note">カメラ映像は端末内だけで表示され、送信・保存されません。</div>
+          <div class="demo-note" data-i18n="landing.demo.note">カメラ映像は端末内だけで表示され、送信・保存されません。</div>
         </div>
       </section>
     </header>
 
     <main>
       <section id="quickstart" class="section">
-        <p class="eyebrow">Three ways to try</p>
-        <h2>デモの次は、実データをViewerへ。</h2>
+        <p class="eyebrow" data-i18n="landing.quickstart.eyebrow">Three ways to try</p>
+        <h2 data-i18n="landing.quickstart.heading">デモの次は、実データをViewerへ。</h2>
         <div class="steps">
-          <article><b>01</b><h3>UIデモ</h3><p>上の「デモを開始」を押すだけ。カメラは任意です。</p></article>
-          <article><b>02</b><h3>Tracker</h3><p>カメラを開始し、localモードでConnectします。</p></article>
-          <article><b>03</b><h3>Viewer</h3><p>同じブラウザの別タブで開き、内蔵ボットや自分のアバターを動かします。</p></article>
+          <article><b>01</b><h3 data-i18n="landing.quickstart.step1.title">UIデモ</h3><p data-i18n="landing.quickstart.step1.body">上の「デモを開始」を押すだけ。カメラは任意です。</p></article>
+          <article><b>02</b><h3 data-i18n="landing.quickstart.step2.title">Tracker</h3><p data-i18n="landing.quickstart.step2.body">カメラを開始し、localモードでConnectします。</p></article>
+          <article><b>03</b><h3 data-i18n="landing.quickstart.step3.title">Viewer</h3><p data-i18n="landing.quickstart.step3.body">同じブラウザの別タブで開き、内蔵ボットや自分のアバターを動かします。</p></article>
         </div>
         <div class="cta-row">
-          <a class="button" href="../tracker/">Trackerへ</a>
-          <a class="button secondary" href="../viewer/">Viewerへ</a>
+          <a class="button" href="../tracker/" data-i18n="landing.quickstart.toTracker">Trackerへ</a>
+          <a class="button secondary" href="../viewer/" data-i18n="landing.quickstart.toViewer">Viewerへ</a>
         </div>
       </section>
 
       <section id="tracking" class="section cards">
         <article>
-          <h3>手と指</h3>
-          <p>左右の手、指ごとの関節、curl、spread、pinch、速度、遮蔽状態を扱います。</p>
+          <h3 data-i18n="landing.cards.hands.title">手と指</h3>
+          <p data-i18n="landing.cards.hands.body">左右の手、指ごとの関節、curl、spread、pinch、速度、遮蔽状態を扱います。</p>
         </article>
         <article>
-          <h3>顔・目・口</h3>
-          <p>頭部姿勢、blink、gaze、口の開き・幅・丸め、smileなどを安定化します。</p>
+          <h3 data-i18n="landing.cards.face.title">顔・目・口</h3>
+          <p data-i18n="landing.cards.face.body">頭部姿勢、blink、gaze、口の開き・幅・丸め、smileなどを安定化します。</p>
         </article>
         <article>
-          <h3>ドラム</h3>
-          <p>スティック軌道、打面、hit velocity、音声onset、ペダルの統合を目指します。</p>
+          <h3 data-i18n="landing.cards.drums.title">ドラム</h3>
+          <p data-i18n="landing.cards.drums.body">スティック軌道、打面、hit velocity、音声onset、ペダルの統合を目指します。</p>
         </article>
         <article>
-          <h3>破綻防止</h3>
-          <p>One Euro Filter、外れ値除去、速度制限、解剖学的制約、遮蔽復帰を重ねます。</p>
+          <h3 data-i18n="landing.cards.stability.title">破綻防止</h3>
+          <p data-i18n="landing.cards.stability.body">One Euro Filter、外れ値除去、速度制限、解剖学的制約、遮蔽復帰を重ねます。</p>
         </article>
       </section>
 
       <section class="section">
-        <p class="eyebrow">Privacy</p>
-        <h2>映像をアップロードしない設計。</h2>
+        <p class="eyebrow" data-i18n="landing.privacy.eyebrow">Privacy</p>
+        <h2 data-i18n="landing.privacy.heading">映像をアップロードしない設計。</h2>
         <p>
-          このデモとTrackerのカメラ映像はブラウザ内で処理されます。ネットワーク接続を使う場合も、
-          Viewerへ渡すのはモーションパラメータです。詳しくは
-          <a href="../docs/security/privacy.ja.md">プライバシー設計</a>を参照してください。
+          <span data-i18n="landing.privacy.bodyPre">このデモとTrackerのカメラ映像はブラウザ内で処理されます。ネットワーク接続を使う場合も、Viewerへ渡すのはモーションパラメータです。詳しくは</span>
+          <a href="../docs/security/privacy.ja.md" data-i18n="landing.privacy.link">プライバシー設計</a>
+          <span data-i18n="landing.privacy.bodyPost">を参照してください。</span>
         </p>
       </section>
     </main>
 
     <footer>
       <a href="../">Minamo</a>
-      <span>Local-first, privacy-first, streamer-first.</span>
+      <span data-i18n="landing.footer.tagline">Local-first, privacy-first, streamer-first.</span>
     </footer>
 
     <script src="./app.js" type="module"></script>

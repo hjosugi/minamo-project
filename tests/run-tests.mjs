@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import {
+  MESSAGES,
+  SUPPORTED_LANGUAGES,
+  applyTranslations,
+  createI18n,
+  detectLanguage,
+  normalizeLanguage,
+} from '../shared/i18n.js';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import QRCode from 'qrcode';
@@ -1957,4 +1965,51 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.ok(CAMERA_METADATA_TIMEOUT_MS > 0, 'camera metadata timeout is configured');
 }
 
-console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, and shortcut tests passed.`);
+{
+  // Runtime i18n (#267): every key must exist in both languages, and the engine
+  // detects/falls back correctly.
+  for (const lang of SUPPORTED_LANGUAGES) {
+    assert.ok(MESSAGES[lang], `MESSAGES missing language ${lang}`);
+  }
+  const enKeys = Object.keys(MESSAGES.en).sort();
+  const jaKeys = Object.keys(MESSAGES.ja).sort();
+  assert.deepEqual(jaKeys, enKeys, 'EN and JA string tables must have identical keys');
+  for (const [lang, table] of Object.entries(MESSAGES)) {
+    for (const [key, value] of Object.entries(table)) {
+      assert.equal(typeof value, 'string', `${lang}.${key} must be a string`);
+      assert.ok(value.length > 0, `${lang}.${key} must not be empty`);
+    }
+  }
+
+  assert.equal(normalizeLanguage('ja-JP'), 'ja');
+  assert.equal(normalizeLanguage('en-US'), 'en');
+  assert.equal(normalizeLanguage('fr'), '');
+  assert.equal(detectLanguage({ stored: 'ja', navigatorLanguage: 'en-US' }), 'ja');
+  assert.equal(detectLanguage({ stored: '', navigatorLanguage: 'ja-JP' }), 'ja');
+  assert.equal(detectLanguage({ stored: 'zz', navigatorLanguage: 'fr' }), 'en');
+
+  const i18n = createI18n({ lang: 'ja' });
+  assert.equal(i18n.t('landing.demo.running'), 'デモ実行中');
+  i18n.setLang('en');
+  assert.equal(i18n.t('landing.demo.running'), 'Demo running');
+  assert.equal(i18n.t('missing.key', 'fallback'), 'fallback');
+  // Fallback to EN when a key is only defined there.
+  const partial = createI18n({ messages: { en: { only: 'E' }, ja: {} }, lang: 'ja' });
+  assert.equal(partial.t('only'), 'E');
+
+  // applyTranslations walks data-i18n / data-i18n-attr via a stubbed DOM.
+  const makeEl = (attrs) => {
+    const el = { textContent: '', _a: { ...attrs }, getAttribute: (k) => el._a[k] ?? null, setAttribute: (k, v) => { el._a[k] = v; } };
+    return el;
+  };
+  const textEl = makeEl({ 'data-i18n': 'landing.hero.startDemo' });
+  const attrEl = makeEl({ 'data-i18n-attr': 'aria-label:lang.toggle.aria' });
+  const root = {
+    querySelectorAll: (sel) => (sel === '[data-i18n]' ? [textEl] : sel === '[data-i18n-attr]' ? [attrEl] : []),
+  };
+  applyTranslations(root, createI18n({ lang: 'en' }).t);
+  assert.equal(textEl.textContent, 'Start the demo');
+  assert.equal(attrEl.getAttribute('aria-label'), 'Switch to Japanese');
+}
+
+console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, i18n, and shortcut tests passed.`);
