@@ -63,6 +63,35 @@ export const MESSAGES = {
     'tracker.capability.noCameraApi': 'Camera API unavailable in this browser/context.',
     'tracker.capability.noWebgl2': 'WebGL2 unavailable; GPU MediaPipe will not start.',
     'tracker.capability.noWebtransport': 'WebTransport unsupported; wt mode is disabled.',
+    'replay.status.loaded': 'loaded',
+    'replay.status.empty': 'empty',
+    'replay.status.playing': 'playing',
+    'replay.status.paused': 'paused',
+    'replay.status.reset': 'reset',
+    'replay.status.finished': 'finished',
+    'replay.status.blocked': 'blocked: {n} error(s)',
+    'replay.status.vrmaExported': 'vrma exported',
+    'replay.error.vrmaExport': 'vrma export error: {detail}',
+    'replay.validation.ready': 'ready: {n} frame(s), no validation errors',
+    'replay.validation.none': 'no playable motion frames found',
+    'replay.validation.disabled': '{n} validation error(s); playback disabled',
+    'viewer.status.mappingApplied': 'mapping applied',
+    'viewer.status.sceneUrlCopied': 'scene URL copied',
+    'viewer.status.mappingLoaded': 'mapping loaded: {name}',
+    'viewer.status.inochiLoaded': 'Inochi2D loaded: {name}',
+    'viewer.status.loadingNativeAvatar': 'loading native avatar: {name}',
+    'viewer.error.mapping': 'mapping error: {detail}',
+    'viewer.error.connect': 'connect error: {detail}',
+    'viewer.error.nativeAvatar': 'native avatar error: {detail}',
+    'viewer.error.nativeBridge': 'native bridge error: {detail}',
+    'viewer.error.layeredAvatar': 'layered avatar error: {detail}',
+    'viewer.error.replay': 'replay error: {detail}',
+    'desktop.render.selecting': 'selecting…',
+    'desktop.render.ready': 'ready',
+    'desktop.pairing.qrFailed': 'QR rendering failed; use the tracker link',
+    'desktop.pairing.regenerate': 'Regenerate QR',
+    'desktop.pairing.generate': 'Generate QR',
+    'desktop.url.notAvailable': 'not available',
   },
   ja: {
     'lang.toggle': 'English',
@@ -117,6 +146,35 @@ export const MESSAGES = {
     'tracker.capability.noCameraApi': 'このブラウザ／コンテキストではカメラAPIを利用できません。',
     'tracker.capability.noWebgl2': 'WebGL2が利用できません。GPU版MediaPipeは起動しません。',
     'tracker.capability.noWebtransport': 'WebTransport非対応のため、wtモードは無効です。',
+    'replay.status.loaded': '読み込み完了',
+    'replay.status.empty': '空',
+    'replay.status.playing': '再生中',
+    'replay.status.paused': '一時停止',
+    'replay.status.reset': 'リセット',
+    'replay.status.finished': '完了',
+    'replay.status.blocked': '{n} 件のエラーで再生できません',
+    'replay.status.vrmaExported': 'VRMAを書き出しました',
+    'replay.error.vrmaExport': 'VRMA書き出しエラー: {detail}',
+    'replay.validation.ready': '準備完了: {n} フレーム、検証エラーなし',
+    'replay.validation.none': '再生可能なモーションフレームがありません',
+    'replay.validation.disabled': '{n} 件の検証エラーのため再生を無効化しました',
+    'viewer.status.mappingApplied': 'マッピングを適用しました',
+    'viewer.status.sceneUrlCopied': 'シーンURLをコピーしました',
+    'viewer.status.mappingLoaded': 'マッピング読み込み: {name}',
+    'viewer.status.inochiLoaded': 'Inochi2D読み込み: {name}',
+    'viewer.status.loadingNativeAvatar': 'ネイティブアバター読み込み: {name}',
+    'viewer.error.mapping': 'マッピングエラー: {detail}',
+    'viewer.error.connect': '接続エラー: {detail}',
+    'viewer.error.nativeAvatar': 'ネイティブアバターエラー: {detail}',
+    'viewer.error.nativeBridge': 'ネイティブブリッジエラー: {detail}',
+    'viewer.error.layeredAvatar': 'レイヤードアバターエラー: {detail}',
+    'viewer.error.replay': 'リプレイエラー: {detail}',
+    'desktop.render.selecting': '選択中…',
+    'desktop.render.ready': '準備完了',
+    'desktop.pairing.qrFailed': 'QRの生成に失敗しました。トラッカーのリンクをご利用ください',
+    'desktop.pairing.regenerate': 'QRを再生成',
+    'desktop.pairing.generate': 'QRを生成',
+    'desktop.url.notAvailable': '利用不可',
   },
 };
 
@@ -131,12 +189,20 @@ export function detectLanguage({ stored = '', navigatorLanguage = '' } = {}) {
 
 export function createI18n({ messages = MESSAGES, lang = 'en' } = {}) {
   let current = SUPPORTED_LANGUAGES.includes(lang) ? lang : 'en';
-  function t(key, fallback) {
+  // t(key) → string; t(key, { n }) interpolates `{n}` tokens; t(key, 'fallback')
+  // returns the fallback string when the key is missing (back-compatible).
+  function t(key, params) {
     const table = messages[current] || {};
-    if (Object.prototype.hasOwnProperty.call(table, key)) return table[key];
     const en = messages.en || {};
-    if (Object.prototype.hasOwnProperty.call(en, key)) return en[key];
-    return fallback ?? key;
+    let value;
+    if (Object.prototype.hasOwnProperty.call(table, key)) value = table[key];
+    else if (Object.prototype.hasOwnProperty.call(en, key)) value = en[key];
+    else return typeof params === 'string' ? params : key;
+    if (params && typeof params === 'object') {
+      value = value.replace(/\{(\w+)\}/g, (match, token) =>
+        (Object.prototype.hasOwnProperty.call(params, token) ? String(params[token]) : match));
+    }
+    return value;
   }
   return {
     get lang() { return current; },

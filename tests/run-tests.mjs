@@ -2023,6 +2023,10 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   // Fallback to EN when a key is only defined there.
   const partial = createI18n({ messages: { en: { only: 'E' }, ja: {} }, lang: 'ja' });
   assert.equal(partial.t('only'), 'E');
+  // {token} interpolation for app status/error strings.
+  assert.equal(createI18n({ lang: 'en' }).t('replay.status.blocked', { n: 3 }), 'blocked: 3 error(s)');
+  assert.equal(createI18n({ lang: 'ja' }).t('viewer.error.mapping', { detail: 'boom' }), 'マッピングエラー: boom');
+  assert.equal(createI18n({ lang: 'en' }).t('viewer.error.mapping', {}), 'mapping error: {detail}');
 
   // applyTranslations walks data-i18n / data-i18n-attr via a stubbed DOM.
   const makeEl = (attrs) => {

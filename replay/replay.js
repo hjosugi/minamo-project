@@ -2,6 +2,10 @@ import { encodeFrame } from '../shared/codec.js';
 import { parseKgmRecording } from '../shared/kgm-recording.js';
 import { parseRecordingJsonl } from '../shared/recording.js';
 import { VRMA_MIME, exportVrmaFromFrames } from '../shared/vrma-export.js';
+import { createI18n, loadLanguage } from '../shared/i18n.js';
+
+// Runtime EN/JA localization (#267).
+const t = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) }).t;
 
 /** @param {string} id @returns {any} */
 const $ = (id) => document.getElementById(id);
@@ -38,7 +42,7 @@ $('fileReplay').addEventListener('change', async (event) => {
   $('btnReset').disabled = !canReplay();
   $('btnExportVrma').disabled = !canReplay();
   renderReplayValidation(validationErrors, frames.length);
-  chip.textContent = validationErrors.length ? `blocked: ${validationErrors.length} error(s)` : (frames.length ? 'loaded' : 'empty');
+  chip.textContent = validationErrors.length ? t('replay.status.blocked', { n: validationErrors.length }) : (frames.length ? t('replay.status.loaded') : t('replay.status.empty'));
   chip.dataset.state = validationErrors.length || !frames.length ? 'error' : 'open';
 });
 
@@ -48,7 +52,7 @@ $('btnPlay').addEventListener('click', () => {
   startedAt = performance.now() - ((frames[cursor]?.t ?? baseT) - baseT);
   $('btnPlay').disabled = true;
   $('btnPause').disabled = false;
-  chip.textContent = 'playing';
+  chip.textContent = t('replay.status.playing');
   chip.dataset.state = 'open';
   tick();
 });
@@ -71,10 +75,10 @@ $('btnExportVrma').addEventListener('click', () => {
     });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     downloadBytes(`minamo-motion-${stamp}.vrma`, bytes, VRMA_MIME);
-    chip.textContent = 'vrma exported';
+    chip.textContent = t('replay.status.vrmaExported');
     chip.dataset.state = 'open';
   } catch (error) {
-    chip.textContent = `vrma export error: ${error.message}`;
+    chip.textContent = t('replay.error.vrmaExport', { detail: error.message });
     chip.dataset.state = 'error';
   }
 });
@@ -105,7 +109,7 @@ function pause(label) {
   closePublishChannel();
   $('btnPlay').disabled = !canReplay();
   $('btnPause').disabled = true;
-  chip.textContent = label;
+  chip.textContent = t('replay.status.' + label, label);
   chip.dataset.state = label === 'finished' ? 'closed' : 'idle';
 }
 
@@ -143,13 +147,13 @@ function renderReplayValidation(errors, frameCount) {
   if (!errors.length) {
     panel.dataset.state = frameCount ? 'open' : 'empty';
     summary.textContent = frameCount
-      ? `ready: ${frameCount} frame(s), no validation errors`
-      : 'no playable motion frames found';
+      ? t('replay.validation.ready', { n: frameCount })
+      : t('replay.validation.none');
     return;
   }
 
   panel.dataset.state = 'error';
-  summary.textContent = `${errors.length} validation error(s); playback disabled`;
+  summary.textContent = t('replay.validation.disabled', { n: errors.length });
   for (const error of errors.slice(0, 20)) {
     const li = document.createElement('li');
     li.textContent = `line ${error.line ?? '?'}: ${(error.errors ?? []).join('; ')}`;

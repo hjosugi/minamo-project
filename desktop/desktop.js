@@ -6,6 +6,10 @@ import {
   parsePairingRoom,
   redactPairingUrl,
 } from '../shared/pairing.js';
+import { createI18n, loadLanguage } from '../shared/i18n.js';
+
+// Runtime EN/JA localization for status/error strings (#267).
+const tr = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) }).t;
 
 const invoke = window.__TAURI__?.core?.invoke;
 
@@ -124,10 +128,10 @@ function bindNativeAvatarButton() {
       return;
     }
     button.disabled = true;
-    setText('renderMeter', 'selecting…');
+    setText('renderMeter', tr('desktop.render.selecting'));
     try {
       const info = await command('pick_native_avatar');
-      setText('renderMeter', info?.name || 'ready');
+      setText('renderMeter', info?.name || tr('desktop.render.ready'));
     } catch (error) {
       setText('renderMeter', error instanceof Error ? error.message : String(error));
     } finally {
@@ -289,7 +293,7 @@ async function generatePhonePairing(event) {
     } catch {
       renderActivePairing();
       $('pairingQrShell').dataset.state = 'error';
-      $('pairingQrEmpty').textContent = 'QR rendering failed; use the tracker link';
+      $('pairingQrEmpty').textContent = tr('desktop.pairing.qrFailed');
       setPairingStatus('The token is active, but QR rendering failed. Use the accessible tracker link.');
       startPairingTimer();
       return;
@@ -409,7 +413,7 @@ function renderActivePairing() {
   $('btnCopyTrackerUrl').disabled = false;
   $('btnCopyViewerUrl').disabled = false;
   $('btnExpirePairing').disabled = false;
-  $('btnGeneratePairing').textContent = 'Regenerate QR';
+  $('btnGeneratePairing').textContent = tr('desktop.pairing.regenerate');
   setPairingStatus('QR ready. Scan it on the phone or use the token-redacted fallback link.');
   updatePairingCountdown();
 }
@@ -419,14 +423,14 @@ function renderInactivePairing(state, label) {
   $('pairingQrShell').dataset.state = state;
   $('pairingQrEmpty').textContent = label;
   $('pairingQr').setAttribute('aria-label', label);
-  $('trackerUrlPreview').textContent = 'not available';
-  $('viewerUrlPreview').textContent = 'not available';
+  $('trackerUrlPreview').textContent = tr('desktop.url.notAvailable');
+  $('viewerUrlPreview').textContent = tr('desktop.url.notAvailable');
   disablePairingLink('tracker');
   disablePairingLink('viewer');
   $('btnCopyTrackerUrl').disabled = true;
   $('btnCopyViewerUrl').disabled = true;
   $('btnExpirePairing').disabled = true;
-  $('btnGeneratePairing').textContent = 'Generate QR';
+  $('btnGeneratePairing').textContent = tr('desktop.pairing.generate');
   $('pairingCountdown').textContent = state === 'expired' ? 'expired' : 'not generated';
   $('pairingCountdown').dataset.state = state;
 }
