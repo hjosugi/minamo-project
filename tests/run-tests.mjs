@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { withStubbedDom } from './helpers/dom-stub.mjs';
+import { takeLateFailures, withStubbedDom } from './helpers/dom-stub.mjs';
 import { applyPitchOffset, mat4ToQuat } from '../shared/pose-math.js';
 import { fingerCurl, fingerSpread, fingerVector, jointAngle } from '../shared/hand-math.js';
 import { roomLayout, slotOffsetX } from '../shared/room-layout.js';
@@ -2307,6 +2307,13 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     }
     page.check?.({ elements });
   }
+
+  // Async work a page started during import can outlive the stubbed window and
+  // reject against a restored global. That used to abort the whole suite with a
+  // bare stack naming no page; it is now captured and reported here.
+  for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  const lateFailures = takeLateFailures();
+  assert.deepEqual(lateFailures, [], `async work outlived a stubbed page load:\n${lateFailures.join('\n')}`);
 
   // viewer/viewer.js is deliberately absent: it constructs a THREE.WebGLRenderer
   // at module scope, which needs a real WebGL context (three dies inside
