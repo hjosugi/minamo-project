@@ -84,12 +84,17 @@ import { percentileSample } from '../shared/hud-metrics.js';
 import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import { waitForVideoMetadata, startVideoPlayback } from '../shared/camera-startup.js';
+import { createI18n, loadLanguage } from '../shared/i18n.js';
 import {
   AUDIO_LIPSYNC_TARGET_LATENCY_MS,
   audioLipsyncWithinLatency,
   createSilentAudioLipsyncFrame,
   fuseAudioLipsyncWeights,
 } from '../shared/audio-lipsync.js';
+
+// Runtime EN/JA localization for failure/guidance strings (#267).
+const i18n = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) });
+const t = i18n.t;
 
 const MEDIAPIPE_VERSION = '0.10.35';
 const CDN_TASKS_VISION_BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
@@ -705,17 +710,17 @@ function checkCapabilities() {
   if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     warnings.push({
       code: WARNING_TAXONOMY.insecureContext,
-      text: 'Camera access requires HTTPS or localhost. See docs/DEV_HTTPS.md.',
+      text: t('tracker.capability.insecureContext'),
     });
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    warnings.push({ code: WARNING_TAXONOMY.noCameraApi, text: 'Camera API unavailable in this browser/context.' });
+    warnings.push({ code: WARNING_TAXONOMY.noCameraApi, text: t('tracker.capability.noCameraApi') });
   }
   const gl = document.createElement('canvas').getContext('webgl2');
-  if (!gl) warnings.push({ code: WARNING_TAXONOMY.noWebgl2, text: 'WebGL2 unavailable; GPU MediaPipe will not start.' });
+  if (!gl) warnings.push({ code: WARNING_TAXONOMY.noWebgl2, text: t('tracker.capability.noWebgl2') });
   const wtOption = [...$('selMode').options].find((opt) => opt.value === 'wt');
   if (typeof WebTransport === 'undefined') {
-    warnings.push({ code: WARNING_TAXONOMY.noWebtransport, text: 'WebTransport unsupported; wt mode is disabled.' });
+    warnings.push({ code: WARNING_TAXONOMY.noWebtransport, text: t('tracker.capability.noWebtransport') });
     if (wtOption) wtOption.disabled = true;
     if ($('selMode').value === 'wt') $('selMode').value = 'local';
   } else if (wtOption) {
@@ -2016,12 +2021,12 @@ function downloadBytes(filename, bytes, type = 'application/octet-stream') {
 }
 
 function cameraErrorMessage(e) {
-  if (e?.name === 'NotAllowedError') return 'Camera permission was denied. Allow camera access in the browser settings and try again.';
-  if (e?.name === 'NotFoundError') return 'No camera device was found. Connect a camera and press refresh/start again.';
+  if (e?.name === 'NotAllowedError') return t('tracker.camera.denied');
+  if (e?.name === 'NotFoundError') return t('tracker.camera.notFound');
   if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-    return 'Camera requires HTTPS or localhost. See docs/DEV_HTTPS.md for local HTTPS setup.';
+    return t('tracker.camera.https');
   }
-  return e?.message || 'Camera startup failed.';
+  return e?.message || t('tracker.camera.failed');
 }
 
 async function ensureHandLandmarkerIfRunning() {
