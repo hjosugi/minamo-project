@@ -49,6 +49,8 @@ import {
   parseMotionJsonl,
   saveJson,
 } from '../shared/runtime.js';
+import { invoke, isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { setupPageI18n } from '../shared/i18n.js';
 
 // Runtime EN/JA localization (#267): static markup carries data-i18n keys and
@@ -86,9 +88,13 @@ function setStatusText(text, chipState) {
   chip.dataset.state = chipState;
 }
 
-const tauriGlobal = /** @type {any} */ (window).__TAURI__;
-const tauriInvoke = tauriGlobal?.core?.invoke;
-const tauriListen = tauriGlobal?.event?.listen;
+// Imported from @tauri-apps/api rather than read off the global IPC bridge, so
+// the desktop build ships with withGlobalTauri disabled (#251). In a browser
+// isTauri() is false and both handles stay null, which every call site already
+// guards for.
+const runningInTauri = isTauri();
+const tauriInvoke = runningInTauri ? invoke : null;
+const tauriListen = runningInTauri ? listen : null;
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
 const params = new URLSearchParams(location.search);

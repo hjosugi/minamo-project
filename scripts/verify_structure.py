@@ -1496,8 +1496,16 @@ def validate_desktop_contracts() -> None:
     if 'icons/icon.png' not in tauri_config.get('bundle', {}).get('icon', []):
         add_error('src-tauri/tauri.conf.json', 'Linux bundles must select the square application icon explicitly')
     app_config = tauri_config.get('app', {})
-    if app_config.get('withGlobalTauri') is not True:
-        add_error('src-tauri/tauri.conf.json', 'desktop renderer must have Tauri invoke access')
+    # The renderer must still reach IPC, but through the @tauri-apps/api module
+    # rather than the window.__TAURI__ bridge, so the bridge stays off the window
+    # global (#251).
+    if app_config.get('withGlobalTauri') is not False:
+        add_error('src-tauri/tauri.conf.json', 'desktop build must keep the IPC bridge off the window global')
+    for path, source in (('desktop/desktop.js', desktop_js), ('viewer/viewer.js', viewer_js)):
+        if '@tauri-apps/api/core' not in source:
+            add_error(path, 'renderer must import Tauri invoke from @tauri-apps/api/core')
+        if 'window.__TAURI__' in source:
+            add_error(path, 'renderer must not read the IPC bridge off window.__TAURI__')
     if 'viewer' not in tauri_capability.get('windows', []):
         add_error('src-tauri/capabilities/default.json', 'viewer must have IPC access for the native avatar bridge')
     windows = app_config.get('windows', [])

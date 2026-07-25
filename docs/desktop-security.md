@@ -52,29 +52,40 @@ Why each allowance exists (all are required by the bundled tracker/viewer):
 ### innerHTML sink removed
 
 `desktop/desktop.js` built the page-status rows with an `innerHTML` template
-interpolation — the only such sink in the codebase. It now builds the two
-`<span>` children with `textContent`, so status strings can never inject markup.
+interpolation. It now builds the two `<span>` children with `textContent`.
 
-## Planned (needs the packaged app and/or CI secrets)
+`viewer/drum-overlay.html` had the same pattern for drum-zone labels
+(`el.innerHTML = \`<div><div>${zone.label}</div>…\``). Those labels come from a
+hardcoded layout constant, so it was not exploitable — but it was the last
+interpolation sink, and the invariant is only useful if it holds everywhere. It
+now builds nodes and sets `textContent`. There are no remaining `innerHTML`
+interpolations in the codebase.
 
-### Drop `withGlobalTauri`
+### `withGlobalTauri` disabled
 
-`app.withGlobalTauri` is still `true`. It exposes the full IPC bridge on
-`window.__TAURI__`, widening the blast radius of any injected content. Dropping
-it is a coordinated change that must be verified in the running app:
+`app.withGlobalTauri` is now `false`, so the IPC bridge is no longer exposed on
+the window object. The renderers import the API instead:
 
-1. Add `@tauri-apps/api` as a dependency.
-2. `desktop/desktop.js`: replace `window.__TAURI__?.core?.invoke` with
-   `import { invoke } from '@tauri-apps/api/core'`, gated on Tauri presence so
-   the web preview still falls back:
-   `const isTauri = '__TAURI_INTERNALS__' in window;`
-3. `viewer/viewer.js`: same for `core.invoke` **and** `event.listen`
-   (`import { listen } from '@tauri-apps/api/event'`).
-4. Set `withGlobalTauri: false` and update the `scripts/verify_structure.py`
-   assertion that currently *requires* it to be `true`.
-5. Smoke-test desktop status, phone pairing, and the native-avatar bridge in the
-   packaged app — `__TAURI_INTERNALS__` is injected by Tauri v2 regardless of
-   `withGlobalTauri`, but this must be confirmed at runtime.
+- `desktop/desktop.js` — `import { invoke, isTauri } from '@tauri-apps/api/core'`
+- `viewer/viewer.js` — the same, plus
+  `import { listen } from '@tauri-apps/api/event'` for the native-avatar bridge
+
+Presence is detected with the official `isTauri()` helper rather than sniffing an
+internals global. Outside a Tauri webview it returns false, both handles stay
+null, and the existing web-preview fallbacks run unchanged — this path is
+covered by the page smoke tests (#263).
+
+`scripts/verify_structure.py` previously *required* `withGlobalTauri: true`. It
+now requires `false`, requires both renderers to import from
+`@tauri-apps/api/core`, and fails if either reads the bridge off the window
+object again.
+
+> **Verification required:** the IPC path itself cannot be exercised in CI,
+> which builds the bundle but never launches it. Before release, smoke-test in
+> the packaged app: desktop status, phone pairing, and the viewer's
+> native-avatar open/read bridge.
+
+## Planned (needs CI secrets)
 
 ### Signed auto-updater
 

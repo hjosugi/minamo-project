@@ -6,6 +6,7 @@ import {
   parsePairingRoom,
   redactPairingUrl,
 } from '../shared/pairing.js';
+import { invoke as tauriInvoke, isTauri } from '@tauri-apps/api/core';
 import { setupPageI18n } from '../shared/i18n.js';
 
 // Runtime EN/JA localization (#267): static markup carries data-i18n keys and
@@ -31,7 +32,11 @@ let lastInactiveLabelKey = '';
 /** @type {{kind: 'fallback'} | {kind: 'runtime', status: any} | {kind: 'error', message: string | null}} */
 let lastStatusSource = { kind: 'fallback' };
 
-const invoke = window.__TAURI__?.core?.invoke;
+// Imported from @tauri-apps/api rather than read off the global IPC bridge, so
+// the desktop build ships with withGlobalTauri disabled and keeps that bridge
+// off the window object (#251). Outside a Tauri webview isTauri() is false and
+// every command falls back to the web-preview path.
+const invoke = isTauri() ? tauriInvoke : null;
 
 // Shown whenever the desktop runtime is absent — which is how this page renders
 // on GitHub Pages and under `pnpm dev`, so it is the common case. These strings

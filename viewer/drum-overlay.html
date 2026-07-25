@@ -59,7 +59,17 @@
         el.style.left = `${zone.x * 100}%`;
         el.style.top = `${zone.y * 100}%`;
         el.style.width = el.style.height = `${zone.r * 2}px`;
-        el.innerHTML = `<div><div>${zone.label}</div><div class="count" data-count>0</div></div>`;
+        // Built as nodes, not interpolated markup: the codebase's invariant is
+        // that no user-facing string ever reaches innerHTML (#251).
+        const box = document.createElement('div');
+        const name = document.createElement('div');
+        name.textContent = zone.label;
+        const count = document.createElement('div');
+        count.className = 'count';
+        count.dataset.count = '';
+        count.textContent = '0';
+        box.append(name, count);
+        el.replaceChildren(box);
         stage.appendChild(el);
         nodes.set(zone.id, el);
       }
