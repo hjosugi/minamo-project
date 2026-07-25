@@ -552,10 +552,18 @@ nodes terminating WebTransport (via a Rust NIF or sidecar) or WebSocket
 natively. KGM frames stay opaque binaries. See design doc for topology,
 backpressure, and the Rust-sidecar-vs-NIF decision.
 
+Status: **not started.** `services/erlang-router/src/kgm1_router.erl` is a
+skeleton with no rebar.config, .app.src, supervisor, OTP application, or
+transport; nothing compiles or runs it. The committed JavaScript file is a
+simulation of the topology, not an implementation of it (#258).
+
 Acceptance criteria:
-- [x] 1 publisher -> 5,000 subscribers across 3 nodes, p99 relay latency < 30 ms (lab)
-- [x] Node loss drops only that node's subscribers
-- [x] Load test harness committed
+- [ ] 1 publisher -> 5,000 subscribers across 3 nodes, p99 relay latency < 30 ms (lab)
+- [ ] Node loss drops only that node's subscribers
+- [x] Topology simulation committed (`services/erlang-router/topology-simulation.mjs`, models the design in JS; runs no Erlang)
+
+The first two were previously checked on the strength of the simulation alone.
+They require a running BEAM cluster to claim.
 
 ### [KGM-033] relay-rs observability: metrics and structured logs
 - Labels: area/transport, type/chore

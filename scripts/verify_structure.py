@@ -127,7 +127,7 @@ REQUIRED = [
     'src-tauri/src/lib.rs',
     'src-tauri/src/main.rs',
     'relay-rs/grafana-dashboard.json',
-    'services/erlang-router/load-test.mjs',
+    'services/erlang-router/topology-simulation.mjs',
     'Cargo.toml',
     'Cargo.lock',
     'crates/kgm1-codec/Cargo.toml',
@@ -1343,7 +1343,7 @@ def validate_transport_contracts() -> None:
     moq_doc = read('docs/transport/moq-evaluation.md')
     relay_rs = read('relay-rs/src/main.rs')
     dashboard = read('relay-rs/grafana-dashboard.json')
-    cluster_harness = read('services/erlang-router/load-test.mjs')
+    cluster_harness = read('services/erlang-router/topology-simulation.mjs')
     cluster_readme = read('services/erlang-router/README.md')
     cluster_design = read('docs/design/DD-005-elixir-relay-cluster.md')
 
@@ -1426,16 +1426,39 @@ def validate_transport_contracts() -> None:
         'NODES = 3',
         'P99_TARGET_MS = 30',
         'localOnlyDrop',
-        'runClusterLoadTest',
+        'simulateClusterTopology',
     ]:
         if needle not in cluster_harness:
-            add_error('services/erlang-router/load-test.mjs', f'missing cluster harness contract: {needle}')
+            add_error('services/erlang-router/topology-simulation.mjs', f'missing cluster harness contract: {needle}')
     for needle in ['5,000 subscribers', 'p99', 'localOnlyDrop', 'node-loss isolation']:
         if needle not in cluster_readme and needle not in cluster_design:
             add_error('services/erlang-router/README.md', f'missing cluster harness documentation: {needle}')
+    # KGM-032 previously had to stay fully checked, which pinned a claim the code
+    # does not support: the only thing committed is a JS simulation of the
+    # topology, and no OTP application exists to run (#258). The rule now tracks
+    # reality in both directions — the lab criteria may only be claimed once the
+    # router is something the build can actually compile and run.
     kgm032 = backlog.split('### [KGM-032]', 1)[1].split('\n### ', 1)[0]
-    if '- [ ]' in kgm032:
-        add_error('docs/BACKLOG.md', 'KGM-032 acceptance criteria must remain checked after cluster harness implementation')
+    router_is_buildable = any(
+        (ROOT / 'services' / 'erlang-router' / name).exists()
+        for name in ('rebar.config', 'mix.exs')
+    )
+    lab_criteria = [
+        line for line in kgm032.splitlines()
+        if 'p99 relay latency' in line or "Node loss drops only" in line
+    ]
+    if len(lab_criteria) != 2:
+        add_error('docs/BACKLOG.md', 'KGM-032 must keep both cluster lab acceptance criteria')
+    if not router_is_buildable:
+        for line in lab_criteria:
+            if line.strip().startswith('- [x]'):
+                add_error(
+                    'docs/BACKLOG.md',
+                    'KGM-032 claims a cluster lab result while services/erlang-router has no buildable OTP app; '
+                    'the committed JS file only simulates the topology',
+                )
+        if 'simulation' not in kgm032.lower():
+            add_error('docs/BACKLOG.md', 'KGM-032 must say the committed harness is a simulation, not an implementation')
     for needle in [
         'Mapping Design',
         'Latency Findings',

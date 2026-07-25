@@ -1,3 +1,14 @@
+// A JavaScript simulation of the DD-005 cluster topology.
+//
+// IMPORTANT: this exercises **no Erlang**. It models the intended room-agent
+// topology — N nodes, newest-only local mailboxes, node-loss isolation — in
+// plain JS so the design's latency and isolation properties can be reasoned
+// about before anything is built. `src/kgm1_router.erl` is never compiled or
+// run by this file, or by anything else in the repo (#258).
+//
+// It is therefore a design model, not coverage of a relay implementation. Do
+// not read a passing run as evidence that a clustered relay works.
+
 import { performance } from 'node:perf_hooks';
 
 const NODES = 3;
@@ -46,7 +57,7 @@ function percentile(values, p) {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] || 0;
 }
 
-export function runClusterLoadTest({ nodes = NODES, subscribers = SUBSCRIBERS, frames = FRAMES } = {}) {
+export function simulateClusterTopology({ nodes = NODES, subscribers = SUBSCRIBERS, frames = FRAMES } = {}) {
   const cluster = Array.from({ length: nodes }, (_, id) => new RelayNode(id));
   for (let i = 0; i < subscribers; i++) {
     const node = cluster[i % nodes];
@@ -86,7 +97,7 @@ export function runClusterLoadTest({ nodes = NODES, subscribers = SUBSCRIBERS, f
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const result = runClusterLoadTest();
+  const result = simulateClusterTopology();
   console.log(JSON.stringify(result, null, 2));
   process.exit(result.pass ? 0 : 1);
 }
