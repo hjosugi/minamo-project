@@ -7,6 +7,15 @@ MAGIC = b'KGM1'
 HEADER_LEN = 40
 HEADER_STRUCT = struct.Struct('<4sHHQQQHBBI')
 
+# Major versions this decoder understands, i.e. those it knows describe the
+# 40-byte layout below (#256). Two are in the wild and mean the same thing: 0 is
+# the long-standing encoder default, and 1 is the major in the cross-language
+# golden vector. The gate exists to fail closed on a *future* major that changes
+# the layout, which would otherwise be decoded as if it were this one and have
+# every field silently misread. Extend this only alongside a decoder that
+# actually handles the new layout.
+SUPPORTED_VERSION_MAJORS = (0, 1)
+
 
 @dataclass(frozen=True)
 class Kgm1bHeader:
@@ -27,6 +36,8 @@ def decode_header(data: bytes) -> Kgm1bHeader:
     magic, version_major, version_minor, frame_id, source_time_ns, monotonic_time_ns, flags, encoding, payload_type, payload_len = HEADER_STRUCT.unpack_from(data)
     if magic != MAGIC:
         raise ValueError('invalid magic')
+    if version_major not in SUPPORTED_VERSION_MAJORS:
+        raise ValueError(f'unsupported version_major {version_major}')
     return Kgm1bHeader(
         version_major=version_major,
         version_minor=version_minor,

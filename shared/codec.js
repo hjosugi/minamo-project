@@ -1,7 +1,11 @@
-// KGM1 wire codec.
+// KGM1-WIRE codec: the real-time datagram format.
+//
 // One tracking frame fits in one small binary packet (76 bytes for face only),
 // so a frame always fits in a single WebTransport datagram (< 1200 B MTU).
-// See docs/PROTOCOL.md for the full spec.
+//
+// Not to be confused with the other two layouts also called "KGM1" (#256):
+// KGM1B is the 40-byte container header in shared/kgm1b.js, and KGM1-JSON is
+// the envelope in src/core/kgm1.ts. See docs/PROTOCOL.md for all three.
 
 import { NUM_CHANNELS, NUM_POSE_POINTS } from './blendshapes.js';
 

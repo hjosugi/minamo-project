@@ -1,5 +1,23 @@
+// KGM1B: the 40-byte container/recording header that wraps an arbitrary
+// payload. This is what crates/kgm1-codec and packages/kgm1-codec-py implement.
+//
+// It is NOT the real-time datagram format — that is KGM1-WIRE in shared/codec.js
+// — and not the JSON envelope in src/core/kgm1.ts. All three have been called
+// "KGM1"; see docs/PROTOCOL.md (#256).
+
 export const KGM1B_MAGIC = 0x314d474b; // "KGM1" little-endian
 export const KGM1B_HEADER_BYTES = 40;
+
+// Major versions this decoder understands, i.e. those it knows describe the
+// 40-byte layout below (#256). Two are in the wild and mean the same thing:
+// 0 is what encodeKgm1bHeader has always defaulted to, and 1 is the major in
+// the cross-language golden vector and the Rust crate's tests.
+//
+// The point of the gate is to fail closed on a *future* major that changes the
+// layout: without it, such a packet is decoded as if it were this layout and
+// its fields are silently misread. Bump this list only together with a decoder
+// that actually handles the new layout.
+export const KGM1B_SUPPORTED_VERSION_MAJORS = Object.freeze([0, 1]);
 
 export function encodeKgm1bHeader({
   versionMajor = 0,
@@ -32,8 +50,10 @@ export function decodeKgm1bHeader(data) {
   if (!buf || buf.byteLength < KGM1B_HEADER_BYTES) return null;
   const dv = new DataView(buf);
   if (dv.getUint32(0, true) !== KGM1B_MAGIC) return null;
+  const versionMajor = dv.getUint16(4, true);
+  if (!KGM1B_SUPPORTED_VERSION_MAJORS.includes(versionMajor)) return null;
   return {
-    versionMajor: dv.getUint16(4, true),
+    versionMajor,
     versionMinor: dv.getUint16(6, true),
     frameId: dv.getBigUint64(8, true),
     sourceTimeNs: dv.getBigUint64(16, true),

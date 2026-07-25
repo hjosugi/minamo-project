@@ -35,6 +35,7 @@ import {
 import {
   decodeKgm1bHeader,
   decodeKgm1bPacket,
+  KGM1B_SUPPORTED_VERSION_MAJORS,
   encodeKgm1bHeader,
   encodeKgm1bPacket,
 } from '../shared/kgm1b.js';
@@ -520,6 +521,26 @@ function kgm2FaceFrame(seq, overrides = {}) {
     env: { ...process.env, PYTHONPATH: path.join(root, 'packages/kgm1-codec-py') },
   });
   assert.equal(JSON.parse(pyModuleOut).header.frame_id, headerInput.frameId.toString());
+
+  // All three implementations must agree on the version gate (#256), not just on
+  // the happy path — a decoder that accepts a future major while its peers reject
+  // it is exactly the interop hazard the shared golden vector exists to prevent.
+  const futureHeaderHex = bytesToHex(new Uint8Array(encodeKgm1bHeader({ ...headerInput, versionMajor: 2 })));
+  assert.equal(decodeKgm1bHeader(hexToBytes(futureHeaderHex)), null, 'JS must reject an unknown major');
+  let pythonRejected = false;
+  try {
+    execFileSync('python3', ['-m', 'kgm1_codec', 'decode-header', futureHeaderHex], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PYTHONPATH: path.join(root, 'packages/kgm1-codec-py') },
+    });
+  } catch (error) {
+    pythonRejected = true;
+    assert.match(String(error.stderr ?? error.message), /unsupported version_major/,
+      'the Python decoder must reject an unknown major with a clear reason');
+  }
+  assert.ok(pythonRejected, 'the Python decoder accepted an unknown version_major');
 }
 
 {
@@ -2322,7 +2343,26 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     assert.equal(decodeRoomFrame(packet), null, `an id length of ${idLength} must be rejected`);
   }
 
-  // 8. A container must never report more payload than it actually carries.
+  // 8. An unknown container major version must fail closed (#256). Without this
+  //    a future, differently-shaped header is decoded as if it were this layout
+  //    and every field is silently misread — worse than rejecting it.
+  for (const major of KGM1B_SUPPORTED_VERSION_MAJORS) {
+    const accepted = new Uint8Array(encodeKgm1bHeader({ versionMajor: major, versionMinor: 3, payloadLen: 0 }));
+    assert.ok(decodeKgm1bHeader(accepted), `version_major ${major} is in the supported set and must decode`);
+  }
+  for (const major of [2, 3, 7, 255, 4096, 65535]) {
+    const future = new Uint8Array(encodeKgm1bHeader({ versionMajor: major, versionMinor: 0, payloadLen: 0 }));
+    assert.equal(decodeKgm1bHeader(future), null, `version_major ${major} must be rejected`);
+    assert.equal(decodeKgm1bPacket(new Uint8Array(encodeKgm1bPacket({ versionMajor: major }, new Uint8Array([1, 2])))), null,
+      `a packet with version_major ${major} must be rejected`);
+  }
+  // The minor version is not a compatibility boundary and must stay accepted.
+  for (const minor of [0, 1, 7, 65535]) {
+    const bytes = new Uint8Array(encodeKgm1bHeader({ versionMajor: 1, versionMinor: minor, payloadLen: 0 }));
+    assert.ok(decodeKgm1bHeader(bytes), `version_minor ${minor} must still decode`);
+  }
+
+  // 9. A container must never report more payload than it actually carries.
   //    Dropping this bounds check is the classic length-field bug, and
   //    ArrayBuffer.slice clamps silently, so "it did not throw" proves nothing.
   const kgm1bHeaderOf = (payloadLen, actualPayload) => {
