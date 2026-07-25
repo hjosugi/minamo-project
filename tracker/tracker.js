@@ -85,6 +85,8 @@ import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import { waitForVideoMetadata, startVideoPlayback } from '../shared/camera-startup.js';
 import { setupPageI18n } from '../shared/i18n.js';
+import { mat4ToQuat, applyPitchOffset } from '../shared/pose-math.js';
+import { fingerCurl, fingerSpread, fingerVector } from '../shared/hand-math.js';
 import {
   AUDIO_LIPSYNC_TARGET_LATENCY_MS,
   audioLipsyncWithinLatency,
@@ -263,41 +265,6 @@ state.transport.addEventListener('status', (/** @type {any} */ ev) => {
 // ---------------------------------------------------------------- math
 
 // Column-major 4x4 -> unit quaternion [x, y, z, w].
-function mat4ToQuat(m) {
-  const m00 = m[0], m01 = m[4], m02 = m[8];
-  const m10 = m[1], m11 = m[5], m12 = m[9];
-  const m20 = m[2], m21 = m[6], m22 = m[10];
-  const tr = m00 + m11 + m22;
-  let x, y, z, w;
-  if (tr > 0) {
-    const s = Math.sqrt(tr + 1.0) * 2;
-    w = 0.25 * s;
-    x = (m21 - m12) / s;
-    y = (m02 - m20) / s;
-    z = (m10 - m01) / s;
-  } else if (m00 > m11 && m00 > m22) {
-    const s = Math.sqrt(1.0 + m00 - m11 - m22) * 2;
-    w = (m21 - m12) / s;
-    x = 0.25 * s;
-    y = (m01 + m10) / s;
-    z = (m02 + m20) / s;
-  } else if (m11 > m22) {
-    const s = Math.sqrt(1.0 + m11 - m00 - m22) * 2;
-    w = (m02 - m20) / s;
-    x = (m01 + m10) / s;
-    y = 0.25 * s;
-    z = (m12 + m21) / s;
-  } else {
-    const s = Math.sqrt(1.0 + m22 - m00 - m11) * 2;
-    w = (m10 - m01) / s;
-    x = (m02 + m20) / s;
-    y = (m12 + m21) / s;
-    z = 0.25 * s;
-  }
-  const len = Math.hypot(x, y, z, w) || 1;
-  return [x / len, y / len, z / len, w / len];
-}
-
 // ---------------------------------------------------------------- setup
 
 function normalizeTrackerSettings(raw) {
@@ -626,22 +593,6 @@ function sampleVoiceRms() {
 function currentAudioLipsyncLatencyMs(nowMs = performance.now()) {
   if (!settings.audioLipsync || !state.voice.lipsyncReceivedAtMs || state.voice.lipsyncLatencyMs === null) return Infinity;
   return state.voice.lipsyncLatencyMs + Math.max(0, nowMs - state.voice.lipsyncReceivedAtMs);
-}
-
-function applyPitchOffset(quat, radians) {
-  if (!Number.isFinite(radians) || Math.abs(radians) < 1e-6) return quat;
-  const half = radians * 0.5;
-  const sx = Math.sin(half);
-  const cw = Math.cos(half);
-  const [x, y, z, w] = quat;
-  const next = [
-    x * cw + w * sx,
-    y * cw + z * sx,
-    z * cw - y * sx,
-    w * cw - x * sx,
-  ];
-  const len = Math.hypot(next[0], next[1], next[2], next[3]) || 1;
-  return [next[0] / len, next[1] / len, next[2] / len, next[3] / len];
 }
 
 async function configureCameraQualityControls(track) {
@@ -1209,33 +1160,6 @@ function filterHandTargets(targets, tSec) {
     curls: target.curls.map((_, i) => curls[h * 5 + i]),
     spreads: target.spreads.map((_, i) => spreads[h * 5 + i]),
   }));
-}
-
-function fingerVector(landmarks, chain) {
-  const a = landmarks[chain[0]];
-  const b = landmarks[chain[1]];
-  return { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
-}
-
-function fingerCurl(landmarks, chain) {
-  const a = angle(landmarks[chain[0]], landmarks[chain[1]], landmarks[chain[2]]);
-  const b = angle(landmarks[chain[1]], landmarks[chain[2]], landmarks[chain[3]]);
-  return Math.max(0, Math.min(1, ((Math.PI - a) + (Math.PI - b)) / (Math.PI * 1.2)));
-}
-
-function fingerSpread(landmarks, chain, middle) {
-  const v = fingerVector(landmarks, chain);
-  const cross = middle.x * v.y - middle.y * v.x;
-  const dot = middle.x * v.x + middle.y * v.y;
-  return Math.max(-1.5, Math.min(1.5, Math.atan2(cross, dot)));
-}
-
-function angle(a, b, c) {
-  const ab = { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
-  const cb = { x: c.x - b.x, y: c.y - b.y, z: c.z - b.z };
-  const denom = Math.hypot(ab.x, ab.y, ab.z) * Math.hypot(cb.x, cb.y, cb.z) || 1;
-  const dot = (ab.x * cb.x + ab.y * cb.y + ab.z * cb.z) / denom;
-  return Math.acos(Math.max(-1, Math.min(1, dot)));
 }
 
 function drawHandDebug() {

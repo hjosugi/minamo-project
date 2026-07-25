@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { withStubbedDom } from './helpers/dom-stub.mjs';
+import { applyPitchOffset, mat4ToQuat } from '../shared/pose-math.js';
+import { fingerCurl, fingerSpread, fingerVector, jointAngle } from '../shared/hand-math.js';
+import { roomLayout, slotOffsetX } from '../shared/room-layout.js';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import {
@@ -2128,6 +2131,107 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(setupPageI18n({ doc, storage, navigatorLanguage: 'en-US' }).i18n.lang, 'ja');
   // No toggle button and no document must not throw.
   setupPageI18n({ doc: { documentElement: {}, getElementById: () => null, querySelectorAll: () => [] }, storage });
+}
+
+{
+  // Pure logic extracted from tracker.js / viewer.js (#263). These were
+  // previously unreachable from any test: tracker.js needs a DOM, and viewer.js
+  // builds a WebGLRenderer at module scope, so neither file can be imported in
+  // Node at all.
+
+  // mat4ToQuat: identity in, identity out.
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const q = mat4ToQuat(identity);
+  assert.ok(Math.abs(Math.abs(q[3]) - 1) < 1e-9, `identity matrix must give the identity quaternion, got ${q}`);
+  assert.ok(Math.hypot(q[0], q[1], q[2]) < 1e-9, 'identity matrix must have no vector part');
+
+  // Each branch of the trace/major-diagonal dispatch must round-trip a known
+  // rotation. Column-major 180-degree turns about each axis.
+  const rot180 = {
+    x: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1],
+    y: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1],
+    z: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+  };
+  for (const [axis, matrix] of Object.entries(rot180)) {
+    const quat = mat4ToQuat(matrix);
+    const index = { x: 0, y: 1, z: 2 }[axis];
+    assert.ok(Math.abs(Math.abs(quat[index]) - 1) < 1e-6, `180deg about ${axis} must load axis ${index}, got ${quat}`);
+    assert.ok(Math.abs(quat[3]) < 1e-6, `180deg about ${axis} must have zero w, got ${quat}`);
+  }
+
+  // Every result is normalized, and a short/sparse matrix degrades to a usable
+  // rotation instead of NaN.
+  for (const matrix of [identity, rot180.x, rot180.y, rot180.z, [], [0, 0, 0]]) {
+    const quat = mat4ToQuat(matrix);
+    assert.ok(quat.every(Number.isFinite), `mat4ToQuat must never return NaN, got ${quat}`);
+    assert.ok(Math.abs(Math.hypot(...quat) - 1) < 1e-9, `mat4ToQuat must return a unit quaternion, got ${quat}`);
+  }
+
+  // applyPitchOffset: no-op for zero/non-finite, and two half-turns compose to a
+  // full turn (which is -identity, the same rotation).
+  const base = [0, 0, 0, 1];
+  assert.equal(applyPitchOffset(base, 0), base, 'a zero offset must return the input untouched');
+  assert.equal(applyPitchOffset(base, Number.NaN), base, 'a non-finite offset must return the input untouched');
+  const quarter = applyPitchOffset(base, Math.PI / 2);
+  assert.ok(Math.abs(quarter[0] - Math.SQRT1_2) < 1e-9 && Math.abs(quarter[3] - Math.SQRT1_2) < 1e-9,
+    `a quarter turn about X must be (0.707, 0, 0, 0.707), got ${quarter}`);
+  const half = applyPitchOffset(applyPitchOffset(base, Math.PI / 2), Math.PI / 2);
+  assert.ok(Math.abs(Math.abs(half[0]) - 1) < 1e-9, `two quarter turns must compose to a half turn, got ${half}`);
+  assert.ok(Math.abs(Math.hypot(...applyPitchOffset([0.3, 0.2, 0.1, 0.9], 0.4)) - 1) < 1e-9,
+    'applyPitchOffset must renormalize');
+
+  // Finger geometry. A straight chain has no curl; a folded one approaches 1.
+  const straight = [{ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 2, z: 0 }, { x: 0, y: 3, z: 0 }];
+  const folded = [{ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }];
+  const chain = [0, 1, 2, 3];
+  assert.ok(fingerCurl(straight, chain) < 1e-9, 'a straight finger must read as uncurled');
+  assert.ok(fingerCurl(folded, chain) > 0.8, 'a folded finger must read as strongly curled');
+  for (const landmarks of [straight, folded]) {
+    const curl = fingerCurl(landmarks, chain);
+    assert.ok(curl >= 0 && curl <= 1, `curl must stay in 0..1, got ${curl}`);
+  }
+  // Coincident landmarks would divide by zero; the guard keeps it finite.
+  const degenerate = Array.from({ length: 4 }, () => ({ x: 0, y: 0, z: 0 }));
+  assert.ok(Number.isFinite(fingerCurl(degenerate, chain)), 'coincident landmarks must not produce NaN');
+  // Coincident points make both segments zero-length; the denominator guard
+  // turns that into acos(0) = PI/2, which is finite and harmless.
+  assert.equal(jointAngle({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }), Math.PI / 2,
+    'a fully degenerate joint stays finite');
+
+  assert.deepEqual(fingerVector(straight, [0, 2]), { x: 0, y: 2, z: 0 });
+  // Spread is signed and clamped: mirrored fingers give opposite signs.
+  const middleRef = { x: 0, y: 1 };
+  const leftward = [{ x: 0, y: 0, z: 0 }, { x: -1, y: 1, z: 0 }];
+  const rightward = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 0 }];
+  const spreadLeft = fingerSpread(leftward, [0, 1], middleRef);
+  const spreadRight = fingerSpread(rightward, [0, 1], middleRef);
+  assert.ok(spreadLeft * spreadRight < 0, `mirrored fingers must spread in opposite directions, got ${spreadLeft} and ${spreadRight}`);
+  for (const value of [spreadLeft, spreadRight]) {
+    assert.ok(Math.abs(value) <= 1.5, `spread must clamp to +/-1.5, got ${value}`);
+  }
+
+  // Room layout: a solo avatar is full size, crowds shrink but never past the floor.
+  assert.deepEqual(roomLayout(1), { scale: 1, spacing: 0.78 });
+  assert.equal(roomLayout(2).scale, 0.9);
+  assert.equal(roomLayout(5).spacing, 0.58, 'rooms over four participants tighten the spacing');
+  for (const count of [0, 1, 2, 3, 8, 20, 100]) {
+    const { scale, spacing } = roomLayout(count);
+    assert.ok(scale >= 0.58 && scale <= 1, `scale must stay in 0.58..1, got ${scale} for ${count}`);
+    assert.ok(spacing > 0, `spacing must stay positive, got ${spacing} for ${count}`);
+  }
+  assert.deepEqual(roomLayout(Number.NaN), roomLayout(0), 'a non-finite count must not produce NaN layout');
+
+  // Slots stay centred on the origin whatever the participant count.
+  for (const count of [1, 2, 3, 4, 7]) {
+    const { spacing } = roomLayout(count);
+    const offsets = Array.from({ length: count }, (_, slot) => slotOffsetX(slot, count, spacing));
+    const centre = offsets.reduce((sum, value) => sum + value, 0) / count;
+    assert.ok(Math.abs(centre) < 1e-9, `slots must be centred for ${count} participants, got ${offsets}`);
+    for (let i = 1; i < offsets.length; i += 1) {
+      assert.ok(offsets[i] > offsets[i - 1], 'slots must increase left to right');
+    }
+  }
+  assert.equal(slotOffsetX(0, 1, 0.78), 0, 'a solo participant sits at the origin');
 }
 
 {
