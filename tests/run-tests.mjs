@@ -2043,4 +2043,48 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(attrEl.getAttribute('aria-label'), 'Switch to Japanese');
 }
 
+{
+  // The landing entry module must survive a bare page load. It shipped broken
+  // once (`renderLanguage()` read `running` from its temporal dead zone, which
+  // aborted the whole module and left the demo button inert), so load it here
+  // against a stubbed DOM to catch any top-level throw.
+  const listeners = new Map();
+  const stubElement = () => ({
+    textContent: '',
+    hidden: false,
+    style: {},
+    classList: { add() {}, remove() {}, toggle() {} },
+    dataset: {},
+    getContext: () => new Proxy({}, { get: () => () => {} }),
+    getAttribute: () => null,
+    setAttribute() {},
+    addEventListener(type, fn) { listeners.set(type, fn); },
+    play: () => Promise.resolve(),
+    querySelectorAll: () => [],
+  });
+  const documentElement = { lang: '' };
+  const restore = [];
+  const stub = (name, value) => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+    restore.push(() => (previous ? Object.defineProperty(globalThis, name, previous) : delete globalThis[name]));
+  };
+  stub('document', {
+    documentElement,
+    getElementById: () => stubElement(),
+    querySelectorAll: () => [],
+    addEventListener() {},
+  });
+  stub('navigator', { language: 'ja-JP', mediaDevices: { getUserMedia: () => Promise.reject(new Error('no camera')) } });
+  stub('localStorage', { getItem: () => null, setItem() {} });
+  stub('requestAnimationFrame', () => 0);
+  stub('cancelAnimationFrame', () => {});
+  try {
+    await import('../landing/app.js');
+  } finally {
+    for (const undo of restore.reverse()) undo();
+  }
+  assert.equal(documentElement.lang, 'ja', 'landing bootstrap applies the detected language to <html lang>');
+}
+
 console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, i18n, and shortcut tests passed.`);
