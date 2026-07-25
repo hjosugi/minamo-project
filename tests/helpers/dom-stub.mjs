@@ -98,6 +98,32 @@ export function createStubElement(tagName = 'div', id = '') {
   return element;
 }
 
+// A page can start async work during import (pairing requests, camera
+// enumeration) that outlives the stubbed window. When such a continuation
+// touches a global after it is restored it rejects with "document is not
+// defined", and Node kills the entire suite with a bare stack that names no
+// page — an unexplained crash rather than a test failure.
+//
+// Installing a process-level listener stops Node from aborting and records the
+// reason instead. The listener is intentionally never removed: a late rejection
+// can surface long after the call that caused it, which is exactly the case
+// that used to be untraceable. Callers assert on takeLateFailures().
+const lateFailures = [];
+let lateFailureCaptureArmed = false;
+
+function armLateFailureCapture() {
+  if (lateFailureCaptureArmed) return;
+  lateFailureCaptureArmed = true;
+  process.on('unhandledRejection', (reason) => {
+    lateFailures.push(reason instanceof Error ? (reason.stack ?? reason.message) : String(reason));
+  });
+}
+
+/** Return and clear everything that escaped a stubbed page load so far. */
+export function takeLateFailures() {
+  return lateFailures.splice(0, lateFailures.length);
+}
+
 /**
  * Install stub browser globals, run `body`, then restore the originals.
  * Returns whatever `body` resolves to, plus the element registry for assertions.
@@ -187,12 +213,11 @@ export async function withStubbedDom(body, options = {}) {
       : Reflect.deleteProperty(globalThis, name)));
   }
 
+  armLateFailureCapture();
   try {
     const result = await body({ document: doc, documentElement, elements, byId });
-    // A page can kick off async work during import (pairing requests, camera
-    // enumeration). Let those settle while the stubs are still installed, so a
-    // late continuation fails against the stub rather than against a restored
-    // global — which would surface as a confusing "document is not defined".
+    // Let async work started during import settle while the stubs are still
+    // installed, so a continuation sees the stub rather than a restored global.
     for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
     return { result, elements, documentElement };
   } finally {
