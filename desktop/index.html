@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
-    <title>Minamo Studio</title>
+    <title data-i18n="desktop.ui.title">Minamo Studio</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -12,140 +12,143 @@
       <header class="topbar">
         <div>
           <span class="eyebrow">Minamo Studio</span>
-          <h1>Desktop Control</h1>
+          <h1 data-i18n="desktop.ui.heading">Desktop Control</h1>
         </div>
-        <div class="status-strip" aria-label="runtime status">
-          <span id="runtimeStatus" class="status">web preview</span>
-          <span id="offlineStatus" class="status ok">offline pages</span>
-          <span id="cameraStatus" class="status warn">virtual camera</span>
+        <div class="topbar-aside">
+          <div class="status-strip" data-i18n-attr="aria-label:desktop.ui.aria.runtimeStatus" aria-label="runtime status">
+            <span id="runtimeStatus" class="status" data-i18n="desktop.ui.status.webPreview">web preview</span>
+            <span id="offlineStatus" class="status ok" data-i18n="desktop.ui.status.offlinePages">offline pages</span>
+            <span id="cameraStatus" class="status warn" data-i18n="desktop.ui.status.virtualCamera">virtual camera</span>
+          </div>
+          <button id="langToggle" type="button" class="lang-toggle" data-i18n="lang.toggle" data-i18n-attr="aria-label:lang.toggle.aria">日本語</button>
         </div>
       </header>
 
-      <section class="workbench" aria-label="desktop controls">
+      <section class="workbench" data-i18n-attr="aria-label:desktop.ui.aria.controls" aria-label="desktop controls">
         <div class="launcher-panel">
           <div class="section-heading">
-            <span class="eyebrow">Launch</span>
-            <h2>Workspace</h2>
+            <span class="eyebrow" data-i18n="desktop.ui.eyebrow.launch">Launch</span>
+            <h2 data-i18n="desktop.ui.heading.workspace">Workspace</h2>
           </div>
           <div class="launch-grid">
             <button id="btnOpenAvatar" class="launch-button native-avatar-button" type="button">
               <span class="button-mark">AV</span>
-              <span>Open Avatar</span>
+              <span data-i18n="desktop.ui.btn.openAvatar">Open Avatar</span>
             </button>
             <button class="launch-button" type="button" data-command="open_tracker" data-fallback="../tracker/">
               <span class="button-mark">IN</span>
-              <span>Tracker</span>
+              <span data-i18n="desktop.ui.btn.tracker">Tracker</span>
             </button>
             <button class="launch-button" type="button" data-command="open_viewer" data-fallback="../viewer/">
               <span class="button-mark">OUT</span>
-              <span>Viewer</span>
+              <span data-i18n="desktop.ui.btn.viewer">Viewer</span>
             </button>
             <button class="launch-button" type="button" data-command="open_replay" data-fallback="../replay/">
               <span class="button-mark">REC</span>
-              <span>Replay</span>
+              <span data-i18n="desktop.ui.btn.replay">Replay</span>
             </button>
           </div>
-          <div id="pageList" class="page-list" aria-label="bundled pages"></div>
+          <div id="pageList" class="page-list" data-i18n-attr="aria-label:desktop.ui.aria.bundledPages" aria-label="bundled pages"></div>
         </div>
 
         <div class="monitor-panel">
           <div class="section-heading">
-            <span class="eyebrow">Signal</span>
-            <h2>KGM1 Monitor</h2>
+            <span class="eyebrow" data-i18n="desktop.ui.eyebrow.signal">Signal</span>
+            <h2 data-i18n="desktop.ui.heading.monitor">KGM1 Monitor</h2>
           </div>
-          <canvas id="signalCanvas" width="960" height="320" aria-label="motion signal preview"></canvas>
+          <canvas id="signalCanvas" width="960" height="320" data-i18n-attr="aria-label:desktop.ui.aria.signalPreview" aria-label="motion signal preview"></canvas>
           <div class="meter-row">
             <div>
-              <span class="meter-label">tracking</span>
+              <span class="meter-label" data-i18n="desktop.ui.meter.tracking">tracking</span>
               <strong id="trackingMeter">local</strong>
             </div>
             <div>
-              <span class="meter-label">relay</span>
-              <strong id="relayMeter">idle</strong>
+              <span class="meter-label" data-i18n="desktop.ui.meter.relay">relay</span>
+              <strong id="relayMeter" data-i18n="desktop.ui.meter.idle">idle</strong>
             </div>
             <div>
-              <span class="meter-label">render</span>
-              <strong id="renderMeter">ready</strong>
+              <span class="meter-label" data-i18n="desktop.ui.meter.render">render</span>
+              <strong id="renderMeter" data-i18n="desktop.render.ready">ready</strong>
             </div>
           </div>
         </div>
 
         <div class="camera-panel">
           <div class="section-heading">
-            <span class="eyebrow">Output</span>
-            <h2>Virtual Camera</h2>
+            <span class="eyebrow" data-i18n="desktop.ui.eyebrow.output">Output</span>
+            <h2 data-i18n="desktop.ui.heading.virtualCamera">Virtual Camera</h2>
           </div>
           <dl class="status-table">
             <div>
-              <dt>OS</dt>
-              <dd id="vcOs">detecting</dd>
+              <dt data-i18n="desktop.ui.vc.os">OS</dt>
+              <dd id="vcOs" data-i18n="desktop.ui.vc.detecting">detecting</dd>
             </div>
             <div>
-              <dt>Backend</dt>
-              <dd id="vcBackend">detecting</dd>
+              <dt data-i18n="desktop.ui.vc.backend">Backend</dt>
+              <dd id="vcBackend" data-i18n="desktop.ui.vc.detecting">detecting</dd>
             </div>
             <div>
-              <dt>Device</dt>
-              <dd id="vcDevice">detecting</dd>
+              <dt data-i18n="desktop.ui.vc.device">Device</dt>
+              <dd id="vcDevice" data-i18n="desktop.ui.vc.detecting">detecting</dd>
             </div>
             <div>
-              <dt>State</dt>
-              <dd id="vcState">detecting</dd>
+              <dt data-i18n="desktop.ui.vc.state">State</dt>
+              <dd id="vcState" data-i18n="desktop.ui.vc.detecting">detecting</dd>
             </div>
           </dl>
           <div class="action-row">
-            <button id="refreshStatus" class="secondary-button" type="button">Refresh</button>
-            <a class="secondary-link" href="../docs/product/desktop-app.md">Desktop guide</a>
+            <button id="refreshStatus" class="secondary-button" type="button" data-i18n="desktop.ui.btn.refresh">Refresh</button>
+            <a class="secondary-link" href="../docs/product/desktop-app.md" data-i18n="desktop.ui.link.guide">Desktop guide</a>
           </div>
         </div>
 
         <section class="pairing-panel" aria-labelledby="pairingHeading">
           <div class="pairing-heading">
             <div class="section-heading">
-              <span class="eyebrow">Phone capture</span>
-              <h2 id="pairingHeading">Pair a tracker</h2>
+              <span class="eyebrow" data-i18n="desktop.ui.eyebrow.phoneCapture">Phone capture</span>
+              <h2 id="pairingHeading" data-i18n="desktop.ui.heading.pairTracker">Pair a tracker</h2>
             </div>
             <div class="pairing-state" aria-live="polite">
-              <strong id="pairingCountdown">not generated</strong>
-              <span id="pairingStatus">Set a phone-accessible tracker URL, then generate a QR.</span>
+              <strong id="pairingCountdown" data-i18n="desktop.pairing.notGenerated">not generated</strong>
+              <span id="pairingStatus" data-i18n="desktop.pairing.setUrlFirst">Set a phone-accessible tracker URL, then generate a QR.</span>
             </div>
           </div>
 
           <form id="pairingForm" class="pairing-layout">
             <div class="pairing-config">
               <label class="pairing-field">
-                <span>Room</span>
+                <span data-i18n="desktop.ui.field.room">Room</span>
                 <input id="pairingRoom" name="room" type="text" value="phone-stage" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" autocomplete="off" required />
               </label>
               <label class="pairing-field pairing-field-wide">
-                <span>Phone tracker URL</span>
+                <span data-i18n="desktop.ui.field.trackerUrl">Phone tracker URL</span>
                 <input id="pairingTrackerBase" name="trackerBase" type="url" inputmode="url" autocomplete="off" spellcheck="false" required />
               </label>
               <label class="pairing-field pairing-field-wide">
-                <span>Secure WebSocket relay / fallback URL</span>
+                <span data-i18n="desktop.ui.field.relayUrl">Secure WebSocket relay / fallback URL</span>
                 <input id="pairingRelayUrl" name="relayUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="wss://relay.example/ws" required />
               </label>
               <label class="pairing-check pairing-field-wide">
                 <input id="pairingPreferWt" name="preferWt" type="checkbox" />
-                <span>Try WebTransport first when the phone supports it</span>
+                <span data-i18n="desktop.ui.check.preferWt">Try WebTransport first when the phone supports it</span>
               </label>
               <label class="pairing-field pairing-field-wide">
-                <span>WebTransport URL (optional)</span>
+                <span data-i18n="desktop.ui.field.wtUrl">WebTransport URL (optional)</span>
                 <input id="pairingWtUrl" name="wtUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://relay.example:4433" />
               </label>
               <label class="pairing-field pairing-field-wide">
-                <span>WebTransport certificate SHA-256 (optional)</span>
+                <span data-i18n="desktop.ui.field.wtHash">WebTransport certificate SHA-256 (optional)</span>
                 <input id="pairingWtHash" name="wtHash" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="64 hexadecimal characters" />
               </label>
               <label class="pairing-field">
-                <span>Phone camera</span>
+                <span data-i18n="desktop.ui.field.camera">Phone camera</span>
                 <select id="pairingCamera" name="camera">
-                  <option value="user">Front</option>
-                  <option value="environment">Back</option>
+                  <option value="user" data-i18n="desktop.ui.camera.front">Front</option>
+                  <option value="environment" data-i18n="desktop.ui.camera.back">Back</option>
                 </select>
               </label>
               <label class="pairing-field">
-                <span>Resolution</span>
+                <span data-i18n="desktop.ui.field.resolution">Resolution</span>
                 <select id="pairingResolution" name="resolution">
                   <option value="720p">720p</option>
                   <option value="1080p">1080p</option>
@@ -153,59 +156,59 @@
                 </select>
               </label>
               <label class="pairing-field">
-                <span>Frame rate</span>
+                <span data-i18n="desktop.ui.field.frameRate">Frame rate</span>
                 <select id="pairingFps" name="fps">
                   <option value="60">60 fps</option>
                   <option value="30">30 fps</option>
                 </select>
               </label>
               <label class="pairing-field">
-                <span>Token lifetime</span>
+                <span data-i18n="desktop.ui.field.tokenLifetime">Token lifetime</span>
                 <select id="pairingTtl" name="ttl">
-                  <option value="300">5 minutes</option>
-                  <option value="120">2 minutes</option>
-                  <option value="600">10 minutes</option>
+                  <option value="300" data-i18n="desktop.ui.ttl.5m">5 minutes</option>
+                  <option value="120" data-i18n="desktop.ui.ttl.2m">2 minutes</option>
+                  <option value="600" data-i18n="desktop.ui.ttl.10m">10 minutes</option>
                 </select>
               </label>
               <label class="pairing-check">
                 <input id="pairingMirror" name="mirror" type="checkbox" checked />
-                <span>Mirror preview</span>
+                <span data-i18n="desktop.ui.check.mirror">Mirror preview</span>
               </label>
               <div class="pairing-actions pairing-field-wide">
-                <button id="btnGeneratePairing" class="primary-button" type="submit" aria-keyshortcuts="Control+Enter Meta+Enter">Generate QR</button>
-                <button id="btnExpirePairing" class="secondary-button" type="button" disabled>Expire now</button>
+                <button id="btnGeneratePairing" class="primary-button" type="submit" aria-keyshortcuts="Control+Enter Meta+Enter" data-i18n="desktop.pairing.generate">Generate QR</button>
+                <button id="btnExpirePairing" class="secondary-button" type="button" disabled data-i18n="desktop.ui.btn.expireNow">Expire now</button>
               </div>
-              <p class="pairing-help pairing-field-wide">Enter submits the form; Ctrl/⌘+Enter regenerates from anywhere in this panel. On HTTPS, WebTransport falls back only to WSS—never plain WS or a silent local channel. Pairing sends motion data only.</p>
+              <p class="pairing-help pairing-field-wide" data-i18n="desktop.ui.help.pairing">Enter submits the form; Ctrl/⌘+Enter regenerates from anywhere in this panel. On HTTPS, WebTransport falls back only to WSS—never plain WS or a silent local channel. Pairing sends motion data only.</p>
             </div>
 
             <div class="qr-card">
               <div id="pairingQrShell" class="qr-shell" data-state="empty">
-                <canvas id="pairingQr" width="300" height="300" role="img" aria-label="Phone tracker pairing QR not generated">
+                <canvas id="pairingQr" width="300" height="300" role="img" data-i18n-attr="aria-label:desktop.ui.aria.qrEmpty" aria-label="Phone tracker pairing QR not generated">
                   Use the accessible tracker link beside this QR if scanning is unavailable.
                 </canvas>
-                <p id="pairingQrEmpty">Generate a short-lived pairing QR</p>
+                <p id="pairingQrEmpty" data-i18n="desktop.pairing.qrEmpty">Generate a short-lived pairing QR</p>
               </div>
-              <p class="qr-warning">The QR contains a secret token. Do not share an unredacted screenshot.</p>
+              <p class="qr-warning" data-i18n="desktop.ui.help.qrWarning">The QR contains a secret token. Do not share an unredacted screenshot.</p>
             </div>
 
-            <div class="pairing-links" aria-label="Pairing links">
+            <div class="pairing-links" data-i18n-attr="aria-label:desktop.ui.aria.pairingLinks" aria-label="Pairing links">
               <div class="pairing-link-card">
-                <span class="meter-label">Phone tracker</span>
-                <code id="trackerUrlPreview">not generated</code>
+                <span class="meter-label" data-i18n="desktop.ui.link.phoneTracker">Phone tracker</span>
+                <code id="trackerUrlPreview" data-i18n="desktop.pairing.notGenerated">not generated</code>
                 <div class="pairing-link-actions">
-                  <a id="openTrackerPairing" class="secondary-link" aria-disabled="true">Open tracker</a>
-                  <button id="btnCopyTrackerUrl" class="secondary-button" type="button" disabled>Copy tracker URL</button>
+                  <a id="openTrackerPairing" class="secondary-link" aria-disabled="true" data-i18n="desktop.ui.btn.openTracker">Open tracker</a>
+                  <button id="btnCopyTrackerUrl" class="secondary-button" type="button" disabled data-i18n="desktop.ui.btn.copyTrackerUrl">Copy tracker URL</button>
                 </div>
               </div>
               <div class="pairing-link-card">
-                <span class="meter-label">Viewer</span>
-                <code id="viewerUrlPreview">not generated</code>
+                <span class="meter-label" data-i18n="desktop.ui.link.viewer">Viewer</span>
+                <code id="viewerUrlPreview" data-i18n="desktop.pairing.notGenerated">not generated</code>
                 <div class="pairing-link-actions">
-                  <a id="openViewerPairing" class="secondary-link" aria-disabled="true">Open viewer</a>
-                  <button id="btnCopyViewerUrl" class="secondary-button" type="button" disabled>Copy viewer URL</button>
+                  <a id="openViewerPairing" class="secondary-link" aria-disabled="true" data-i18n="desktop.ui.btn.openViewer">Open viewer</a>
+                  <button id="btnCopyViewerUrl" class="secondary-button" type="button" disabled data-i18n="desktop.ui.btn.copyViewerUrl">Copy viewer URL</button>
                 </div>
               </div>
-              <p class="pairing-help">Visible link text is token-redacted. Copy actions include the live token and remain disabled after expiry.</p>
+              <p class="pairing-help" data-i18n="desktop.ui.help.links">Visible link text is token-redacted. Copy actions include the live token and remain disabled after expiry.</p>
             </div>
           </form>
         </section>

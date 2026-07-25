@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Minamo Replay</title>
+  <title data-i18n="replay.ui.title">Minamo Replay</title>
   <link rel="stylesheet" href="../assets/minamo.css" />
 </head>
 <body>
@@ -11,54 +11,57 @@
     <span class="wordmark">Minamo</span>
     <span class="page-name">replay</span>
     <span class="spacer"></span>
+    <button id="langToggle" type="button" class="lang-toggle" data-i18n="lang.toggle" data-i18n-attr="aria-label:lang.toggle.aria">日本語</button>
+    <!-- statusChip has no data-i18n: replay.js renders it from a key it can
+         replay, so a language toggle keeps the live message on screen. -->
     <span class="status-chip" id="statusChip" data-state="idle">idle</span>
   </header>
 
   <main class="layout">
     <section class="panel">
-      <h2><span class="dot pose"></span>KGM motion recording</h2>
+      <h2><span class="dot pose"></span><span data-i18n="replay.ui.heading">KGM motion recording</span></h2>
       <div class="form-grid">
         <div class="field">
-          <span>room</span>
+          <span data-i18n="replay.ui.field.room">room</span>
           <input id="inpRoom" type="text" value="demo" />
         </div>
         <div class="field">
-          <span>room token</span>
+          <span data-i18n="replay.ui.field.roomToken">room token</span>
           <input id="inpToken" type="password" autocomplete="off" />
         </div>
         <div class="field wide">
-          <span>recording</span>
+          <span data-i18n="replay.ui.field.recording">recording</span>
           <input id="fileReplay" type="file" accept=".kgm,.jsonl,.ndjson,application/x-ndjson,text/plain" />
         </div>
       </div>
       <div class="controls">
-        <button id="btnPlay" class="primary" disabled>Play</button>
-        <button id="btnPause" disabled>Pause</button>
-        <button id="btnReset" disabled>Reset</button>
-        <button id="btnExportVrma" disabled>Export .vrma</button>
-        <a id="lnkViewer" href="../viewer/?room=demo" target="_blank">Open viewer</a>
+        <button id="btnPlay" class="primary" disabled data-i18n="replay.ui.btn.play">Play</button>
+        <button id="btnPause" disabled data-i18n="replay.ui.btn.pause">Pause</button>
+        <button id="btnReset" disabled data-i18n="replay.ui.btn.reset">Reset</button>
+        <button id="btnExportVrma" disabled data-i18n="replay.ui.btn.exportVrma">Export .vrma</button>
+        <a id="lnkViewer" href="../viewer/?room=demo" target="_blank" data-i18n="replay.ui.link.viewer">Open viewer</a>
       </div>
       <div class="form-grid compact">
         <div class="field">
-          <span>trim start</span>
+          <span data-i18n="replay.ui.field.trimStart">trim start</span>
           <input id="inpTrimStart" type="number" min="0" step="0.01" value="0" />
         </div>
         <div class="field">
-          <span>trim end</span>
+          <span data-i18n="replay.ui.field.trimEnd">trim end</span>
           <input id="inpTrimEnd" type="number" min="0" step="0.01" value="0" />
         </div>
-        <label class="check"><input type="checkbox" id="chkVrmaLoop" />Loop clip</label>
+        <label class="check"><input type="checkbox" id="chkVrmaLoop" /><span data-i18n="replay.ui.check.loopClip">Loop clip</span></label>
       </div>
       <div class="stats">
-        <span>frames <b id="statFrames">0</b></span>
-        <span>cursor <b id="statCursor">0</b></span>
-        <span>duration <b id="statDuration">0.0</b>s</span>
+        <span><span data-i18n="replay.ui.stat.frames">frames</span> <b id="statFrames">0</b></span>
+        <span><span data-i18n="replay.ui.stat.cursor">cursor</span> <b id="statCursor">0</b></span>
+        <span><span data-i18n="replay.ui.stat.duration">duration</span> <b id="statDuration">0.0</b>s</span>
       </div>
       <div class="validation-panel" id="replayValidation" data-state="idle" aria-live="polite">
-        <strong id="replayValidationSummary">No recording loaded.</strong>
+        <strong id="replayValidationSummary" data-i18n="replay.validation.noRecording">No recording loaded.</strong>
         <ul class="error-list" id="replayErrors"></ul>
       </div>
-      <p class="note">Replays tracker .kgm or JSONL locally through BroadcastChannel. No upload is performed.</p>
+      <p class="note" data-i18n="replay.ui.note">Replays tracker .kgm or JSONL locally through BroadcastChannel. No upload is performed.</p>
     </section>
   </main>
 

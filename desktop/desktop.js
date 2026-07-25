@@ -6,10 +6,28 @@ import {
   parsePairingRoom,
   redactPairingUrl,
 } from '../shared/pairing.js';
-import { createI18n, loadLanguage } from '../shared/i18n.js';
+import { setupPageI18n } from '../shared/i18n.js';
 
-// Runtime EN/JA localization for status/error strings (#267).
-const tr = createI18n({ lang: loadLanguage(globalThis.localStorage, navigator.language) }).t;
+// Runtime EN/JA localization (#267): static markup carries data-i18n keys and
+// `tr` localizes everything rendered from here. Those imperative renders run
+// after applyTranslations, so a toggle replays them.
+// `bootDone` must be declared above setupPageI18n, which renders synchronously:
+// reading it from the temporal dead zone would abort the module.
+let bootDone = false;
+const { t: tr } = setupPageI18n({
+  onRender: () => {
+    if (!bootDone) return;
+    if (lastPairingStatus) setPairingStatus(lastPairingStatus.key, lastPairingStatus.params);
+    if (lastStatus) renderStatus(lastStatus);
+    refreshPairingLabels();
+  },
+});
+
+// The pairing status line and the last desktop status payload are remembered so
+// a language toggle can re-render them instead of stranding stale English.
+let lastPairingStatus = null;
+let lastStatus = null;
+let lastInactiveLabelKey = '';
 
 const invoke = window.__TAURI__?.core?.invoke;
 
@@ -67,13 +85,14 @@ function renderPages(pages) {
     const name = document.createElement('span');
     name.textContent = page.name;
     const state = document.createElement('span');
-    state.textContent = page.bundled ? 'bundled' : 'missing';
+    state.textContent = tr(page.bundled ? 'desktop.ui.page.bundled' : 'desktop.ui.page.missing');
     row.append(name, state);
     list.append(row);
   }
 }
 
 function renderStatus(status) {
+  lastStatus = status;
   setText('runtimeStatus', status.runtime);
   renderPages(status.pages || []);
 
@@ -212,7 +231,7 @@ function initializePhonePairing() {
     generatePhonePairing(event);
   });
   $('pairingForm')?.addEventListener('input', () => {
-    if (pairingIsActive()) setPairingStatus('Settings changed. Regenerate the QR to apply them.');
+    if (pairingIsActive()) setPairingStatus('desktop.pairing.settingsChanged');
   });
   window.addEventListener('beforeunload', stopPairingTimer, { once: true });
   queueMicrotask(() => generatePhonePairing());
@@ -223,7 +242,7 @@ async function generatePhonePairing(event) {
   if (phonePairing.generating) return;
   phonePairing.generating = true;
   setPairingBusy(true);
-  setPairingStatus(phonePairing.token ? 'Regenerating a short-lived token…' : 'Requesting a short-lived token…');
+  setPairingStatus(phonePairing.token ? 'desktop.pairing.regenerating' : 'desktop.pairing.requesting');
   try {
     const room = parsePairingRoom($('pairingRoom').value);
     const trackerBase = normalizeTrackerBaseUrl($('pairingTrackerBase').value);
@@ -246,7 +265,7 @@ async function generatePhonePairing(event) {
         throw new Error('The previous relay did not confirm token expiry.');
       }
       clearPairingSecrets();
-      renderInactivePairing('expired', 'Previous pairing expired');
+      renderInactivePairing('expired', 'desktop.pairing.previousExpired');
     }
     const response = await pairingTokenRequest('POST', relayUrl, {
       room,
@@ -294,16 +313,16 @@ async function generatePhonePairing(event) {
       renderActivePairing();
       $('pairingQrShell').dataset.state = 'error';
       $('pairingQrEmpty').textContent = tr('desktop.pairing.qrFailed');
-      setPairingStatus('The token is active, but QR rendering failed. Use the accessible tracker link.');
+      setPairingStatus('desktop.pairing.qrRenderFailed');
       startPairingTimer();
       return;
     }
     renderActivePairing();
     startPairingTimer();
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to generate pairing QR.';
-    if (!pairingIsActive()) renderInactivePairing('error', 'QR unavailable');
-    setPairingStatus(message);
+    if (!pairingIsActive()) renderInactivePairing('error', 'desktop.pairing.qrUnavailable');
+    if (error instanceof Error) setPairingStatusText(error.message);
+    else setPairingStatus('desktop.pairing.generateFailed');
     $('pairingCountdown').dataset.state = 'error';
   } finally {
     phonePairing.generating = false;
@@ -314,7 +333,7 @@ async function generatePhonePairing(event) {
 async function expirePhonePairing() {
   if (!phonePairing.token) return;
   setPairingBusy(true);
-  setPairingStatus('Expiring the current pairing token…');
+  setPairingStatus('desktop.pairing.expiring');
   try {
     const response = await pairingTokenRequest('DELETE', phonePairing.relayUrl, {
       room: phonePairing.room,
@@ -322,10 +341,11 @@ async function expirePhonePairing() {
     });
     if (!response.revoked && pairingIsActive()) throw new Error('Relay did not confirm token expiry.');
     clearPairingSecrets();
-    renderInactivePairing('expired', 'Pairing token expired');
-    setPairingStatus('The token was invalidated. Generate a new QR to pair again.');
+    renderInactivePairing('expired', 'desktop.pairing.tokenExpiredLabel');
+    setPairingStatus('desktop.pairing.invalidated');
   } catch (error) {
-    setPairingStatus(error instanceof Error ? error.message : 'Unable to expire pairing token.');
+    if (error instanceof Error) setPairingStatusText(error.message);
+    else setPairingStatus('desktop.pairing.expireFailed');
   } finally {
     setPairingBusy(false);
   }
@@ -406,7 +426,10 @@ function renderActivePairing() {
   $('pairingQrEmpty').textContent = '';
   $('pairingQr').setAttribute(
     'aria-label',
-    `Phone tracker pairing QR for room ${phonePairing.room}. Token expires at ${new Date(phonePairing.expiresAt).toLocaleTimeString()}.`,
+    tr('desktop.ui.aria.qrActive', {
+      room: phonePairing.room,
+      time: new Date(phonePairing.expiresAt).toLocaleTimeString(),
+    }),
   );
   renderPairingLink('tracker', phonePairing.trackerUrl);
   renderPairingLink('viewer', phonePairing.viewerUrl);
@@ -414,12 +437,14 @@ function renderActivePairing() {
   $('btnCopyViewerUrl').disabled = false;
   $('btnExpirePairing').disabled = false;
   $('btnGeneratePairing').textContent = tr('desktop.pairing.regenerate');
-  setPairingStatus('QR ready. Scan it on the phone or use the token-redacted fallback link.');
+  setPairingStatus('desktop.pairing.qrReady');
   updatePairingCountdown();
 }
 
-function renderInactivePairing(state, label) {
+function renderInactivePairing(state, labelKey) {
   stopPairingTimer();
+  lastInactiveLabelKey = labelKey;
+  const label = tr(labelKey);
   $('pairingQrShell').dataset.state = state;
   $('pairingQrEmpty').textContent = label;
   $('pairingQr').setAttribute('aria-label', label);
@@ -431,8 +456,27 @@ function renderInactivePairing(state, label) {
   $('btnCopyViewerUrl').disabled = true;
   $('btnExpirePairing').disabled = true;
   $('btnGeneratePairing').textContent = tr('desktop.pairing.generate');
-  $('pairingCountdown').textContent = state === 'expired' ? 'expired' : 'not generated';
+  $('pairingCountdown').textContent = tr(state === 'expired' ? 'desktop.pairing.expired' : 'desktop.pairing.notGenerated');
   $('pairingCountdown').dataset.state = state;
+}
+
+// Re-apply the pairing panel's language-dependent labels without touching
+// timers or token state, so a language toggle stays side-effect free.
+function refreshPairingLabels() {
+  const active = pairingIsActive();
+  $('btnGeneratePairing').textContent = tr(active ? 'desktop.pairing.regenerate' : 'desktop.pairing.generate');
+  if (active) {
+    updatePairingCountdown();
+    return;
+  }
+  const state = $('pairingQrShell').dataset.state;
+  $('trackerUrlPreview').textContent = tr('desktop.url.notAvailable');
+  $('viewerUrlPreview').textContent = tr('desktop.url.notAvailable');
+  $('pairingCountdown').textContent = tr(state === 'expired' ? 'desktop.pairing.expired' : 'desktop.pairing.notGenerated');
+  if (lastInactiveLabelKey) {
+    $('pairingQrEmpty').textContent = tr(lastInactiveLabelKey);
+    $('pairingQr').setAttribute('aria-label', tr(lastInactiveLabelKey));
+  }
 }
 
 function renderPairingLink(kind, url) {
@@ -442,7 +486,7 @@ function renderPairingLink(kind, url) {
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
   link.setAttribute('aria-disabled', 'false');
-  link.setAttribute('aria-label', `Open ${kind} pairing URL; secret token hidden from visible text`);
+  link.setAttribute('aria-label', tr('desktop.ui.aria.openPairingUrl', { kind }));
 }
 
 function disablePairingLink(kind) {
@@ -466,15 +510,15 @@ function updatePairingCountdown() {
   const token = pairingTokenState(phonePairing.expiresAt);
   if (token.state !== 'active') {
     if (phonePairing.token) {
-      renderInactivePairing('expired', 'Pairing token expired');
-      setPairingStatus('This QR has expired. Regenerate it before pairing another device.');
+      renderInactivePairing('expired', 'desktop.pairing.tokenExpiredLabel');
+      setPairingStatus('desktop.pairing.qrExpired');
     }
     return;
   }
   const totalSeconds = Math.ceil(token.remainingMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  $('pairingCountdown').textContent = `expires in ${minutes}:${String(seconds).padStart(2, '0')}`;
+  $('pairingCountdown').textContent = tr('desktop.pairing.expiresIn', { time: `${minutes}:${String(seconds).padStart(2, '0')}` });
   $('pairingCountdown').dataset.state = 'active';
 }
 
@@ -496,15 +540,15 @@ function clearPairingSecrets() {
 
 async function copyPairingUrl(kind) {
   if (!pairingIsActive()) {
-    setPairingStatus('The pairing token has expired. Regenerate the QR first.');
+    setPairingStatus('desktop.pairing.tokenExpired');
     return;
   }
   const value = kind === 'viewer' ? phonePairing.viewerUrl : phonePairing.trackerUrl;
   try {
     await copyText(value);
-    setPairingStatus(`${capitalize(kind)} URL copied. It contains the live token; share it privately.`);
+    setPairingStatus('desktop.pairing.urlCopied', { kind: capitalize(kind) });
   } catch {
-    setPairingStatus('Clipboard access failed. Use the accessible open link instead.');
+    setPairingStatus('desktop.pairing.clipboardFailed');
   }
 }
 
@@ -532,8 +576,15 @@ function setPairingBusy(busy) {
   $('btnExpirePairing').disabled = busy || !pairingIsActive();
 }
 
-function setPairingStatus(message) {
-  $('pairingStatus').textContent = message;
+function setPairingStatus(key, params) {
+  lastPairingStatus = { key, params };
+  $('pairingStatus').textContent = tr(key, params);
+}
+
+// Upstream error text has no key to replay, so a language toggle leaves it be.
+function setPairingStatusText(text) {
+  lastPairingStatus = null;
+  $('pairingStatus').textContent = text;
 }
 
 function normalizeTrackerBaseUrl(value) {
@@ -627,3 +678,5 @@ bindNativeAvatarButton();
 drawSignal();
 refreshStatus();
 initializePhonePairing();
+
+bootDone = true;
