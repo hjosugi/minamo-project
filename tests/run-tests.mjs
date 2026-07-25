@@ -546,11 +546,32 @@ function kgm2FaceFrame(seq, overrides = {}) {
     return (performance.now() - t0) * 1000 / perfQuats.length;
   };
   measureSmallestThree(); // Let the runtime optimize the hot path before measuring.
-  const timings = Array.from({ length: 5 }, measureSmallestThree).sort((a, b) => a - b);
-  const medianUsPerQuat = timings[Math.floor(timings.length / 2)];
+  // Fastest round, not the median (#306). The median tracks machine load, so on
+  // a busy runner this failed spuriously and blocked unrelated PRs. Scheduler
+  // noise only ever *adds* time, so the fastest round is the honest estimate of
+  // how fast the code can go, while a real regression raises that floor too.
+  //
+  // Measured on this hardware: ~0.4 us/quat idle, and a deliberately injected 4x
+  // slowdown lands at ~1.6 — so the 1 us budget still catches a real regression.
+  // Under 8-way CPU saturation the median reached 1.9 (the observed flake) while
+  // the best of 25 rounds stayed at 0.57-0.77, hence the retry budget below.
+  //
+  // Rounds stop as soon as one beats the budget: an idle machine pays for a
+  // single round, and only a contended one escalates.
+  const SMALLEST_THREE_BUDGET_US = 1;
+  const SMALLEST_THREE_MAX_ROUNDS = 25;
+  const timings = [];
+  let bestUsPerQuat = Infinity;
+  while (timings.length < SMALLEST_THREE_MAX_ROUNDS && bestUsPerQuat >= SMALLEST_THREE_BUDGET_US) {
+    const round = measureSmallestThree();
+    timings.push(round);
+    bestUsPerQuat = Math.min(bestUsPerQuat, round);
+  }
   assert.ok(
-    medianUsPerQuat < 1,
-    `smallest-three JS encode+decode median ${medianUsPerQuat.toFixed(3)} us/quat; sink=${packedSink}`,
+    bestUsPerQuat < SMALLEST_THREE_BUDGET_US,
+    `smallest-three JS encode+decode best of ${timings.length} rounds was ${bestUsPerQuat.toFixed(3)} us/quat, `
+    + `over the ${SMALLEST_THREE_BUDGET_US} us budget `
+    + `(rounds: ${timings.map((value) => value.toFixed(3)).join(', ')}); sink=${packedSink}`,
   );
 
   const encoder = new Kgm2FaceEncoder({ keyframeInterval: 30 });
