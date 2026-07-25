@@ -1,0 +1,8 @@
+{
+  "all": true,
+  "include": ["shared/**/*.js"],
+  "exclude": ["**/*.test.*"],
+  "reporter": ["text", "json-summary"],
+  "report-dir": "coverage",
+  "temp-directory": "coverage/tmp"
+}

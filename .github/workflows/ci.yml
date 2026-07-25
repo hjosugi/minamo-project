@@ -29,6 +29,8 @@ jobs:
         run: pnpm lint
       - name: Run unit and structure smoke tests
         run: pnpm test
+      - name: Coverage gate for the shipped runtime
+        run: pnpm coverage
       - name: Verify repository structure
         run: pnpm verify
       - name: TypeScript strict gate

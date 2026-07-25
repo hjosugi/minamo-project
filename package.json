@@ -21,7 +21,8 @@
     "inspect:glb": "node scripts/inspect-glb.mjs",
     "pack:avatar": "node scripts/kagami-pack.mjs",
     "benchmark:drum": "tsx scripts/drum-benchmark.ts",
-    "bench:allocs": "node --expose-gc --import tsx scripts/bench-frame-allocs.ts"
+    "bench:allocs": "node --expose-gc --import tsx scripts/bench-frame-allocs.ts",
+    "coverage": "c8 node tests/run-tests.mjs && node scripts/check-coverage.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.35",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
+    "c8": "^12.0.0",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vite": "^8.1.3",
