@@ -64,14 +64,16 @@ machine actually checks today, so the split is explicit rather than assumed
 | **No raw webcam upload** | `scripts/check-privacy-invariants.mjs` |
 | Coverage floors for the shipped runtime | `scripts/check-coverage.mjs` (#263) |
 | Every page entry module loads and binds its controls | `tests/run-tests.mjs` DOM-stub smoke tests |
+| Drum benchmark runner contract and declared pass/fail thresholds | `pnpm benchmark:drum:ci` with the generated 0BSD fixture |
+| Headless motion path: sanitize/calibrate → KGM1 encode/decode → viewer order/semantic controls | `pnpm benchmark:pipeline`, best of 7 rounds, floor 10,000 frames/s (#264) |
 
 ### Not enforced, and why
 
 | Gate | Why a machine cannot decide it here |
 | --- | --- |
-| 60/30 fps performance targets | Wall-clock on a shared CI runner. Note the trap found in #316: under V8 coverage instrumentation the same code measures ~2.7x slower, so any timing gate must know whether it is running instrumented. |
+| 60/30 fps camera/render performance targets | Need MediaPipe, a real camera/GPU, and the browser render loop. The CI throughput floor covers only the deterministic headless motion path. It uses the fastest of seven rounds and skips under V8 coverage instrumentation, avoiding the ~2.7x profiler overhead found in #316. |
 | Hand reacquisition within 500 ms | Needs real camera input; the synthetic clips do not model occlusion recovery timing. |
-| Drum hit-timing threshold | `pnpm benchmark:drum` needs consented recordings that are not in the repository. |
+| Real drum detector hit-timing threshold | `pnpm benchmark:drum` needs consented recordings that are not in the repository. The generated CI fixture verifies the benchmark runner, production scorer, and threshold failure path; its deterministic adapter does not claim tracking accuracy. |
 | WebTransport latency target | Needs a real relay and network path. |
 | Mobile smoke | Needs a device. |
 | VRM + 2D visual mapping | Needs a human looking at the render; only the mapper's unit behaviour is checked. |
