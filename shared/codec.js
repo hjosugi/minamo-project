@@ -98,7 +98,7 @@ export function encodeFrame(frame) {
  * into this function without wrapping it in try/catch.
  *
  * @param {ArrayBuffer|ArrayBufferView} data
- * @returns {object|null} decoded frame, or null if the packet is not valid KGM1
+ * @returns {KgmFrame|null} decoded frame, or null if the packet is not valid KGM1
  */
 export function decodeFrame(data) {
   try {
