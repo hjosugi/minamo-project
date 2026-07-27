@@ -68,27 +68,29 @@ struct DesktopStatus {
 struct VirtualCameraStatus {
     os: &'static str,
     backend: &'static str,
-    device: String,
+    device: Option<String>,
+    device_status: &'static str,
     state: &'static str,
+    tone: &'static str,
 }
 
 #[cfg_attr(not(test), tauri::command)]
 fn desktop_status() -> DesktopStatus {
     DesktopStatus {
-        runtime: "tauri desktop",
+        runtime: "tauri",
         pages: vec![
             DesktopPage {
-                name: "Tracker",
+                name: "tracker",
                 route: "tracker/index.html",
                 bundled: true,
             },
             DesktopPage {
-                name: "Viewer",
+                name: "viewer",
                 route: "viewer/index.html",
                 bundled: true,
             },
             DesktopPage {
-                name: "Replay",
+                name: "replay",
                 route: "replay/index.html",
                 bundled: true,
             },
@@ -329,30 +331,42 @@ fn virtual_camera_backend_for(
         "linux" => VirtualCameraStatus {
             os,
             backend: "v4l2loopback",
-            device: linux_device.unwrap_or_else(|| "no /dev/video device".to_string()),
-            state: if linux_loopback_loaded {
-                "driver loaded"
+            device_status: if linux_device.is_some() {
+                "detected"
             } else {
-                "driver not loaded"
+                "not-found"
             },
+            device: linux_device,
+            state: if linux_loopback_loaded {
+                "driver-loaded"
+            } else {
+                "driver-not-loaded"
+            },
+            tone: if linux_loopback_loaded { "ok" } else { "err" },
         },
         "windows" => VirtualCameraStatus {
             os,
-            backend: "Media Foundation softcam",
-            device: "not installed".to_string(),
-            state: "backend not installed",
+            backend: "media-foundation-softcam",
+            device: None,
+            device_status: "not-installed",
+            state: "backend-not-installed",
+            tone: "err",
         },
         "macos" => VirtualCameraStatus {
             os,
-            backend: "CoreMediaIO camera extension",
-            device: "not installed".to_string(),
-            state: "extension not installed",
+            backend: "core-media-io-camera-extension",
+            device: None,
+            device_status: "not-installed",
+            state: "extension-not-installed",
+            tone: "err",
         },
         _ => VirtualCameraStatus {
             os,
             backend: "unsupported",
-            device: "not available".to_string(),
+            device: None,
+            device_status: "not-available",
             state: "unavailable",
+            tone: "err",
         },
     }
 }
@@ -430,13 +444,66 @@ mod tests {
         let status = virtual_camera_backend_for("linux", true, Some("/dev/video2".to_string()));
         assert_eq!(status.os, "linux");
         assert_eq!(status.backend, "v4l2loopback");
-        assert_eq!(status.device, "/dev/video2");
-        assert_eq!(status.state, "driver loaded");
+        assert_eq!(status.device, Some("/dev/video2".to_string()));
+        assert_eq!(status.device_status, "detected");
+        assert_eq!(status.state, "driver-loaded");
+        assert_eq!(status.tone, "ok");
+    }
+
+    #[test]
+    fn virtual_camera_status_uses_stable_localizable_codes() {
+        let cases = [
+            (
+                "linux",
+                false,
+                "v4l2loopback",
+                "not-found",
+                "driver-not-loaded",
+            ),
+            (
+                "windows",
+                false,
+                "media-foundation-softcam",
+                "not-installed",
+                "backend-not-installed",
+            ),
+            (
+                "macos",
+                false,
+                "core-media-io-camera-extension",
+                "not-installed",
+                "extension-not-installed",
+            ),
+            (
+                "other",
+                false,
+                "unsupported",
+                "not-available",
+                "unavailable",
+            ),
+        ];
+        for (os, loaded, backend, device_status, state) in cases {
+            let status = virtual_camera_backend_for(os, loaded, None);
+            assert_eq!(status.backend, backend);
+            assert_eq!(status.device, None);
+            assert_eq!(status.device_status, device_status);
+            assert_eq!(status.state, state);
+            assert_eq!(status.tone, "err");
+        }
     }
 
     #[test]
     fn desktop_status_lists_offline_pages() {
         let status = desktop_status();
+        assert_eq!(status.runtime, "tauri");
+        assert_eq!(
+            status
+                .pages
+                .iter()
+                .map(|page| page.name)
+                .collect::<Vec<_>>(),
+            vec!["tracker", "viewer", "replay"]
+        );
         let routes: Vec<_> = status.pages.iter().map(|page| page.route).collect();
         assert_eq!(
             routes,
