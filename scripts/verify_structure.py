@@ -436,7 +436,12 @@ def validate_foundation_contracts() -> None:
     for needle in ['pnpm lint', 'pnpm test', 'pnpm verify', 'pnpm typecheck:js', 'pnpm build']:
         if needle not in ci:
             add_error('.github/workflows/ci.yml', f'CI missing JavaScript gate: {needle}')
-    for needle in ['benchmark:', 'pnpm benchmark:drum:ci', 'pnpm benchmark:pipeline']:
+    for needle in [
+        'benchmark:',
+        'sudo apt-get install -y ffmpeg',
+        'pnpm benchmark:drum:ci',
+        'pnpm benchmark:pipeline',
+    ]:
         if needle not in ci:
             add_error('.github/workflows/ci.yml', f'CI missing benchmark gate: {needle}')
     if 'pnpm install --frozen-lockfile' not in ci:
