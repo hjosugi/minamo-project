@@ -8,6 +8,7 @@ import {
 } from '../shared/pairing.js';
 import { invoke as tauriInvoke, isTauri } from '@tauri-apps/api/core';
 import { setupPageI18n } from '../shared/i18n.js';
+import { localizeDesktopStatus } from './status-i18n.js';
 
 // Runtime EN/JA localization (#267): static markup carries data-i18n keys and
 // `tr` localizes everything rendered from here. Those imperative renders run
@@ -62,11 +63,11 @@ function fallbackStatus() {
   };
 }
 
-// Rebuild the payload the status panel should currently show. Anything the
-// desktop runtime supplied is replayed verbatim (still English — see #307);
-// anything we own is re-translated.
+// Rebuild the payload the status panel should currently show. Both the native
+// runtime's stable codes and the web fallback are translated on every render,
+// so a language toggle never strands stale text (#307).
 function currentStatus() {
-  if (lastStatusSource.kind === 'runtime') return lastStatusSource.status;
+  if (lastStatusSource.kind === 'runtime') return localizeDesktopStatus(lastStatusSource.status, tr);
   const base = fallbackStatus();
   if (lastStatusSource.kind === 'error') {
     return {
@@ -139,11 +140,7 @@ function renderStatus(status) {
   const cameraStatus = $('cameraStatus');
   if (cameraStatus) {
     cameraStatus.textContent = camera.state;
-    // Prefer an explicit tone; fall back to sniffing the runtime's own English
-    // state string, which is all the Tauri payload gives us today (#307).
-    const tone = camera.tone
-      ?? (/loaded|ready|visible/i.test(camera.state) ? 'ok'
-        : /not installed|unavailable/i.test(camera.state) ? 'err' : '');
+    const tone = camera.tone ?? '';
     cameraStatus.classList.toggle('ok', tone === 'ok');
     cameraStatus.classList.toggle('err', tone === 'err');
   }

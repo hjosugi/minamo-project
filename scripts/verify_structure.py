@@ -1602,9 +1602,14 @@ def validate_desktop_contracts() -> None:
     for route in ['tracker/index.html', 'viewer/index.html', 'replay/index.html']:
         if route not in tauri_lib:
             add_error('src-tauri/src/lib.rs', f'desktop app must expose bundled page route {route}')
-    for target in ['v4l2loopback', 'Media Foundation softcam', 'CoreMediaIO camera extension']:
-        if target not in tauri_lib or target not in desktop_doc:
-            add_error('src-tauri/src/lib.rs', f'missing virtual camera backend target {target}')
+    backend_targets = [
+        ('v4l2loopback', 'v4l2loopback'),
+        ('media-foundation-softcam', 'Media Foundation softcam'),
+        ('core-media-io-camera-extension', 'CoreMediaIO camera extension'),
+    ]
+    for code, label in backend_targets:
+        if code not in tauri_lib or label not in desktop_doc:
+            add_error('src-tauri/src/lib.rs', f'missing virtual camera backend target {code}')
     if 'signalCanvas' not in desktop_html or 'drawSignal' not in desktop_js:
         add_error('desktop/index.html', 'desktop shell must include the KGM1 signal monitor canvas')
     if 'Keep issue KGM-050 open' not in desktop_doc:

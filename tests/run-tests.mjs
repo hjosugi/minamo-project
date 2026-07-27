@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { takeLateFailures, withStubbedDom } from './helpers/dom-stub.mjs';
+import { localizeDesktopStatus } from '../desktop/status-i18n.js';
 import { applyPitchOffset, mat4ToQuat } from '../shared/pose-math.js';
 import { fingerCurl, fingerSpread, fingerVector, jointAngle } from '../shared/hand-math.js';
 import { roomLayout, slotOffsetX } from '../shared/room-layout.js';
@@ -2583,6 +2584,53 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     }
   }
   assert.equal(slotOffsetX(0, 1, 0.78), 0, 'a solo participant sits at the origin');
+}
+
+{
+  // The real Tauri payload carries stable codes; the desktop UI owns their
+  // language and can replay the same payload after an EN/JA toggle (#307).
+  const nativeStatus = {
+    runtime: 'tauri',
+    pages: [
+      { name: 'tracker', route: 'tracker/index.html', bundled: true },
+      { name: 'viewer', route: 'viewer/index.html', bundled: true },
+      { name: 'replay', route: 'replay/index.html', bundled: true },
+    ],
+    virtualCamera: {
+      os: 'linux',
+      backend: 'v4l2loopback',
+      device: null,
+      deviceStatus: 'not-found',
+      state: 'driver-not-loaded',
+      tone: 'err',
+    },
+  };
+  const en = localizeDesktopStatus(nativeStatus, createI18n({ lang: 'en' }).t);
+  assert.equal(en.runtime, 'Tauri desktop');
+  assert.deepEqual(en.pages.map((page) => page.name), ['Tracker', 'Viewer', 'Replay']);
+  assert.equal(en.virtualCamera.device, 'no /dev/video device');
+  assert.equal(en.virtualCamera.state, 'driver not loaded');
+  assert.equal(en.virtualCamera.tone, 'err');
+
+  const ja = localizeDesktopStatus(nativeStatus, createI18n({ lang: 'ja' }).t);
+  assert.equal(ja.runtime, 'Tauriデスクトップ');
+  assert.deepEqual(ja.pages.map((page) => page.name), ['トラッカー', 'ビューア', 'リプレイ']);
+  assert.equal(ja.virtualCamera.device, '/dev/videoデバイスなし');
+  assert.equal(ja.virtualCamera.state, 'ドライバー未読み込み');
+
+  const connected = localizeDesktopStatus({
+    ...nativeStatus,
+    virtualCamera: {
+      ...nativeStatus.virtualCamera,
+      device: '/dev/video2',
+      deviceStatus: 'detected',
+      state: 'driver-loaded',
+      tone: 'ok',
+    },
+  }, createI18n({ lang: 'ja' }).t);
+  assert.equal(connected.virtualCamera.device, '/dev/video2', 'native device paths stay verbatim');
+  assert.equal(connected.virtualCamera.state, 'ドライバー読み込み済み');
+  assert.equal(connected.virtualCamera.tone, 'ok');
 }
 
 {
