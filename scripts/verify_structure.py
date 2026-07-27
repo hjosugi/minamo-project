@@ -1512,6 +1512,12 @@ def validate_transport_contracts() -> None:
         (ROOT / 'services' / 'erlang-router' / name).exists()
         for name in ('rebar.config', 'mix.exs')
     )
+    legacy_router = ROOT / 'services' / 'erlang-router' / 'src' / 'kgm1_router.erl'
+    if legacy_router.exists() and not router_is_buildable:
+        add_error(
+            'services/erlang-router/src/kgm1_router.erl',
+            'unbuildable Erlang sketch must stay archived; restore it only as part of a buildable OTP app (#258)',
+        )
     lab_criteria = [
         line for line in kgm032.splitlines()
         if 'p99 relay latency' in line or "Node loss drops only" in line

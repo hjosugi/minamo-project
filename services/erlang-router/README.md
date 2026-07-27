@@ -1,13 +1,15 @@
 <!-- i18n: language-switcher -->
 [English](README.md) | [日本語](README.ja.md)
 
-# Erlang Router Service
+# Clustered Relay Topology Model
 
-This is the OTP-side design and load-harness area for the future clustered
-relay. The production WebTransport edge remains `relay-rs`; this service owns
-room/session fan-out semantics for large rooms.
+This directory preserves the DD-005 topology model for a possible future
+BEAM-based clustered relay. It contains no Erlang runtime or buildable OTP
+application. The earlier unbuildable `src/kgm1_router.erl` sketch was archived
+in #258 because nothing compiled, ran, or depended on it.
 
-Responsibilities:
+The production WebTransport edge remains `relay-rs`. A future implementation
+of DD-005 would own:
 
 - room/session supervision
 - KGM1 stream fanout
@@ -16,15 +18,14 @@ Responsibilities:
 - WebTransport/WebSocket gateway supervision
 - metrics
 
-The MVP can run fully in the browser. This service is for remote collaboration
-and production scaling.
+The MVP can run fully in the browser. DD-005 remains a design record for future
+remote-collaboration and production-scaling work.
 
 ## Topology simulation
 
-> **This runs no Erlang.** It is a JavaScript model of the DD-005 design, not a
-> test of `src/kgm1_router.erl`, which is not compiled or run by any path in
-> this repository. A passing run is evidence about the *design*, not about a
-> working clustered relay (#258).
+> **This runs no Erlang.** It is a JavaScript model of the DD-005 design. A
+> passing run is evidence about the *design*, not about a working clustered
+> relay (#258).
 
 Run from the repository root:
 
