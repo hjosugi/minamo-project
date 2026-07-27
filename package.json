@@ -21,6 +21,8 @@
     "inspect:glb": "node scripts/inspect-glb.mjs",
     "pack:avatar": "node scripts/kagami-pack.mjs",
     "benchmark:drum": "tsx scripts/drum-benchmark.ts",
+    "benchmark:drum:ci": "tsx scripts/drum-benchmark.ts tests/fixtures/drum-benchmark-runner.manifest.json",
+    "benchmark:pipeline": "node scripts/benchmark-motion-pipeline.mjs",
     "bench:allocs": "node --expose-gc --import tsx scripts/bench-frame-allocs.ts",
     "coverage": "c8 node tests/run-tests.mjs && node scripts/check-coverage.mjs"
   },

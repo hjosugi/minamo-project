@@ -92,6 +92,7 @@ REQUIRED = [
     'tests/fixtures/drum-benchmark-runner.manifest.json',
     'tests/fixtures/drum-benchmark-runner.mp4',
     'scripts/drum-benchmark.ts',
+    'scripts/benchmark-motion-pipeline.mjs',
     'docs/benchmarks/drum-benchmark-runner.md',
     'docs/research/multi-camera-fusion.md',
     'docs/research/phone-camera-companion.md',
@@ -395,6 +396,7 @@ def validate_dependency_guardrails() -> None:
 
 def validate_foundation_contracts() -> None:
     ci = read('.github/workflows/ci.yml')
+    pipeline_benchmark = read('scripts/benchmark-motion-pipeline.mjs')
     release_smoke = read('scripts/release-smoke.mjs')
     relay_node_package = json.loads(read('relay-node/package.json'))
     relay_node = read('relay-node/server.mjs')
@@ -407,6 +409,22 @@ def validate_foundation_contracts() -> None:
         add_error('package.json', 'packageManager must pin pnpm@11.0.0')
     if package.get('scripts', {}).get('benchmark:drum') != 'tsx scripts/drum-benchmark.ts':
         add_error('package.json', 'benchmark:drum must run the TypeScript drum benchmark runner')
+    if package.get('scripts', {}).get('benchmark:drum:ci') != 'tsx scripts/drum-benchmark.ts tests/fixtures/drum-benchmark-runner.manifest.json':
+        add_error('package.json', 'benchmark:drum:ci must run the generated fixture through the drum runner')
+    if package.get('scripts', {}).get('benchmark:pipeline') != 'node scripts/benchmark-motion-pipeline.mjs':
+        add_error('package.json', 'benchmark:pipeline must run the headless motion path guard')
+    for needle in [
+        'MIN_FRAMES_PER_SECOND = 10_000',
+        'MAX_ROUNDS = 7',
+        'process.env.NODE_V8_COVERAGE',
+        'sanitizeWeights',
+        'applyCalibrationProfile',
+        'encodeFrame',
+        'decodeFrame',
+        'semanticFaceControls',
+    ]:
+        if needle not in pipeline_benchmark:
+            add_error('scripts/benchmark-motion-pipeline.mjs', f'missing headless throughput contract: {needle}')
     if not (ROOT / 'pnpm-lock.yaml').exists():
         add_error('pnpm-lock.yaml', 'pnpm lockfile is required')
     if not (ROOT / 'pnpm-workspace.yaml').exists():
@@ -418,6 +436,14 @@ def validate_foundation_contracts() -> None:
     for needle in ['pnpm lint', 'pnpm test', 'pnpm verify', 'pnpm typecheck:js', 'pnpm build']:
         if needle not in ci:
             add_error('.github/workflows/ci.yml', f'CI missing JavaScript gate: {needle}')
+    for needle in [
+        'benchmark:',
+        'sudo apt-get install -y ffmpeg',
+        'pnpm benchmark:drum:ci',
+        'pnpm benchmark:pipeline',
+    ]:
+        if needle not in ci:
+            add_error('.github/workflows/ci.yml', f'CI missing benchmark gate: {needle}')
     if 'pnpm install --frozen-lockfile' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must install the frozen pnpm lockfile')
     if 'cargo test --locked --manifest-path relay-rs/Cargo.toml' not in ci:

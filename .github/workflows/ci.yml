@@ -42,6 +42,28 @@ jobs:
       - name: Build production bundle
         run: pnpm build
 
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.0.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install benchmark media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Exercise the synthetic drum benchmark contract and thresholds
+        run: pnpm benchmark:drum:ci
+      - name: Enforce the headless motion-pipeline throughput floor
+        run: pnpm benchmark:pipeline
+
   rust:
     runs-on: ubuntu-latest
     steps:
