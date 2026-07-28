@@ -9,6 +9,9 @@
 カメラなしでも動くUIデモから始め、実TrackerとViewerへ進めます。モックと実トラッキングの
 違いは[Pagesデモガイド](docs/PAGES_DEMO.ja.md)を参照してください。
 
+**[Minamo Studioをダウンロード](https://github.com/hjosugi/minamo-project/releases/latest)** —
+Windows、macOS、Linux向けのネイティブアプリをインストールできます。
+
 普通のwebcamひとつで、誰でも無料・低遅延でアバターを動かすための
 高精度トラッキングシステム。
 
@@ -80,6 +83,21 @@ relay-rs のCI整備はKGM-009。
 
 ### 4. ネイティブデスクトップ
 
+すぐ使えるアプリは
+[最新のGitHub Release](https://github.com/hjosugi/minamo-project/releases/latest)
+からOSに合うファイルをダウンロードします。
+
+- Windows: `.exe`（推奨）または `.msi`
+- macOS: Apple Silicon用またはIntel用の `.dmg`
+- Linux: 持ち運べる `.AppImage` または `.deb`
+
+現在の直接配布ビルドには、WindowsまたはAppleの公開信頼された開発者証明書による
+署名がまだありません。そのためWindows SmartScreenやmacOSの「プライバシーと
+セキュリティ」で確認を求められる場合があります。Linuxパッケージも未署名です。
+インストール前に[デスクトップ配布の詳細](docs/product/desktop-app.ja.md)を確認してください。
+
+開発者は同じアプリをソースから起動できます。
+
 ```sh
 pnpm desktop:check
 pnpm desktop:dev
@@ -88,7 +106,7 @@ pnpm desktop:dev
 起動した画面で **Open Avatar** を押し、`.inp`、`.inx`、`.vrm`、または
 `.glb` を選択すると、Viewerが開いてそのまま読み込みます。配布用ビルドは
 `pnpm desktop:build` で作成できます。詳細は
-[docs/product/desktop-app.md](docs/product/desktop-app.md) を参照してください。
+[docs/product/desktop-app.ja.md](docs/product/desktop-app.ja.md) を参照してください。
 
 詳しい手順: [docs/QUICKSTART.md](docs/QUICKSTART.md)
 ([日本語版](docs/QUICKSTART.ja.md))。

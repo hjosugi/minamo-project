@@ -48,7 +48,14 @@ camera, relay-token, WebTransport, or OBS smoke tests.
 - Generated files are expected and intentional.
 - No recordings, local model downloads, secrets, or temporary captures are
   committed.
+- The GitHub Release stays in draft until Linux, Windows, Apple Silicon macOS,
+  and Intel macOS installer jobs all succeed.
+- Release assets include Linux `.AppImage`/`.deb`, Windows `.exe`/`.msi`, and
+  both `aarch64` and `x86_64` macOS `.dmg` files.
+- Each native installer filename includes the version, platform, and
+  architecture; its version matches the tag.
 - Release notes mention known browser, HTTPS, WebTransport, and model fallback
   caveats.
+- Release notes and desktop docs disclose the current code-signing status.
 - Tag or deployment target points at the commit whose CI completed
   successfully.

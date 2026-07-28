@@ -6,6 +6,30 @@
 Minamo Studio is the Tauri desktop shell for the existing tracker, viewer, and
 replay tools.
 
+## Install
+
+Open the [latest GitHub Release](https://github.com/hjosugi/minamo-project/releases/latest)
+and choose the native installer for your machine:
+
+| Platform | Download | Notes |
+|---|---|---|
+| Windows x86_64 | `.exe` or `.msi` | The NSIS `.exe` is the simplest installer. |
+| macOS Apple Silicon | `aarch64` `.dmg` | For M1 and newer Macs. |
+| macOS Intel | `x86_64` `.dmg` | For Intel Macs. |
+| Linux x86_64 | `.AppImage` or `.deb` | AppImage is portable; Debian-family systems can use `.deb`. |
+
+Release assets are built by GitHub Actions from the tagged commit. The release
+remains a draft until every platform build succeeds, so a public release cannot
+silently omit one of the supported installers.
+
+These initial direct-download packages are not signed with a publicly trusted
+Windows or Apple developer certificate. Windows SmartScreen can warn before
+launch, and macOS can require approval in **System Settings > Privacy &
+Security**. macOS builds use an ad-hoc signature so Apple Silicon can launch
+the app after that approval. Linux packages are currently unsigned.
+Trusted code signing, notarization, and the signed updater remain tracked in
+[issue #251](https://github.com/hjosugi/minamo-project/issues/251).
+
 ## Commands
 
 ```sh
@@ -18,6 +42,9 @@ pnpm desktop:build
 choose an Inochi2D `.inp`/`.inx` or VRM `.vrm`/`.glb` file in the OS file
 picker, and Minamo opens the Viewer and loads it immediately. A packaged build
 is written under `src-tauri/target/release/bundle/` by default.
+
+Tagged releases build `.AppImage`/`.deb`, `.exe`/`.msi`, and both macOS `.dmg`
+architectures through `.github/workflows/release.yml`.
 
 ## Native Avatar Loading
 

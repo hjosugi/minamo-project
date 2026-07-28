@@ -7,6 +7,9 @@
 
 **[Try Minamo on GitHub Pages](https://hjosugi.github.io/minamo-project/)** — start with a camera-optional UI demo, then open the real Tracker and Viewer. See the [Pages demo guide](docs/PAGES_DEMO.md) for the difference between simulated and real tracking.
 
+**[Download Minamo Studio](https://github.com/hjosugi/minamo-project/releases/latest)** —
+install the native desktop app for Windows, macOS, or Linux.
+
 > 日本語版: [README.ja.md](README.ja.md)
 
 High-precision avatar tracking that anyone can use with a single ordinary
@@ -107,6 +110,22 @@ LAN/phone HTTPS setup: [docs/DEV_HTTPS.md](docs/DEV_HTTPS.md).
 
 ### 4. Desktop shell
 
+For the ready-to-run app, open the
+[latest GitHub Release](https://github.com/hjosugi/minamo-project/releases/latest)
+and download the installer for your OS:
+
+- Windows: `.exe` (recommended) or `.msi`
+- macOS: Apple Silicon or Intel `.dmg`
+- Linux: portable `.AppImage` or `.deb`
+
+The current direct-download builds are not yet signed by a publicly trusted
+Windows or Apple developer certificate. Windows SmartScreen or macOS
+Privacy & Security may therefore ask for confirmation. The Linux packages are
+also unsigned. See [desktop packaging details](docs/product/desktop-app.md)
+before installing.
+
+Developers can run the same app from source:
+
 ```sh
 pnpm desktop:check
 pnpm desktop:dev
@@ -114,7 +133,6 @@ pnpm desktop:dev
 
 In the native control surface, click **Open Avatar** and choose an
 `.inp`, `.inx`, `.vrm`, or `.glb`; the Viewer opens and loads it immediately.
-Desktop packaging details: [docs/product/desktop-app.md](docs/product/desktop-app.md).
 The desktop **Pair a tracker** panel issues a five-minute room token through
 `relay-node`, renders a scannable phone URL, and provides independent tracker
 and viewer copy controls. See [docs/product/phone-tracker.md](docs/product/phone-tracker.md).
