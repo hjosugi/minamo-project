@@ -13,8 +13,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  prepare:
     runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.release.outputs.id }}
     steps:
       - uses: actions/checkout@v7
 
@@ -23,10 +25,15 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          tauri_version="$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json', 'utf8')).version")"
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)"
           test "$TAG" = "v$version"
+          test "$tauri_version" = "$version"
+          test "$cargo_version" = "$version"
           test -f "docs/releases/$TAG.md"
 
-      - name: Publish GitHub Release
+      - name: Prepare draft GitHub Release
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
@@ -40,7 +47,89 @@ jobs:
           else
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
+              --draft \
               --verify-tag \
               --title "Minamo $TAG" \
               --notes-file "$notes"
           fi
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)"
+          test -n "$release_id"
+          echo "id=$release_id" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    name: desktop (${{ matrix.name }})
+    needs: prepare
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            platform: ubuntu-22.04
+            target: ''
+            args: --bundles appimage,deb
+          - name: Windows x86_64
+            platform: windows-latest
+            target: ''
+            args: --bundles nsis,msi
+          - name: macOS Apple Silicon
+            platform: macos-latest
+            target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin --bundles dmg
+          - name: macOS Intel
+            platform: macos-latest
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin --bundles dmg
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.0.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Tauri Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and upload native installers
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
+          tauriScript: pnpm exec tauri
+          args: ${{ matrix.args }}
+          retryAttempts: 1
+          uploadUpdaterJson: false
+          releaseAssetNamePattern: Minamo-Studio_[version]_[platform]_[arch][setup][ext]
+
+  publish:
+    needs:
+      - prepare
+      - desktop
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the complete GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release edit "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            --latest

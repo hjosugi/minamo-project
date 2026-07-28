@@ -5,6 +5,29 @@
 
 Minamo Studio は、既存のトラッカー、ビューワー、リプレイツールのための Tauri デスクトップシェルです。
 
+## インストール
+
+[最新のGitHub Release](https://github.com/hjosugi/minamo-project/releases/latest)
+を開き、端末に合うネイティブインストーラーを選びます。
+
+| プラットフォーム | ダウンロード | 補足 |
+|---|---|---|
+| Windows x86_64 | `.exe` または `.msi` | NSIS形式の `.exe` が最も簡単です。 |
+| macOS Apple Silicon | `aarch64` `.dmg` | M1以降のMac用です。 |
+| macOS Intel | `x86_64` `.dmg` | Intel Mac用です。 |
+| Linux x86_64 | `.AppImage` または `.deb` | AppImageは持ち運び可能で、Debian系では `.deb` も使えます。 |
+
+Releaseの配布ファイルは、タグが指すコミットからGitHub Actionsでビルドされます。
+すべてのOS向けビルドが成功するまでReleaseはドラフトのままなので、対応する
+インストーラーの一部が欠けた状態では公開されません。
+
+初期の直接配布パッケージには、WindowsまたはAppleの公開信頼された開発者証明書に
+よる署名がありません。Windows SmartScreenが起動前に警告する場合があり、macOSでは
+**システム設定 > プライバシーとセキュリティ**から許可が必要になる場合があります。
+Apple Siliconでも許可後に起動できるようmacOSビルドにはアドホック署名を付けます。
+Linuxパッケージは現在未署名です。信頼されたコード署名、公証、署名付き自動更新は
+[Issue #251](https://github.com/hjosugi/minamo-project/issues/251)で追跡します。
+
 ## コマンド
 
 ```sh
@@ -14,6 +37,10 @@ pnpm desktop:build
 ```
 
 `pnpm desktop:dev` はネイティブコントロールサーフェスを開きます。**アバターを開く**を選択し、OSファイルピッカーで Inochi2D の `.inp`/`.inx` または VRM の `.vrm`/`.glb` ファイルを選択すると、Minamo がビューワーを開き、すぐに読み込みます。パッケージ化されたビルドはデフォルトで `src-tauri/target/release/bundle/` に書き込まれます。
+
+タグ付きReleaseでは `.github/workflows/release.yml` により
+`.AppImage`/`.deb`、`.exe`/`.msi`、両方のmacOSアーキテクチャ向け `.dmg`
+をビルドします。
 
 ## ネイティブアバターの読み込み
 

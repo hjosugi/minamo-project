@@ -108,6 +108,7 @@ REQUIRED = [
     'scripts/kgm1b_codec.py',
     'scripts/release-smoke.mjs',
     '.github/workflows/ci.yml',
+    '.github/workflows/release.yml',
     '.nojekyll',
     'docker-compose.yml',
     'issues/index.csv',
@@ -123,6 +124,11 @@ REQUIRED = [
     'src-tauri/Info.plist',
     'src-tauri/tauri.conf.json',
     'src-tauri/capabilities/default.json',
+    'src-tauri/icons/32x32.png',
+    'src-tauri/icons/128x128.png',
+    'src-tauri/icons/128x128@2x.png',
+    'src-tauri/icons/icon.icns',
+    'src-tauri/icons/icon.ico',
     'src-tauri/icons/icon.png',
     'src-tauri/icons/icon.svg',
     'src-tauri/src/lib.rs',
@@ -1546,6 +1552,7 @@ def validate_transport_contracts() -> None:
 def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
+    release = read('.github/workflows/release.yml')
     release_smoke = read('scripts/release-smoke.mjs')
     vite = read('vite.config.ts')
     tauri_config = json.loads(read('src-tauri/tauri.conf.json'))
@@ -1564,6 +1571,14 @@ def validate_desktop_contracts() -> None:
     dev_dependencies = package.get('devDependencies', {})
     if '@tauri-apps/cli' not in dev_dependencies:
         add_error('package.json', 'desktop shell must pin @tauri-apps/cli')
+    app_version = package.get('version')
+    tauri_version = tauri_config.get('version')
+    cargo_version_match = re.search(r'^version = "([^"]+)"$', tauri_cargo, re.MULTILINE)
+    cargo_version = cargo_version_match.group(1) if cargo_version_match else None
+    if not app_version or tauri_version != app_version or cargo_version != app_version:
+        add_error('package.json', 'package, Tauri config, and desktop Cargo versions must match')
+    if app_version and not (ROOT / 'docs' / 'releases' / f'v{app_version}.md').is_file():
+        add_error('docs/releases', f'missing release notes for v{app_version}')
     if "desktop: page('desktop/index.html')" not in vite:
         add_error('vite.config.ts', 'Vite build must include the desktop control surface')
     for needle in [
@@ -1587,6 +1602,26 @@ def validate_desktop_contracts() -> None:
         add_error('src-tauri/tauri.conf.json', 'Tauri must package the existing Vite dist output')
     if 'icons/icon.png' not in tauri_config.get('bundle', {}).get('icon', []):
         add_error('src-tauri/tauri.conf.json', 'Linux bundles must select the square application icon explicitly')
+    for icon in ['icons/icon.icns', 'icons/icon.ico']:
+        if icon not in tauri_config.get('bundle', {}).get('icon', []):
+            add_error('src-tauri/tauri.conf.json', f'desktop bundles must include {icon}')
+    if tauri_config.get('bundle', {}).get('macOS', {}).get('signingIdentity') != '-':
+        add_error('src-tauri/tauri.conf.json', 'macOS direct downloads must use an ad-hoc signature until trusted signing is configured')
+    for needle in [
+        'tauri-apps/tauri-action@v1',
+        '--bundles appimage,deb',
+        '--bundles nsis,msi',
+        '--target aarch64-apple-darwin --bundles dmg',
+        '--target x86_64-apple-darwin --bundles dmg',
+        'releaseAssetNamePattern: Minamo-Studio_[version]_[platform]_[arch][setup][ext]',
+        '--draft=false',
+    ]:
+        if needle not in release:
+            add_error('.github/workflows/release.yml', f'release workflow missing desktop distribution contract: {needle}')
+    for path in ['README.md', 'README.ja.md', 'docs/product/desktop-app.md', 'docs/product/desktop-app.ja.md']:
+        source = read(path)
+        if 'https://github.com/hjosugi/minamo-project/releases/latest' not in source:
+            add_error(path, 'desktop install docs must link to the latest GitHub Release')
     app_config = tauri_config.get('app', {})
     # The renderer must still reach IPC, but through the @tauri-apps/api module
     # rather than the window.__TAURI__ bridge, so the bridge stays off the window
