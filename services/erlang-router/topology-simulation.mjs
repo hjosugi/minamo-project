@@ -3,8 +3,8 @@
 // IMPORTANT: this exercises **no Erlang**. It models the intended room-agent
 // topology — N nodes, newest-only local mailboxes, node-loss isolation — in
 // plain JS so the design's latency and isolation properties can be reasoned
-// about before anything is built. `src/kgm1_router.erl` is never compiled or
-// run by this file, or by anything else in the repo (#258).
+// about before anything is built. The earlier unbuildable Erlang sketch was
+// archived because nothing compiled, ran, or depended on it (#258).
 //
 // It is therefore a design model, not coverage of a relay implementation. Do
 // not read a passing run as evidence that a clustered relay works.

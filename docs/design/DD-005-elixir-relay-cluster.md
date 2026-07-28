@@ -3,7 +3,8 @@
 
 # DD-005: Elixir Clustered Relay
 
-Status: harness implemented. Backlog: KGM-032, relates to KGM-034.
+Status: design record; topology simulation implemented, relay not started.
+Backlog: KGM-032, relates to KGM-034.
 
 ## Problem
 

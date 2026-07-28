@@ -168,7 +168,7 @@ src-tauri/   Minamo Studio native shell and desktop window commands
 crates/      Rust KGM1 binary header codec
 relay-node/  static serving + WebSocket relay (Node, ws only)
 relay-rs/    WebTransport datagram relay (Rust / wtransport)
-services/    Erlang/OTP router design skeleton
+services/    clustered-relay design model (JS simulation; no Erlang runtime)
 landing/     landing page hub + webcam/mock tracking demo
 docs/        specs, architecture, roadmap, design docs, curated backlog
 issues/      142 granular issue-ready Markdown files + registration script
