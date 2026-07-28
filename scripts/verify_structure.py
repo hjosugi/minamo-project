@@ -1614,7 +1614,10 @@ def validate_desktop_contracts() -> None:
         '--target aarch64-apple-darwin --bundles dmg',
         '--target x86_64-apple-darwin --bundles dmg',
         'releaseAssetNamePattern: Minamo-Studio_[version]_[platform]_[arch][setup][ext]',
-        '--draft=false',
+        'workflow_dispatch:',
+        'inputs.tag || github.ref',
+        'repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID',
+        '--field draft=false',
     ]:
         if needle not in release:
             add_error('.github/workflows/release.yml', f'release workflow missing desktop distribution contract: {needle}')
