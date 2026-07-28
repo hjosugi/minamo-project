@@ -4,12 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v* tag to publish without moving it
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -19,11 +25,17 @@ jobs:
       release_id: ${{ steps.release.outputs.id }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Validate release metadata
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          case "$TAG" in
+            v*) ;;
+            *) echo "release tag must start with v: $TAG" >&2; exit 1 ;;
+          esac
           version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
           tauri_version="$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json', 'utf8')).version")"
           cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)"
@@ -36,14 +48,21 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           notes="docs/releases/$TAG.md"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Minamo $TAG" \
-              --notes-file "$notes"
+          release_id="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+              --jq ".[] | select(.tag_name == \"$TAG\") | .id" |
+              head -n 1
+          )"
+          if test -n "$release_id"; then
+            gh api \
+              --method PATCH \
+              "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+              --field name="Minamo $TAG" \
+              --raw-field body="$(<"$notes")" \
+              >/dev/null
           else
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
@@ -51,8 +70,12 @@ jobs:
               --verify-tag \
               --title "Minamo $TAG" \
               --notes-file "$notes"
+            release_id="$(
+              gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+                --jq ".[] | select(.tag_name == \"$TAG\") | .id" |
+                head -n 1
+            )"
           fi
-          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)"
           test -n "$release_id"
           echo "id=$release_id" >> "$GITHUB_OUTPUT"
 
@@ -82,6 +105,8 @@ jobs:
             args: --target x86_64-apple-darwin --bundles dmg
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.0.0
@@ -111,7 +136,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
-          tagName: ${{ github.ref_name }}
+          tagName: ${{ inputs.tag || github.ref_name }}
           tauriScript: pnpm exec tauri
           args: ${{ matrix.args }}
           retryAttempts: 1
@@ -127,9 +152,11 @@ jobs:
       - name: Publish the complete GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
         run: |
-          gh release edit "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft=false \
-            --latest
+          gh api \
+            --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --field draft=false \
+            --raw-field make_latest=true \
+            >/dev/null
