@@ -1615,7 +1615,8 @@ def validate_desktop_contracts() -> None:
         '--target x86_64-apple-darwin --bundles dmg',
         'releaseAssetNamePattern: Minamo-Studio_[version]_[platform]_[arch][setup][ext]',
         'workflow_dispatch:',
-        'inputs.tag || github.ref',
+        "branches:\n      - 'release/v*'",
+        'needs.prepare.outputs.tag',
         'repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID',
         '--field draft=false',
     ]:
