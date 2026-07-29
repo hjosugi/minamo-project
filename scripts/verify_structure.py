@@ -1622,6 +1622,7 @@ def validate_desktop_contracts() -> None:
         'releaseAssetNamePattern: Minamo-Studio_[version]_[platform]_[arch][setup][ext]',
         'workflow_dispatch:',
         "branches:\n      - 'release/v*'",
+        "github.event.deleted == false",
         'needs.prepare.outputs.tag',
         '--raw-field tag_name="$TAG"',
         "needs.publish.result != 'success'",
