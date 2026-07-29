@@ -1623,8 +1623,9 @@ def validate_desktop_contracts() -> None:
         'workflow_dispatch:',
         "branches:\n      - 'release/v*'",
         'needs.prepare.outputs.tag',
-        'repos/$GITHUB_REPOSITORY/releases/$release_id/assets',
-        'refusing to replace assets on a published release',
+        '--raw-field tag_name="$TAG"',
+        "needs.publish.result != 'success'",
+        'release already published; skipping cleanup',
         'repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID',
         '--field draft=false',
     ]:
