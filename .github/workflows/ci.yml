@@ -118,10 +118,10 @@ jobs:
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       # The full release bundle is the slowest step; PRs, feature branches, and
       # tags get cargo check/clippy/test above. Main proves the Linux package,
-      # while release.yml owns the cross-platform tag bundles.
+      # while release.yml owns and signs the cross-platform updater bundles.
       - name: Build the desktop bundle (deb)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: pnpm exec tauri build --bundles deb
+        run: pnpm exec tauri build --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - name: Upload the desktop bundle
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v7
