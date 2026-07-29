@@ -74,47 +74,16 @@ jobs:
         run: |
           notes="docs/releases/$TAG.md"
           release_id="$(
-            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
-              --jq ".[] | select(.tag_name == \"$TAG\") | .id" |
-              head -n 1
-          )"
-          if test -n "$release_id"; then
             gh api \
-              --method PATCH \
-              "repos/$GITHUB_REPOSITORY/releases/$release_id" \
-              --field name="Minamo $TAG" \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/releases" \
+              --raw-field tag_name="$TAG" \
+              --raw-field name="Minamo $TAG" \
               --raw-field body="$(<"$notes")" \
-              >/dev/null
-          else
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --draft \
-              --verify-tag \
-              --title "Minamo $TAG" \
-              --notes-file "$notes"
-            release_id="$(
-              gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
-                --jq ".[] | select(.tag_name == \"$TAG\") | .id" |
-                head -n 1
-            )"
-          fi
-          test -n "$release_id"
-          release_draft="$(
-            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '.draft'
+              --field draft=true \
+              --jq '.id'
           )"
-          if test "$release_draft" != true; then
-            echo "refusing to replace assets on a published release" >&2
-            exit 1
-          fi
-          gh api --paginate \
-            "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
-            --jq '.[].id' |
-            while read -r asset_id; do
-              test -z "$asset_id" ||
-                gh api \
-                  --method DELETE \
-                  "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
-            done
+          test -n "$release_id"
           echo "id=$release_id" >> "$GITHUB_OUTPUT"
 
   desktop:
@@ -195,3 +164,27 @@ jobs:
             --field draft=false \
             --raw-field make_latest=true \
             >/dev/null
+
+  cleanup:
+    needs:
+      - prepare
+      - desktop
+      - publish
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publish.result != 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Remove incomplete draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+        run: |
+          release_draft="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '.draft'
+          )"
+          if test "$release_draft" = true; then
+            gh api \
+              --method DELETE \
+              "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+          else
+            echo "release already published; skipping cleanup"
+          fi
