@@ -27,8 +27,12 @@ Windows or Apple developer certificate. Windows SmartScreen can warn before
 launch, and macOS can require approval in **System Settings > Privacy &
 Security**. macOS builds use an ad-hoc signature so Apple Silicon can launch
 the app after that approval. Linux packages are currently unsigned.
-Trusted code signing, notarization, and the signed updater remain tracked in
-[issue #251](https://github.com/hjosugi/minamo-project/issues/251).
+Trusted OS code signing and notarization remain future work.
+
+Update artifacts use a separate minisign identity even while the downloadable
+installers lack a publicly trusted OS identity. In Minamo Studio, choose
+**Check for updates** to fetch `latest.json`, verify the platform update before
+installing it, and restart into the new version.
 
 ## Commands
 
@@ -57,8 +61,10 @@ loads it from memory through the same reviewed avatar loaders used by file drop.
   before loading.
 - Selection state lasts only for the current app process and is not persisted.
 - The webview cannot submit an arbitrary path, and no broad filesystem or asset
-  protocol scope is granted. The `main`, `tracker`, `viewer`, and `replay`
-  windows receive only the core IPC capability.
+  protocol scope is granted. Every app window receives core IPC, while only the
+  `main` control window receives the narrow updater check/install and
+  process-restart permissions required by the signed update control. Shell and
+  process-exit permissions remain unavailable.
 - Browser preview remains supported; use the Viewer file controls or drag and
   drop when the Tauri runtime is not attached.
 

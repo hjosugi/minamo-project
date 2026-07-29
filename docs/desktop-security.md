@@ -85,19 +85,29 @@ object again.
 > the packaged app: desktop status, phone pairing, and the viewer's
 > native-avatar open/read bridge.
 
-## Planned (needs CI secrets)
-
 ### Signed auto-updater
 
-No updater is configured. Adopt `tauri-plugin-updater`:
+Minamo Studio now uses `tauri-plugin-updater` and verifies every update with
+the public minisign key embedded in `tauri.conf.json`. The desktop control
+surface exposes a user-initiated **Check for updates** action; it checks the
+latest GitHub Release, asks before installing, downloads and verifies the
+platform artifact, then restarts the app.
 
-1. `tauri signer generate` → a minisign keypair. Commit the **public** key to
-   `tauri.conf.json` (`plugins.updater.pubkey`); store the **private** key and
-   its password only in CI secrets (`TAURI_SIGNING_PRIVATE_KEY`,
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) — never in the repo.
-2. Enable `createUpdaterArtifacts` in the bundle config and publish the signed
-   `latest.json` + artifacts to GitHub Releases from CI.
-3. Point `plugins.updater.endpoints` at the release `latest.json`.
+The dedicated `main`-window capability grants only `check`,
+`download-and-install`, and process `restart`; tracker, viewer, and replay do
+not receive those permissions, and no window exposes process exit or a shell
+command. Release CI
+reads the encrypted private key and password from
+`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, creates
+signed updater artifacts for all four platform builds, and lets
+`tauri-action` merge them into `latest.json`. The release remains a draft
+until that complete matrix succeeds.
+
+The private updater key and password are long-lived release credentials. They
+must stay outside the repository and be backed up securely: losing either
+prevents already-installed copies from trusting future updates.
+
+## Planned (requires platform signing identities)
 
 ### OS code signing
 

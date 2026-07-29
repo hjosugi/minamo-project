@@ -1559,10 +1559,12 @@ def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
     release = read('.github/workflows/release.yml')
+    updater_manifest_validator = read('scripts/validate-updater-manifest.mjs')
     release_smoke = read('scripts/release-smoke.mjs')
     vite = read('vite.config.ts')
     tauri_config = json.loads(read('src-tauri/tauri.conf.json'))
     tauri_capability = json.loads(read('src-tauri/capabilities/default.json'))
+    tauri_updater_capability = json.loads(read('src-tauri/capabilities/updater.json'))
     tauri_cargo = read('src-tauri/Cargo.toml')
     tauri_lib = read('src-tauri/src/lib.rs')
     desktop_html = read('desktop/index.html')
@@ -1629,6 +1631,12 @@ def validate_desktop_contracts() -> None:
         'release already published; skipping cleanup',
         'repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID',
         '--field draft=false',
+        'TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}',
+        'TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}',
+        'uploadUpdaterJson: true',
+        'updaterJsonPreferNsis: true',
+        'Validate the complete signed updater manifest',
+        'scripts/validate-updater-manifest.mjs',
     ]:
         if needle not in release:
             add_error('.github/workflows/release.yml', f'release workflow missing desktop distribution contract: {needle}')
@@ -1637,6 +1645,9 @@ def validate_desktop_contracts() -> None:
             '.github/workflows/release.yml',
             'release builds must not restore target caches because partial artifacts can make retries fail',
         )
+    for platform in ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64', 'darwin-x86_64']:
+        if platform not in updater_manifest_validator:
+            add_error('scripts/validate-updater-manifest.mjs', f'updater manifest gate missing {platform}')
     for path in ['README.md', 'README.ja.md', 'docs/product/desktop-app.md', 'docs/product/desktop-app.ja.md']:
         source = read(path)
         if 'https://github.com/hjosugi/minamo-project/releases/latest' not in source:
@@ -1647,6 +1658,27 @@ def validate_desktop_contracts() -> None:
     # global (#251).
     if app_config.get('withGlobalTauri') is not False:
         add_error('src-tauri/tauri.conf.json', 'desktop build must keep the IPC bridge off the window global')
+    updater_config = tauri_config.get('plugins', {}).get('updater', {})
+    updater_endpoint = 'https://github.com/hjosugi/minamo-project/releases/latest/download/latest.json'
+    if tauri_config.get('bundle', {}).get('createUpdaterArtifacts') is not True:
+        add_error('src-tauri/tauri.conf.json', 'desktop releases must create signed updater artifacts')
+    if updater_endpoint not in updater_config.get('endpoints', []):
+        add_error('src-tauri/tauri.conf.json', 'desktop updater must use the latest GitHub Release manifest')
+    updater_pubkey = updater_config.get('pubkey', '')
+    if len(updater_pubkey) < 100 or any(char.isspace() for char in updater_pubkey):
+        add_error('src-tauri/tauri.conf.json', 'desktop updater must embed a valid minisign public key')
+    if tauri_updater_capability.get('windows') != ['main']:
+        add_error('src-tauri/capabilities/updater.json', 'signed updater capability must be limited to the main window')
+    updater_permissions = set(tauri_updater_capability.get('permissions', []))
+    expected_updater_permissions = {
+        'updater:allow-check',
+        'updater:allow-download-and-install',
+        'process:allow-restart',
+    }
+    if not expected_updater_permissions.issubset(updater_permissions):
+        add_error('src-tauri/capabilities/updater.json', 'desktop updater is missing its narrow check/install/restart permissions')
+    if {'updater:default', 'process:default', 'process:allow-exit'} & updater_permissions:
+        add_error('src-tauri/capabilities/updater.json', 'desktop updater must not broaden into default process or updater permissions')
     for path, source in (('desktop/desktop.js', desktop_js), ('viewer/viewer.js', viewer_js)):
         if '@tauri-apps/api/core' not in source:
             add_error(path, 'renderer must import Tauri invoke from @tauri-apps/api/core')
@@ -1670,9 +1702,23 @@ def validate_desktop_contracts() -> None:
     for command in ['pick_native_avatar', 'native_avatar_info', 'read_native_avatar']:
         if command not in tauri_lib:
             add_error('src-tauri/src/lib.rs', f'missing native avatar command {command}')
-    for needle in ['tauri-plugin-dialog = "2.7.1"', 'MAX_NATIVE_AVATAR_BYTES', 'tauri::ipc::Response']:
+    for needle in [
+        'tauri-plugin-dialog = "2.7.1"',
+        'tauri-plugin-process = "2.3.1"',
+        'tauri-plugin-updater = "2.10.1"',
+        'MAX_NATIVE_AVATAR_BYTES',
+        'tauri::ipc::Response',
+    ]:
         if needle not in tauri_cargo and needle not in tauri_lib:
             add_error('src-tauri', f'missing native avatar boundary contract: {needle}')
+    for needle in [
+        '@tauri-apps/plugin-updater',
+        '@tauri-apps/plugin-process',
+        'checkForUpdates',
+        'downloadAndInstall',
+    ]:
+        if needle not in desktop_html and needle not in desktop_js and needle not in json.dumps(package):
+            add_error('desktop', f'missing signed updater contract: {needle}')
     for needle in ['btnOpenAvatar', 'pick_native_avatar']:
         if needle not in desktop_html and needle not in desktop_js:
             add_error('desktop', f'missing one-click native avatar control: {needle}')
