@@ -54,13 +54,19 @@ jobs:
           restore-keys: fuzz-corpus-${{ matrix.target }}-
       - name: Seed the corpus from the shared conformance vectors
         run: node scripts/seed-fuzz-corpus.mjs
+      # --target is explicit because cargo-fuzz infers the host triple from how
+      # its own binary was built, and the prebuilt one is musl-linked; left to
+      # itself it tries to build for a musl std the runner does not have.
       - name: Fuzz ${{ matrix.target }}
         run: |
-          cargo +nightly fuzz run --fuzz-dir crates/kgm1-codec/fuzz ${{ matrix.target }} -- \
+          cargo +nightly fuzz run --fuzz-dir crates/kgm1-codec/fuzz \
+            --target x86_64-unknown-linux-gnu ${{ matrix.target }} -- \
             -max_total_time=600 -print_final_stats=1
       - name: Shrink the corpus for the next run
         if: success()
-        run: cargo +nightly fuzz cmin --fuzz-dir crates/kgm1-codec/fuzz ${{ matrix.target }}
+        run: |
+          cargo +nightly fuzz cmin --fuzz-dir crates/kgm1-codec/fuzz \
+            --target x86_64-unknown-linux-gnu ${{ matrix.target }}
       - name: Upload the failing input
         if: failure()
         uses: actions/upload-artifact@v7
