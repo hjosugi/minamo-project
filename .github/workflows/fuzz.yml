@@ -1,0 +1,70 @@
+name: fuzz
+
+# The long fuzzing run for the KGM1B container decoder (#262).
+#
+# ci.yml gives each target 30 seconds, which is enough to catch a decoder someone
+# just broke but not enough to *find* anything: coverage-guided fuzzing needs a
+# corpus that grows across runs. This job restores that corpus from cache, fuzzes
+# for ten minutes per target, and saves it again, so each week starts deeper into
+# the input space than the last.
+
+on:
+  schedule:
+    - cron: '41 4 * * 2' # Tuesdays 04:41 UTC
+  workflow_dispatch:
+  # Also run when the harness or the decoder it exercises changes.
+  push:
+    paths:
+      - 'crates/kgm1-codec/**'
+      - 'scripts/seed-fuzz-corpus.mjs'
+      - 'tests/fixtures/kgm1b-vectors.txt'
+      - '.github/workflows/fuzz.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [decode_packet, corrupt_valid, roundtrip]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # cargo-fuzz needs the sanitizer support that only nightly ships.
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/kgm1-codec/fuzz
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      # restore-keys makes each run start from the newest corpus available, and
+      # the run number in the key means the grown corpus is saved under a new one.
+      - name: Restore the corpus
+        uses: actions/cache@v4
+        with:
+          path: crates/kgm1-codec/fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_number }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Seed the corpus from the shared conformance vectors
+        run: node scripts/seed-fuzz-corpus.mjs
+      - name: Fuzz ${{ matrix.target }}
+        run: |
+          cargo +nightly fuzz run --fuzz-dir crates/kgm1-codec/fuzz ${{ matrix.target }} -- \
+            -max_total_time=600 -print_final_stats=1
+      - name: Shrink the corpus for the next run
+        if: success()
+        run: cargo +nightly fuzz cmin --fuzz-dir crates/kgm1-codec/fuzz ${{ matrix.target }}
+      - name: Upload the failing input
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: crates/kgm1-codec/fuzz/artifacts
+          if-no-files-found: ignore

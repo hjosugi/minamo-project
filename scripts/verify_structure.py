@@ -139,6 +139,13 @@ REQUIRED = [
     'Cargo.lock',
     'crates/kgm1-codec/Cargo.toml',
     'crates/kgm1-codec/src/lib.rs',
+    'crates/kgm1-codec/fuzz/Cargo.toml',
+    'crates/kgm1-codec/fuzz/src/lib.rs',
+    'crates/kgm1-codec/fuzz/fuzz_targets/decode_packet.rs',
+    'crates/kgm1-codec/fuzz/fuzz_targets/corrupt_valid.rs',
+    'crates/kgm1-codec/fuzz/fuzz_targets/roundtrip.rs',
+    'scripts/seed-fuzz-corpus.mjs',
+    '.github/workflows/fuzz.yml',
     'packages/kgm1-codec-py/pyproject.toml',
     'packages/kgm1-codec-py/kgm1_codec/__init__.py',
     'packages/kgm1-codec-py/kgm1_codec/__main__.py',
@@ -987,8 +994,8 @@ def validate_protocol_v2_contracts() -> None:
         add_error('packages/kgm1-codec-py/kgm1_codec/__main__.py', 'Python codec CLI must decode headers and packets')
     if 'kgm1_codec.__main__ import main' not in script:
         add_error('scripts/kgm1b_codec.py', 'script wrapper must use the Python package implementation')
-    if 'members = ["crates/kgm1-codec"]' not in cargo or 'exclude = ["relay-rs", "src-tauri"]' not in cargo:
-        add_error('Cargo.toml', 'root Cargo workspace must register only the KGM1 reference crate and exclude app crates')
+    if 'members = ["crates/kgm1-codec"]' not in cargo or 'exclude = ["relay-rs", "src-tauri", "crates/kgm1-codec/fuzz"]' not in cargo:
+        add_error('Cargo.toml', 'root Cargo workspace must register only the KGM1 reference crate and exclude app crates plus the fuzz harness')
     for needle in [
         'KGM2 compact face profile',
         'smallest-three quaternion',
@@ -2091,6 +2098,48 @@ def validate_avatar_pack_cli() -> None:
         add_error('package.json', 'missing pack:avatar script for kagami-pack CLI')
 
 
+def validate_fuzz_harness() -> None:
+    """The KGM1B decoder parses untrusted datagrams; keep its fuzzing wired up (#262)."""
+    ci = read('.github/workflows/ci.yml')
+    scheduled = read('.github/workflows/fuzz.yml')
+    contract = read('crates/kgm1-codec/fuzz/src/lib.rs')
+    manifest = read('crates/kgm1-codec/fuzz/Cargo.toml')
+    workspace = read('Cargo.toml')
+    targets = ['decode_packet', 'corrupt_valid', 'roundtrip']
+
+    for target in targets:
+        if f'name = "{target}"' not in manifest:
+            add_error('crates/kgm1-codec/fuzz/Cargo.toml', f'missing fuzz target {target}')
+        if target not in ci:
+            add_error('.github/workflows/ci.yml', f'push fuzz smoke must run {target}')
+        if target not in scheduled:
+            add_error('.github/workflows/fuzz.yml', f'scheduled fuzz run must cover {target}')
+    if 'cargo +nightly fuzz run' not in ci:
+        add_error('.github/workflows/ci.yml', 'every push must fuzz the KGM1B decoder')
+    if 'node scripts/seed-fuzz-corpus.mjs' not in ci:
+        add_error('.github/workflows/ci.yml', 'fuzzing must start from the shared conformance vectors')
+    if 'schedule:' not in scheduled or 'cron:' not in scheduled:
+        add_error('.github/workflows/fuzz.yml', 'the long fuzzing run must be scheduled')
+    if 'actions/cache' not in scheduled:
+        add_error('.github/workflows/fuzz.yml', 'the scheduled run must persist its corpus between runs')
+
+    # The contract has to fail in both directions. "Never panics" is satisfied by
+    # a decoder that rejects everything, which is how a fuzz target ends up
+    # unable to fail rather than merely not failing.
+    if 'rejected a well-formed packet' not in contract:
+        add_error(
+            'crates/kgm1-codec/fuzz/src/lib.rs',
+            'the contract must fail when a valid packet is rejected, not only when an invalid one is accepted',
+        )
+    if 'did not reproduce its bytes' not in contract:
+        add_error(
+            'crates/kgm1-codec/fuzz/src/lib.rs',
+            'an accepted packet must be asserted to re-encode to the bytes it was decoded from',
+        )
+    if 'crates/kgm1-codec/fuzz' not in workspace:
+        add_error('Cargo.toml', 'the fuzz harness must stay out of the stable workspace build')
+
+
 validate_issue_templates()
 validate_adr_headings()
 validate_local_docs_links()
@@ -2132,6 +2181,7 @@ validate_secure_phone_transport()
 validate_research_docs()
 validate_onnx_backend_registry()
 validate_avatar_pack_cli()
+validate_fuzz_harness()
 
 if errors:
     print('Structure verification failed:')

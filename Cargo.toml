@@ -1,4 +1,7 @@
 [workspace]
 members = ["crates/kgm1-codec"]
-exclude = ["relay-rs", "src-tauri"]
+# crates/kgm1-codec/fuzz is a nightly-only cargo-fuzz harness with its own
+# lockfile; excluding it keeps the stable workspace build free of libfuzzer-sys
+# and keeps kgm1-codec itself dependency-free (#262).
+exclude = ["relay-rs", "src-tauri", "crates/kgm1-codec/fuzz"]
 resolver = "2"
