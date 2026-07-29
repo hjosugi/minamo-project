@@ -78,6 +78,7 @@ jobs:
           workspaces: |
             .
             relay-rs
+            crates/kgm1-codec/fuzz
       - run: cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
       - run: cargo build --locked --manifest-path relay-rs/Cargo.toml --release
@@ -85,6 +86,11 @@ jobs:
       - run: cargo fmt --manifest-path crates/kgm1-codec/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path crates/kgm1-codec/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path crates/kgm1-codec/Cargo.toml
+      # The fuzz harness only needs nightly to *run* under a sanitizer; checking
+      # and formatting it works on stable, so it is gated here rather than
+      # pinning those to a moving nightly rustfmt (#262).
+      - run: cargo fmt --manifest-path crates/kgm1-codec/fuzz/Cargo.toml -- --check
+      - run: cargo clippy --locked --manifest-path crates/kgm1-codec/fuzz/Cargo.toml --all-targets -- -D warnings
 
   # Short smoke budget so a regression in the container decoder is caught on the
   # PR that introduces it; the real search happens weekly in fuzz.yml (#262).
@@ -104,8 +110,6 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
-      - run: cargo +nightly fmt --manifest-path crates/kgm1-codec/fuzz/Cargo.toml -- --check
-      - run: cargo +nightly clippy --locked --manifest-path crates/kgm1-codec/fuzz/Cargo.toml --all-targets -- -D warnings
       - name: Seed the corpus from the shared conformance vectors
         run: node scripts/seed-fuzz-corpus.mjs
       - name: Fuzz the KGM1B container decoder
