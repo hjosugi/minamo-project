@@ -56,6 +56,7 @@ import {
   parseGlb,
   summarizeGltf,
 } from '../scripts/inspect-glb.mjs';
+import { validateUpdaterManifest } from '../scripts/validate-updater-manifest.mjs';
 import {
   AVATAR_DECODER_SUPPORT,
   describeAvatarLoadError,
@@ -268,6 +269,44 @@ const required = [
 ];
 for (const file of required) {
   assert.ok(fs.existsSync(path.join(root, file)), `Missing ${file}`);
+}
+
+{
+  const platformNames = [
+    'linux-x86_64',
+    'windows-x86_64',
+    'darwin-aarch64',
+    'darwin-x86_64',
+  ];
+  const manifest = {
+    version: '0.1.15',
+    platforms: Object.fromEntries(platformNames.map((name) => [name, {
+      signature: 's'.repeat(100),
+      url: `https://api.github.com/releases/assets/${name}`,
+    }])),
+  };
+  assert.deepEqual(validateUpdaterManifest(manifest, '0.1.15'), platformNames);
+  assert.throws(() => validateUpdaterManifest(manifest, '0.1.14'), /does not match/);
+  assert.throws(
+    () => validateUpdaterManifest({
+      ...manifest,
+      platforms: { ...manifest.platforms, 'darwin-x86_64': undefined },
+    }, '0.1.15'),
+    /missing darwin-x86_64/,
+  );
+  assert.throws(
+    () => validateUpdaterManifest({
+      ...manifest,
+      platforms: {
+        ...manifest.platforms,
+        'linux-x86_64': {
+          ...manifest.platforms['linux-x86_64'],
+          url: 'http://updates.invalid/appimage',
+        },
+      },
+    }, '0.1.15'),
+    /must use HTTPS/,
+  );
 }
 
 {
@@ -2063,6 +2102,8 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     'btnCopyViewerUrl',
     'openTrackerPairing',
     'openViewerPairing',
+    'checkForUpdates',
+    'updateStatus',
   ]) {
     assert.ok(pairingHtml.includes(`id="${id}"`), `desktop pairing UI is missing #${id}`);
   }
@@ -2708,7 +2749,7 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     },
     {
       file: '../desktop/desktop.js',
-      bound: ['refreshStatus', 'btnExpirePairing', 'langToggle'],
+      bound: ['refreshStatus', 'btnExpirePairing', 'checkForUpdates', 'langToggle'],
       check: ({ elements }) => {
         assert.equal(elements.get('pairingCountdown')?.textContent, '未生成', 'desktop renders the pairing countdown from a key');
         // The stub refuses network access, so the pairing request fails; the
@@ -2719,6 +2760,8 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
         // which is ours to localize (#267).
         assert.equal(elements.get('runtimeStatus')?.textContent, 'Webプレビュー', 'desktop localizes the fallback runtime status');
         assert.equal(elements.get('vcState')?.textContent, 'デスクトップランタイム未接続', 'desktop localizes the fallback virtual-camera state');
+        assert.equal(elements.get('updateStatus')?.textContent, 'デスクトップアプリで利用できます',
+          'browser preview keeps the signed updater behind the Tauri runtime');
         // The warn styling used to be chosen by regex-matching English words in
         // that state string, so localizing it dropped the class entirely. The
         // fallback now carries an explicit tone.

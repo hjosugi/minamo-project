@@ -1,6 +1,6 @@
 {
   "name": "minamo",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "license": "0BSD",
   "type": "module",
@@ -30,6 +30,8 @@
     "@mediapipe/tasks-vision": "0.10.35",
     "@pixiv/three-vrm": "^3.5.4",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-process": "2.3.1",
+    "@tauri-apps/plugin-updater": "2.10.1",
     "ag-psd": "^31.0.2",
     "qrcode": "1.5.4",
     "three": "^0.185.1"

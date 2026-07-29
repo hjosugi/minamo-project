@@ -139,13 +139,16 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           tagName: ${{ needs.prepare.outputs.tag }}
           tauriScript: pnpm exec tauri
           args: ${{ matrix.args }}
           retryAttempts: 1
-          uploadUpdaterJson: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
           releaseAssetNamePattern: Minamo-Studio_[version]_[platform]_[arch][setup][ext]
 
   publish:
@@ -154,6 +157,33 @@ jobs:
       - desktop
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Validate the complete signed updater manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          asset_ids="$(
+            gh api \
+              --paginate \
+              "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" \
+              --jq '.[] | select(.name == "latest.json") | .id'
+          )"
+          asset_count="$(printf '%s\n' "$asset_ids" | sed '/^$/d' | wc -l)"
+          test "$asset_count" -eq 1
+          asset_id="$(printf '%s\n' "$asset_ids" | sed '/^$/d')"
+          gh api \
+            -H 'Accept: application/octet-stream' \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" \
+            > "$RUNNER_TEMP/latest.json"
+          node scripts/validate-updater-manifest.mjs \
+            "$RUNNER_TEMP/latest.json" \
+            "${TAG#v}"
+
       - name: Publish the complete GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

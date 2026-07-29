@@ -7,6 +7,8 @@ import {
   redactPairingUrl,
 } from '../shared/pairing.js';
 import { invoke as tauriInvoke, isTauri } from '@tauri-apps/api/core';
+import { relaunch as tauriRelaunch } from '@tauri-apps/plugin-process';
+import { check as tauriCheckForUpdate } from '@tauri-apps/plugin-updater';
 import { setupPageI18n } from '../shared/i18n.js';
 import { localizeDesktopStatus } from './status-i18n.js';
 
@@ -22,6 +24,7 @@ const { t: tr } = setupPageI18n({
     if (lastPairingStatus) setPairingStatus(lastPairingStatus.key, lastPairingStatus.params);
     renderStatus(currentStatus());
     refreshPairingLabels();
+    renderUpdateStatus();
   },
 });
 
@@ -30,6 +33,8 @@ const { t: tr } = setupPageI18n({
 // English.
 let lastPairingStatus = null;
 let lastInactiveLabelKey = '';
+/** @type {{key: string, params: Record<string, unknown> | undefined}} */
+let lastUpdateStatus = { key: 'desktop.update.desktopOnly', params: undefined };
 /** @type {{kind: 'fallback'} | {kind: 'runtime', status: any} | {kind: 'error', message: string | null}} */
 let lastStatusSource = { kind: 'fallback' };
 
@@ -37,7 +42,14 @@ let lastStatusSource = { kind: 'fallback' };
 // the desktop build ships with withGlobalTauri disabled and keeps that bridge
 // off the window object (#251). Outside a Tauri webview isTauri() is false and
 // every command falls back to the web-preview path.
-const invoke = isTauri() ? tauriInvoke : null;
+const runningInTauri = isTauri();
+const invoke = runningInTauri ? tauriInvoke : null;
+const checkForUpdate = runningInTauri ? tauriCheckForUpdate : null;
+const relaunch = runningInTauri ? tauriRelaunch : null;
+lastUpdateStatus = {
+  key: runningInTauri ? 'desktop.update.ready' : 'desktop.update.desktopOnly',
+  params: undefined,
+};
 
 // Shown whenever the desktop runtime is absent — which is how this page renders
 // on GitHub Pages and under `pnpm dev`, so it is the common case. These strings
@@ -155,6 +167,65 @@ async function refreshStatus() {
     lastStatusSource = { kind: 'error', message: error instanceof Error ? error.message : null };
   }
   renderStatus(currentStatus());
+}
+
+function renderUpdateStatus() {
+  const status = $('updateStatus');
+  if (status) status.textContent = tr(lastUpdateStatus.key, lastUpdateStatus.params);
+}
+
+function setUpdateStatus(key, params) {
+  lastUpdateStatus = { key, params };
+  renderUpdateStatus();
+}
+
+async function runUpdateCheck() {
+  const button = $('checkForUpdates');
+  if (!button) return;
+  if (!checkForUpdate || !relaunch) {
+    setUpdateStatus('desktop.update.desktopOnly');
+    return;
+  }
+
+  button.disabled = true;
+  let update = null;
+  try {
+    setUpdateStatus('desktop.update.checking');
+    update = await checkForUpdate({ timeout: 15_000 });
+    if (!update) {
+      setUpdateStatus('desktop.update.upToDate');
+      return;
+    }
+
+    setUpdateStatus('desktop.update.available', { version: update.version });
+    if (!window.confirm(tr('desktop.update.confirm', { version: update.version }))) return;
+
+    let downloaded = 0;
+    let total = 0;
+    await update.downloadAndInstall((event) => {
+      if (event.event === 'Started') {
+        total = Number(event.data.contentLength) || 0;
+        setUpdateStatus('desktop.update.downloading', { percent: 0 });
+      } else if (event.event === 'Progress') {
+        downloaded += Number(event.data.chunkLength) || 0;
+        const percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
+        setUpdateStatus('desktop.update.downloading', { percent });
+      } else if (event.event === 'Finished') {
+        setUpdateStatus('desktop.update.installing');
+      }
+    });
+
+    update.close();
+    update = null;
+    setUpdateStatus('desktop.update.restarting');
+    await relaunch();
+  } catch (error) {
+    console.error('Signed update failed', error);
+    setUpdateStatus('desktop.update.failed');
+  } finally {
+    update?.close();
+    button.disabled = false;
+  }
 }
 
 function bindLaunchButtons() {
@@ -706,10 +777,12 @@ function capitalize(value) {
 }
 
 $('refreshStatus')?.addEventListener('click', refreshStatus);
+$('checkForUpdates')?.addEventListener('click', runUpdateCheck);
 bindLaunchButtons();
 bindNativeAvatarButton();
 drawSignal();
 refreshStatus();
+renderUpdateStatus();
 initializePhonePairing();
 
 bootDone = true;

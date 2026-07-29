@@ -420,6 +420,8 @@ fn first_linux_video_device() -> Option<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(NativeAvatarState::default())
         .invoke_handler(tauri::generate_handler![
             desktop_status,
@@ -563,6 +565,42 @@ mod tests {
         capability_windows.sort_unstable();
         capability_windows.dedup();
         assert_eq!(capability_windows, app_windows);
+
+        assert_eq!(
+            tauri_config["bundle"]["createUpdaterArtifacts"], true,
+            "desktop releases must generate updater artifacts"
+        );
+        assert_eq!(
+            tauri_config["plugins"]["updater"]["endpoints"][0],
+            "https://github.com/hjosugi/minamo-project/releases/latest/download/latest.json"
+        );
+        let updater_capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/updater.json"))
+                .expect("updater capability should be valid JSON");
+        assert_eq!(
+            updater_capability["windows"],
+            serde_json::json!(["main"]),
+            "signed updater permissions must stay limited to the main control window"
+        );
+        let permissions = updater_capability["permissions"]
+            .as_array()
+            .expect("updater capability permissions should be an array");
+        for permission in [
+            "updater:allow-check",
+            "updater:allow-download-and-install",
+            "process:allow-restart",
+        ] {
+            assert!(
+                permissions.iter().any(|value| value == permission),
+                "updater capability is missing {permission}"
+            );
+        }
+        assert!(
+            permissions
+                .iter()
+                .all(|value| value != "process:allow-exit"),
+            "the updater must not expose arbitrary process exit"
+        );
     }
 
     #[test]

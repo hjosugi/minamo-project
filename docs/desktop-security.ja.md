@@ -84,19 +84,27 @@ Tauri 上かどうかは internals グローバルを覗くのではなく、公
 > phone pairing・viewer の native-avatar の open/read ブリッジを動作確認して
 > ください。
 
-## 計画中(CI シークレットが必要)
-
 ### 署名付き自動アップデータ
 
-アップデータは未設定です。`tauri-plugin-updater` を採用します:
+Minamo Studio は `tauri-plugin-updater` を使用し、すべてのアップデートを
+`tauri.conf.json` に埋め込んだ minisign 公開鍵で検証します。デスクトップの
+コントロールサーフェスに **アップデートを確認** 操作があり、最新の GitHub
+Release を確認し、インストール前に確認を求め、プラットフォーム用成果物を
+ダウンロード・検証してからアプリを再起動します。
 
-1. `tauri signer generate` で minisign 鍵ペアを生成。**公開**鍵を
-   `tauri.conf.json`(`plugins.updater.pubkey`)にコミット。**秘密**鍵と
-   パスワードは CI シークレット(`TAURI_SIGNING_PRIVATE_KEY`,
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`)にのみ保存(リポジトリには置かない)。
-2. bundle 設定で `createUpdaterArtifacts` を有効化し、署名済み `latest.json` と
-   成果物を CI から GitHub Releases に公開。
-3. `plugins.updater.endpoints` をリリースの `latest.json` に向ける。
+`main`ウィンドウ専用capabilityが許可するのは `check`、`download-and-install` と
+プロセスの `restart` だけです。tracker、viewer、replayにはこれらを付与せず、
+どのウィンドウにもプロセス終了やshellコマンドは公開しません。Release CI は暗号化された
+秘密鍵とパスワードを `TAURI_SIGNING_PRIVATE_KEY` /
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` から読み、4 プラットフォームすべての
+署名済み updater 成果物を生成し、`tauri-action` で `latest.json` に統合します。
+この完全なマトリクスが成功するまで Release はドラフトのままです。
+
+updater の秘密鍵とパスワードは長期利用するリリース資格情報です。リポジトリ外に
+保ち、安全にバックアップする必要があります。どちらかを失うと、インストール済み
+アプリが将来のアップデートを信頼できなくなります。
+
+## 計画中（プラットフォーム署名IDが必要）
 
 ### OS コード署名
 
