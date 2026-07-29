@@ -99,6 +99,22 @@ jobs:
             )"
           fi
           test -n "$release_id"
+          release_draft="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --jq '.draft'
+          )"
+          if test "$release_draft" != true; then
+            echo "refusing to replace assets on a published release" >&2
+            exit 1
+          fi
+          gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
+            --jq '.[].id' |
+            while read -r asset_id; do
+              test -z "$asset_id" ||
+                gh api \
+                  --method DELETE \
+                  "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+            done
           echo "id=$release_id" >> "$GITHUB_OUTPUT"
 
   desktop:
@@ -139,9 +155,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - name: Install Tauri Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'

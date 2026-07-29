@@ -1623,11 +1623,18 @@ def validate_desktop_contracts() -> None:
         'workflow_dispatch:',
         "branches:\n      - 'release/v*'",
         'needs.prepare.outputs.tag',
+        'repos/$GITHUB_REPOSITORY/releases/$release_id/assets',
+        'refusing to replace assets on a published release',
         'repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID',
         '--field draft=false',
     ]:
         if needle not in release:
             add_error('.github/workflows/release.yml', f'release workflow missing desktop distribution contract: {needle}')
+    if 'Swatinem/rust-cache@v2' in release:
+        add_error(
+            '.github/workflows/release.yml',
+            'release builds must not restore target caches because partial artifacts can make retries fail',
+        )
     for path in ['README.md', 'README.ja.md', 'docs/product/desktop-app.md', 'docs/product/desktop-app.ja.md']:
         source = read(path)
         if 'https://github.com/hjosugi/minamo-project/releases/latest' not in source:
