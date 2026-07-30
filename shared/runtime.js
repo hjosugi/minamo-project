@@ -1048,6 +1048,94 @@ export function mirrorFacePayload({ quat = [0, 0, 0, 1], pos = [0, 0, 0.4], weig
   };
 }
 
+/**
+ * Mirror a face payload in place — same result as {@link mirrorFacePayload},
+ * without the three arrays it allocates, so the 60 fps tracker loop can mirror
+ * into buffers it already owns (#259).
+ *
+ * The channel swap needs no scratch buffer because MIRROR_INDEX is an
+ * involution: it maps every `...Left` channel to its `...Right` partner and back,
+ * and a channel with no partner to itself. Swapping each pair once therefore
+ * applies the whole permutation. `mirrorPairs` caches the `i < MIRROR_INDEX[i]`
+ * half of it.
+ *
+ * The first pass reproduces `mirrorWeights`' `Number(w || 0)` coercion, which
+ * turns a non-finite channel into 0. Keeping it means mirroring stays a pure
+ * allocation change: tests/run-tests.mjs asserts this agrees with
+ * mirrorFacePayload channel for channel, NaN inputs included.
+ * @param {number[]} quat mutated to [x, -y, -z, w]
+ * @param {number[]} pos mutated to [-x, y, z]
+ * @param {Float32Array|number[]} weights mutated with left/right channels swapped
+ */
+export function mirrorFacePayloadInPlace(quat, pos, weights) {
+  quat[1] = -quat[1];
+  quat[2] = -quat[2];
+  pos[0] = -pos[0];
+  for (let i = 0; i < NUM_CHANNELS; i++) weights[i] = Number(weights[i] || 0);
+  for (const [a, b] of mirrorPairs()) {
+    const swap = weights[a];
+    weights[a] = weights[b];
+    weights[b] = swap;
+  }
+}
+
+/** @type {[number, number][] | null} */
+let cachedMirrorPairs = null;
+
+/** @returns {[number, number][]} */
+function mirrorPairs() {
+  if (!cachedMirrorPairs) {
+    cachedMirrorPairs = [];
+    for (let i = 0; i < NUM_CHANNELS; i++) {
+      const partner = MIRROR_INDEX[i];
+      if (i < partner) cachedMirrorPairs.push([i, partner]);
+    }
+  }
+  return cachedMirrorPairs;
+}
+
+/**
+ * Dedupe two warning lists into `out`, preserving first-seen order, reusing both
+ * `out` and `seen` rather than allocating two spreads, a Set and a result array
+ * every frame (#259).
+ *
+ * Fixed arity and indexed loops on purpose: a `...sources` rest parameter
+ * allocates an array per call and `for...of` allocates an iterator, which between
+ * them made the first version of this measurably slower than the
+ * `[...new Set([...a, ...b])]` it replaced — an allocation-reduction helper that
+ * allocated. Even so this trades a little CPU for the four allocations it drops
+ * per frame, which is the trade #259 is asking for.
+ * @template T
+ * @param {T[]} out cleared, then filled
+ * @param {Set<T>} seen cleared, then used as the membership test
+ * @param {ArrayLike<T>|null|undefined} primary
+ * @param {ArrayLike<T>|null|undefined} secondary
+ * @returns {T[]} `out`
+ */
+export function mergeWarningsInto(out, seen, primary, secondary) {
+  out.length = 0;
+  seen.clear();
+  appendUnique(out, seen, primary);
+  appendUnique(out, seen, secondary);
+  return out;
+}
+
+/**
+ * @template T
+ * @param {T[]} out
+ * @param {Set<T>} seen
+ * @param {ArrayLike<T>|null|undefined} source
+ */
+function appendUnique(out, seen, source) {
+  if (!source) return;
+  for (let i = 0; i < source.length; i++) {
+    const warning = source[i];
+    if (seen.has(warning)) continue;
+    seen.add(warning);
+    out.push(warning);
+  }
+}
+
 export function setMirrorPreviewClass(element, mirror) {
   element?.classList?.toggle?.('mirrored', Boolean(mirror));
   return Boolean(mirror);
