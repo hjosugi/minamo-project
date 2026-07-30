@@ -7,7 +7,7 @@
 
 レビューしたソース:
 
-- IETF `draft-ietf-moq-transport-18`, 2026年5月:
+- IETF `draft-ietf-moq-transport-19`, 2026-07-06 (Active I-D, moq WG; IESG 提出マイルストーン 2026年12月):
   https://datatracker.ietf.org/doc/draft-ietf-moq-transport/
 - IETF Media over QUIC ワーキンググループのチャーター:
   https://datatracker.ietf.org/group/moq/about/
@@ -50,6 +50,14 @@ MoQTドラフトはオブジェクトデータグラムを定義し、オーバ�
 ## ゴー/ノーゴー
 
 決定: 今日、このリポジトリでのプロダクションにはノーゴー。
+
+以下3点すべてが成立したら MoQT を採用する — 議論の再燃ではなく事実の変化によって判断が再開されるよう、明示的なトリガーとして記録する (#274):
+
+1. `draft-ietf-moq-transport` が RFC として発行される、または IESG レビューを通過している。
+2. 少なくとも2つのブラウザネイティブまたは広く使われているクライアントライブラリが公開リレーに対して相互運用できる。
+3. KGM フレームの MoQT トラックマッピングを、本プロジェクトが運用していないリレーに対して CI で実行できる。
+
+2026年の更新、および `draft-ietf-moq-secure-objects` が E2EE エンベロープの置き換えではなく参照である理由は [transport-strategy-2026.md](transport-strategy-2026.md) を参照。
 
 理由:
 
