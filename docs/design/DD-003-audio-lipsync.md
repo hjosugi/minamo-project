@@ -30,6 +30,13 @@ Minamo should fuse both continuously.
 
 Ship (1) first; (2) behind the same interface.
 
+Candidates for the (2) slot are evaluated in
+[../research/audio-arkit-lipsync.md](../research/audio-arkit-lipsync.md) (#268).
+Summary: wav2arkit_cpu (Apache-2.0, 1.8 MB ONNX, 52 ARKit at 30 fps) is the only
+browser-viable candidate, and its adoption turns on one unmeasured quantity — the
+shortest audio chunk it stays usable on, since its published "22x realtime" is
+throughput, not the buffering latency this design budgets 80 ms for.
+
 ## Fusion rule
 
 Let a = audio openness [0,1], v = visual jawOpen, c_v = visual confidence
