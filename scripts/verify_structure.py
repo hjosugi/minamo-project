@@ -106,6 +106,8 @@ REQUIRED = [
     'docs/research/inochi2d-fork-strategy.md',
     'docs/research/kgm2-bitrate.md',
     'docs/research/webgpu-renderer-migration.md',
+    'docs/research/occlusion-robust-hands.md',
+    'docs/research/occlusion-robust-hands.ja.md',
     'docs/research/webgpu-renderer-migration.ja.md',
     'docs/research/kgm2-bitrate.ja.md',
     'scripts/bench-kgm2-bitrate.mjs',
@@ -2113,6 +2115,7 @@ def validate_research_docs() -> None:
         'docs/research/inochi2d-fork-strategy.md': '#275',
         'docs/research/kgm2-bitrate.md': '#277',
         'docs/research/webgpu-renderer-migration.md': '#276',
+        'docs/research/occlusion-robust-hands.md': '#271',
     }
     for rel, issue in research_docs.items():
         text = read(rel)
