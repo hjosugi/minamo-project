@@ -93,6 +93,16 @@ pnpm test
   Runtime updates must rebuild both artifacts, update these hashes, preserve
   `LICENSE.inox2d`, and repeat the real browser smoke procedure.
 
+### Fuzz harness
+
+- `crates/kgm1-codec/fuzz` depends on `libfuzzer-sys` and `arbitrary`, pinned by
+  its own `Cargo.lock` and excluded from the root workspace so that
+  `crates/kgm1-codec` itself stays dependency-free — it is a protocol codec that
+  may be vendored or audited elsewhere.
+- That lockfile is deliberately **not** in the `cargo audit` list: the harness is
+  nightly-only build tooling that never links into a shipped binary, and the
+  three audited lockfiles (root, `relay-rs`, `src-tauri`) are the ones that do.
+
 ## Rollback
 
 - Keep each dependency update in its own commit unless it is inseparable from

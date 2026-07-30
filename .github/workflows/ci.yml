@@ -78,6 +78,7 @@ jobs:
           workspaces: |
             .
             relay-rs
+            crates/kgm1-codec/fuzz
       - run: cargo fmt --manifest-path relay-rs/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path relay-rs/Cargo.toml --all-targets -- -D warnings
       - run: cargo build --locked --manifest-path relay-rs/Cargo.toml --release
@@ -85,6 +86,49 @@ jobs:
       - run: cargo fmt --manifest-path crates/kgm1-codec/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path crates/kgm1-codec/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path crates/kgm1-codec/Cargo.toml
+      # The fuzz harness only needs nightly to *run* under a sanitizer; checking
+      # and formatting it works on stable, so it is gated here rather than
+      # pinning those to a moving nightly rustfmt (#262).
+      - run: cargo fmt --manifest-path crates/kgm1-codec/fuzz/Cargo.toml -- --check
+      - run: cargo clippy --locked --manifest-path crates/kgm1-codec/fuzz/Cargo.toml --all-targets -- -D warnings
+
+  # Short smoke budget so a regression in the container decoder is caught on the
+  # PR that introduces it; the real search happens weekly in fuzz.yml (#262).
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # cargo-fuzz needs the sanitizer support that only nightly ships.
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/kgm1-codec/fuzz
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Seed the corpus from the shared conformance vectors
+        run: node scripts/seed-fuzz-corpus.mjs
+      # --target is explicit because cargo-fuzz infers the host triple from how
+      # its own binary was built, and the prebuilt one is musl-linked; left to
+      # itself it tries to build for a musl std the runner does not have.
+      - name: Fuzz the KGM1B container decoder
+        run: |
+          for target in decode_packet corrupt_valid roundtrip; do
+            cargo +nightly fuzz run --fuzz-dir crates/kgm1-codec/fuzz \
+              --target x86_64-unknown-linux-gnu "$target" -- \
+              -max_total_time=30 -print_final_stats=1
+          done
+      - name: Upload the failing input
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-ci
+          path: crates/kgm1-codec/fuzz/artifacts
+          if-no-files-found: ignore
 
   desktop:
     runs-on: ubuntu-latest

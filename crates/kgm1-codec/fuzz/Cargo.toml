@@ -1,0 +1,53 @@
+# cargo-fuzz harness for the KGM1B container decoder (#262).
+#
+# Deliberately a separate crate with its own lockfile, detached from the root
+# workspace by the empty `[workspace]` table below: `kgm1-codec` has no
+# dependencies at all, not even dev ones, which is worth keeping for a protocol
+# codec that may be vendored or audited elsewhere. libfuzzer-sys and arbitrary
+# are build-time tooling for this harness only and never reach a shipped binary.
+
+[package]
+name = "kgm1-codec-fuzz"
+version = "0.0.0"
+edition = "2021"
+license = "0BSD"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1", features = ["derive"] }
+libfuzzer-sys = "0.4"
+kgm1-codec = { path = ".." }
+
+# The shared decode contract the byte-oriented targets both assert.
+[lib]
+name = "kgm1_codec_fuzz"
+path = "src/lib.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_packet"
+path = "fuzz_targets/decode_packet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "corrupt_valid"
+path = "fuzz_targets/corrupt_valid.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip"
+path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
