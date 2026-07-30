@@ -1647,6 +1647,19 @@ def validate_desktop_contracts() -> None:
     ]:
         if needle not in release:
             add_error('.github/workflows/release.yml', f'release workflow missing desktop distribution contract: {needle}')
+    serialized_updater_matrix = re.search(
+        r'strategy:\s*\n'
+        r'\s+fail-fast: false\s*\n'
+        r'(?:\s*#.*\n)*'
+        r'\s+max-parallel: 1\s*\n'
+        r'\s+matrix:',
+        release,
+    )
+    if not serialized_updater_matrix:
+        add_error(
+            '.github/workflows/release.yml',
+            'signed updater matrix must serialize latest.json updates with max-parallel: 1',
+        )
     if 'Swatinem/rust-cache@v2' in release:
         add_error(
             '.github/workflows/release.yml',

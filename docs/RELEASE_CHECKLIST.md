@@ -50,6 +50,8 @@ camera, relay-token, WebTransport, or OBS smoke tests.
   committed.
 - The GitHub Release stays in draft until Linux, Windows, Apple Silicon macOS,
   and Intel macOS installer jobs all succeed.
+- Updater manifest publication is serialized across the platform matrix so
+  each job extends one `latest.json` instead of racing to overwrite it.
 - Release assets include Linux `.AppImage`/`.deb`, Windows `.exe`/`.msi`, and
   both `aarch64` and `x86_64` macOS `.dmg` files.
 - Each native installer filename includes the version, platform, and

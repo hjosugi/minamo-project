@@ -50,6 +50,8 @@ cd relay-node && node --check server.mjs
   コミットされていないこと。
 - Linux、Windows、Apple Silicon macOS、Intel macOSのインストーラージョブが
   すべて成功するまでGitHub Releaseがドラフトのままであること。
+- updater manifestの公開はプラットフォーム行列内で直列化し、各ジョブが
+  `latest.json` を上書き競合させずに拡張すること。
 - Releaseの配布ファイルにLinuxの `.AppImage`/`.deb`、Windowsの
   `.exe`/`.msi`、`aarch64` と `x86_64` の両macOS `.dmg` が含まれること。
 - 各ネイティブインストーラーのファイル名にバージョン、プラットフォーム、

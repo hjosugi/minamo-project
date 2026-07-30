@@ -93,6 +93,10 @@ jobs:
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
+      # tauri-action updates one shared latest.json asset per target. Serialize
+      # the matrix so each target merges the manifest written by the previous
+      # target instead of racing and dropping platform entries.
+      max-parallel: 1
       matrix:
         include:
           - name: Linux x86_64
