@@ -98,6 +98,8 @@ REQUIRED = [
     'docs/research/phone-camera-companion.md',
     'docs/research/imu-stick-integration.md',
     'docs/research/onnx-wholebody-pose.md',
+    'docs/research/audio-arkit-lipsync.md',
+    'docs/research/audio-arkit-lipsync.ja.md',
     'docs/research/onnx-wholebody-pose.ja.md',
     'docs/design/DD-009-onnx-backend-registry.md',
     'docs/benchmarks/onnx-pose-backends.md',
@@ -2080,6 +2082,7 @@ def validate_research_docs() -> None:
         'docs/research/phone-camera-companion.md': '#184',
         'docs/research/imu-stick-integration.md': '#185',
         'docs/research/onnx-wholebody-pose.md': '#269',
+        'docs/research/audio-arkit-lipsync.md': '#268',
     }
     for rel, issue in research_docs.items():
         text = read(rel)
