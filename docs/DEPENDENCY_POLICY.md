@@ -93,6 +93,18 @@ pnpm test
   Runtime updates must rebuild both artifacts, update these hashes, preserve
   `LICENSE.inox2d`, and repeat the real browser smoke procedure.
 
+### three.js and three-vrm are a version pair
+
+- `three` and `@pixiv/three-vrm` must be upgraded **together**, never
+  independently. three-vrm's node materials build on three's NodeMaterial/TSL
+  APIs, which churn between three releases, so a lone bump on either side can
+  break MToon rendering without a type or build error (#276).
+- Current pins already support the WebGPU path: `three@0.185.1` ships
+  `build/three.webgpu.js`, and `@pixiv/three-vrm@3.5.5` exports
+  `MToonNodeMaterial` from its `./nodes` subexport (not from the main entry).
+  No bump is needed to prototype `WebGPURenderer`; see
+  [research/webgpu-renderer-migration.md](research/webgpu-renderer-migration.md).
+
 ### Fuzz harness
 
 - `crates/kgm1-codec/fuzz` depends on `libfuzzer-sys` and `arbitrary`, pinned by

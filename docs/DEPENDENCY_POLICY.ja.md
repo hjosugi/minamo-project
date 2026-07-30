@@ -71,6 +71,11 @@ pnpm test
   `59922217e5db606c8d77916987909d63d24e0de3a0acb59e07fbbb3120edd2ce`です。
   ランタイムの更新は両方のアーティファクトを再ビルドし、これらのハッシュを更新し、`LICENSE.inox2d`を保持し、実際のブラウザスモーク手順を繰り返す必要があります。
 
+### three.js と three-vrm はバージョンの組
+
+- `three` と `@pixiv/three-vrm` は **常に同時に** 更新し、片方だけを更新しない。three-vrm のノードマテリアルは three の NodeMaterial/TSL API 上に構築されており、これらは three のリリース間で変動するため、片側だけの更新は型エラーもビルドエラーも出さずに MToon 描画を壊しうる (#276)。
+- 現在の固定バージョンは既に WebGPU 経路に対応している: `three@0.185.1` は `build/three.webgpu.js` を同梱し、`@pixiv/three-vrm@3.5.5` は `MToonNodeMaterial` を `./nodes` サブエクスポート (メインエントリではない) から公開している。`WebGPURenderer` のプロトタイプにバージョン更新は不要である。[research/webgpu-renderer-migration.md](research/webgpu-renderer-migration.md) を参照。
+
 ### ファズハーネス
 
 - `crates/kgm1-codec/fuzz`は`libfuzzer-sys`と`arbitrary`に依存し、独自の`Cargo.lock`で固定され、ルートワークスペースから除外されています。これは`crates/kgm1-codec`自体を依存関係ゼロに保つためです — 他所でベンダリングまたは監査される可能性のあるプロトコルコーデックだからです。
