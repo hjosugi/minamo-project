@@ -97,6 +97,8 @@ REQUIRED = [
     'docs/research/multi-camera-fusion.md',
     'docs/research/phone-camera-companion.md',
     'docs/research/imu-stick-integration.md',
+    'docs/research/onnx-wholebody-pose.md',
+    'docs/research/onnx-wholebody-pose.ja.md',
     'docs/design/DD-009-onnx-backend-registry.md',
     'docs/benchmarks/onnx-pose-backends.md',
     'scripts/kagami-pack.mjs',
@@ -2077,6 +2079,7 @@ def validate_research_docs() -> None:
         'docs/research/multi-camera-fusion.md': '#183',
         'docs/research/phone-camera-companion.md': '#184',
         'docs/research/imu-stick-integration.md': '#185',
+        'docs/research/onnx-wholebody-pose.md': '#269',
     }
     for rel, issue in research_docs.items():
         text = read(rel)

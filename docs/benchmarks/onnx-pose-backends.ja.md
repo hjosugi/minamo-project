@@ -21,6 +21,9 @@
 | onnx-yolo-pose (n) | webgpu | 17 | 保留中 | 保留中 | 保留中 | 出荷前にAGPLライセンスを確認 |
 | onnx-yolo-pose (n) | wasm | 17 | 保留中 | 保留中 | 保留中 | CPU/WASMフォールバックティア |
 | onnx-rtmpose (t) | webgpu | 17/26 | 保留中 | 保留中 | 保留中 | 人物検出ステージが必要 |
+| onnx-rtmw (m) | webgpu | 133 | 保留中 | 保留中 | 保留中 | Apache-2.0; 最初の統合として推奨 (#269); 検出器 + pose をエンドツーエンドで計測 |
+| onnx-rtmw (m) | wasm | 133 | 保留中 | 保留中 | 保留中 | CPU/WASMフォールバックティア |
+| onnx-rtmw3d | webgpu | 133 (3D) | 保留中 | 保留中 | 保留中 | 見送り: より重く3D精度が未評価 (#269) |
 
 ## 方法に関するノート
 

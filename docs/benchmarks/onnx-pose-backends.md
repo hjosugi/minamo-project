@@ -28,6 +28,9 @@ the harness and table shape are committed so results are comparable.
 | onnx-yolo-pose (n) | webgpu | 17 | pending | pending | pending | check AGPL licensing before shipping |
 | onnx-yolo-pose (n) | wasm | 17 | pending | pending | pending | CPU/WASM fallback tier |
 | onnx-rtmpose (t) | webgpu | 17/26 | pending | pending | pending | needs person-detector stage |
+| onnx-rtmw (m) | webgpu | 133 | pending | pending | pending | Apache-2.0; recommended first integration (#269); measure detector + pose end to end |
+| onnx-rtmw (m) | wasm | 133 | pending | pending | pending | CPU/WASM fallback tier |
+| onnx-rtmw3d | webgpu | 133 (3D) | pending | pending | pending | deferred: heavier, 3D accuracy unevaluated (#269) |
 
 ## Method notes
 

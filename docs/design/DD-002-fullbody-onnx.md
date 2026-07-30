@@ -49,6 +49,8 @@ The implemented TypeScript boundary lives in `src/core/ml.ts`:
 | YOLO11-pose (n/s) | 17 | one-stage, easy pre/post; check AGPL licensing impact |
 | RTMPose (t/s) | 17/26 | top-down, needs a person detector stage; permissive license |
 | MoveNet Thunder | 17 | TF origin, easy conversion, older |
+| RTMW (m/l/x) | 133 | whole-body; Apache-2.0; top-down, so detector + pose = two sessions. Recommended first integration — see [../research/onnx-wholebody-pose.md](../research/onnx-wholebody-pose.md) (#269) |
+| RTMW3D | 133 | monocular 3D via coordinate classification; addresses the lifting gap below, but heavier and unevaluated — deferred |
 
 Licensing is a first-class selection criterion: AGPL models cannot ship in
 the default build; they can be a user-side plugin.
