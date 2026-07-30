@@ -29,6 +29,8 @@ REQUIRED = [
     'docs/IMPLEMENTATION_PROGRESS.md',
     'docs/transport/kgm2-reference-codecs.md',
     'docs/transport/moq-evaluation.md',
+    'docs/transport/transport-strategy-2026.md',
+    'docs/transport/transport-strategy-2026.ja.md',
     'docs/security/e2ee.md',
     'docs/adr/README.md',
     'docs/product/onboarding.md',
@@ -1562,7 +1564,11 @@ def validate_transport_contracts() -> None:
         'Decision: no-go',
         'motion.delta',
         'motion.keyframe',
-        'draft-ietf-moq-transport-18',
+        # Pinned so the evaluation cannot silently drift behind the draft it
+        # reviewed; bump deliberately with the doc (#274).
+        'draft-ietf-moq-transport-19',
+        # The no-go must stay falsifiable by events rather than re-argued.
+        'Adopt MoQT when all three',
     ]:
         if needle not in moq_doc:
             add_error('docs/transport/moq-evaluation.md', f'missing MoQ evaluation section: {needle}')

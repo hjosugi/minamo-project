@@ -9,8 +9,11 @@ test in CI.
 
 Sources reviewed:
 
-- IETF `draft-ietf-moq-transport-18`, May 2026:
+- IETF `draft-ietf-moq-transport-19`, 2026-07-06 (Active I-D, moq WG; IESG
+  submission milestone Dec 2026):
   https://datatracker.ietf.org/doc/draft-ietf-moq-transport/
+- IETF `draft-ietf-moq-secure-objects-01`, 2026-07-06:
+  https://datatracker.ietf.org/doc/draft-ietf-moq-secure-objects/
 - IETF Media over QUIC working group charter:
   https://datatracker.ietf.org/group/moq/about/
 
@@ -61,6 +64,19 @@ delta semantics, but it requires MTU validation before production use.
 ## Go/No-Go
 
 Decision: no-go for production in this repository today.
+
+Adopt MoQT when all three of the following hold — recorded as an explicit
+trigger (#274) so the decision is re-opened by events rather than re-argued:
+
+1. `draft-ietf-moq-transport` is published as an RFC or has cleared IESG review.
+2. At least two browser-native or widely-used client libraries interoperate
+   against a public relay.
+3. A MoQT track mapping for KGM frames can run in CI against a relay this
+   project does not operate.
+
+See [transport-strategy-2026.md](transport-strategy-2026.md) for the 2026
+refresh, including why `draft-ietf-moq-secure-objects` is a reference for the
+E2EE envelope rather than a replacement.
 
 Reasons:
 

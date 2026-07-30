@@ -86,6 +86,7 @@
 - [transport/webtransport-realtime.md](transport/webtransport-realtime.md)
 - [transport/kgm2-reference-codecs.md](transport/kgm2-reference-codecs.md)
 - [transport/moq-evaluation.md](transport/moq-evaluation.md)
+- [transport/transport-strategy-2026.md](transport/transport-strategy-2026.md) — 2026 transport refresh (#274)
 - [compression/avatar-compression.md](compression/avatar-compression.md) — 概要 + kagami-pack CLI (#41)
 - [compression/glb-inspection.md](compression/glb-inspection.md) (#156)
 - [compression/gltf-transform.md](compression/gltf-transform.md) (#157)
