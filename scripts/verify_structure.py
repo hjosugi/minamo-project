@@ -104,6 +104,9 @@ REQUIRED = [
     'docs/research/audio-arkit-lipsync.ja.md',
     'docs/research/learned-smoothing-filters.md',
     'docs/research/inochi2d-fork-strategy.md',
+    'docs/research/kgm2-bitrate.md',
+    'docs/research/kgm2-bitrate.ja.md',
+    'scripts/bench-kgm2-bitrate.mjs',
     'docs/research/inochi2d-fork-strategy.ja.md',
     'docs/research/learned-smoothing-filters.ja.md',
     'docs/benchmarks/filter-response.md',
@@ -2106,6 +2109,7 @@ def validate_research_docs() -> None:
         'docs/research/audio-arkit-lipsync.md': '#268',
         'docs/research/learned-smoothing-filters.md': '#270',
         'docs/research/inochi2d-fork-strategy.md': '#275',
+        'docs/research/kgm2-bitrate.md': '#277',
     }
     for rel, issue in research_docs.items():
         text = read(rel)

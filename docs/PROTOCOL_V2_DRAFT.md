@@ -32,6 +32,37 @@ The protocol must support:
 - binary transport over WebTransport datagrams
 - JSON transport for debugging, tests, and WebSocket fallback
 
+### 1.1 Compression: no neural codec, and no entropy coding yet (#277)
+
+Measured wire cost (`pnpm bench:kgm2`, verified against `shared/kgm2.js`):
+a keyframe is 74 B and a delta is `26 + N` B for `N` active blendshape channels.
+KGM2's target is 38 B/frame, so **a delta already meets it at N <= 12 with no
+compression at all.**
+
+- **No neural motion tokenizer.** It inherits the same ceiling as a table-based
+  coder while adding model weights, encode-path inference latency, and a decoder
+  that cannot be read from a hex dump. Revisit only if packet-loss concealment is
+  separately wanted — prediction is the one thing a model offers that a table
+  does not.
+- **No entropy coding yet.** It can only touch the mask and delta bytes, `7 + N`
+  of `26 + N`; the other **19 B (header 12, packed quat 4, pos deltas 3) is a
+  floor** it cannot reach, and that floor is 50% of the whole 38 B target.
+- **The header is the larger opportunity and neither proposal touched it.** Up to
+  8 B/frame: `keyId` is already `floor(seq / keyframeInterval)` and fully
+  derivable, `t` is largely predictable from `seq` at a known frame rate, and
+  `magic`+`version` repeat on every datagram of an established session.
+- **E2EE overhead dominates all of it.** The envelope adds 24 B (12 B transmitted
+  nonce + 12 B tag), so a 38 B frame is 62 B on the wire. Dropping the nonce
+  saves more than compressing the entire payload could — but it needs
+  per-participant keys, because a room-scoped key makes a counter nonce unsafe
+  with multiple senders (#274).
+
+Priority order: per-participant keys > header redesign > entropy coding > neural.
+All of it is gated on a consented motion corpus, since `N`'s distribution is
+unknown and the repo has no recordings — `tests/fixtures/kgm1-synthetic.jsonl` is
+a two-line schema fixture. Full analysis:
+[research/kgm2-bitrate.md](research/kgm2-bitrate.md).
+
 ## 2. Transport modes
 
 ### 2.1 KGM1 JSON

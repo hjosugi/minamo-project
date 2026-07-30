@@ -23,6 +23,7 @@
     "benchmark:drum": "tsx scripts/drum-benchmark.ts",
     "benchmark:drum:ci": "tsx scripts/drum-benchmark.ts tests/fixtures/drum-benchmark-runner.manifest.json",
     "benchmark:pipeline": "node scripts/benchmark-motion-pipeline.mjs",
+    "bench:kgm2": "node scripts/bench-kgm2-bitrate.mjs",
     "bench:filters": "node scripts/bench-filter-response.mjs",
     "bench:allocs": "node --expose-gc --import tsx scripts/bench-frame-allocs.ts",
     "coverage": "c8 node tests/run-tests.mjs && node scripts/check-coverage.mjs"
