@@ -105,6 +105,8 @@ REQUIRED = [
     'docs/research/learned-smoothing-filters.md',
     'docs/research/inochi2d-fork-strategy.md',
     'docs/research/kgm2-bitrate.md',
+    'docs/research/webgpu-renderer-migration.md',
+    'docs/research/webgpu-renderer-migration.ja.md',
     'docs/research/kgm2-bitrate.ja.md',
     'scripts/bench-kgm2-bitrate.mjs',
     'docs/research/inochi2d-fork-strategy.ja.md',
@@ -2110,6 +2112,7 @@ def validate_research_docs() -> None:
         'docs/research/learned-smoothing-filters.md': '#270',
         'docs/research/inochi2d-fork-strategy.md': '#275',
         'docs/research/kgm2-bitrate.md': '#277',
+        'docs/research/webgpu-renderer-migration.md': '#276',
     }
     for rel, issue in research_docs.items():
         text = read(rel)
