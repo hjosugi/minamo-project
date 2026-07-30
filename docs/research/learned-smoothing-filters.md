@@ -25,6 +25,8 @@ and measure the benchmark that makes such a claim checkable at all.
   against reference filters.
 - [x] **Baseline scored**: all three presets and all five per-group defaults, in
   [../benchmarks/filter-response.md](../benchmarks/filter-response.md).
+- [x] **Tuning alternative ruled out**: a 725-setting `(minCutoff, beta)` sweep
+  finds nothing that dominates a shipped preset once outlier rejection counts.
 - [x] Written decision per candidate, and the bar a candidate must clear.
 - [ ] Port/run FLK on the pose channel and compare at equal lag. **Not done** —
   requires porting the model (Python/PyTorch upstream) to JS or ONNX, which is
@@ -92,20 +94,41 @@ has not been shown to reduce visible shake at 60 fps.
 
 So the field of live candidates is one, not three.
 
-### The cheaper win the benchmark exposes
+### The tuning space offers no free win — which sharpens the case for FLK
 
-With the baseline measured, the three presets turn out not to span the
-`(minCutoff, beta)` space. The `headRotation` default (1.2, 0.8) beats the
-`balanced` preset (1.6, 0.4) on both jitter (0.085 vs 0.106) and step lag
-(100 vs 133 ms), paying for it only in sustained-motion tracking (0.0581 vs
-0.0543 RMSE). `beta` — the adaptive derivative gain that is the whole point of
-One Euro over a fixed low pass — is doing more work than the preset ladder
-suggests.
+The obvious cheap alternative to a learned filter is better One Euro tuning, so
+that was tested first: `pnpm bench:filters --sweep` scores 725
+`(minCutoff, beta)` settings against every shipped configuration.
 
-A sweep of that space with `pnpm bench:filters` costs minutes and no new
-dependency. It should be exhausted before anyone proposes shipping a neural
-network into a 60 fps loop, because if it captures most of the available gain the
-learned filter has to beat a much stronger baseline than the one #270 assumed.
+Measured on jitter, step lag and sustained-motion tracking, **every shipped
+configuration is dominated**, often heavily — `pose` (0.8, 0.2) looked beatable
+by (0.4, 0.8) at 41% less jitter and 61% less lag, and the result survived a
+hostile clock (noise 0.05, dt jitter ±25%).
+
+It does not survive outlier injection. Adding spike passthrough as a fourth axis,
+**nothing dominates any preset: 0 of 725, for all eight configurations.** Every
+apparent win came from raising `beta`, and One Euro's cutoff is
+`minCutoff + beta * |dx/dt|`, so a one-frame outlier detonates the derivative
+estimate and the filter opens up exactly when it should clamp. Spike passthrough
+rises monotonically with `beta` — 0.144 to 0.276 across `beta` 0 to 1.2 at fixed
+cutoff. The (0.4, 0.8) setting that looked free for `pose` passes 55% more of a
+bad landmark than the incumbent.
+
+So the shipped presets are Pareto-optimal on this benchmark, and there is no
+retuning shortcut. The interesting consequence is what that says about FLK.
+
+The one axis tuning cannot improve is precisely the one FLK claims: its reported
+gains are "up to 140 mm with non-Gaussian noise and 53 mm with missing
+information" — outliers and dropped frames, not at-rest jitter. Read against this
+sweep, that stops being a mismatch and becomes the whole point. One Euro's
+weakness is structural: a filter whose gain is driven by the measured derivative
+cannot also reject derivative outliers. A learned motion model can, because it
+has a prior about what motion is plausible.
+
+That reframes the evaluation. FLK should not be measured on jitter at matched lag
+— tuning already sits on that frontier and would likely win. It should be
+measured on **spike passthrough and dropped-frame recovery at matched jitter and
+lag**, which is where One Euro provably has nothing left to give.
 
 ## Decision
 
@@ -123,15 +146,15 @@ feature from live smoothing and not currently requested.
 port it to the blendshape, quaternion, or curl channels: its biomechanical core
 is meaningless there, so what would remain is a learned Kalman filter competing
 with a well-tuned One Euro on 1-D signals, which is a much weaker proposition
-than the paper's results imply. Before any porting effort, run the sweep below —
-and when FLK is measured, hold it to the four criteria in
-[../benchmarks/filter-response.md](../benchmarks/filter-response.md), especially
-overshoot, which a Kalman filter with a learned motion model can produce and
-One Euro cannot.
+than the paper's results imply. When it is measured, hold it to the five criteria
+in [../benchmarks/filter-response.md](../benchmarks/filter-response.md) — and
+judge it on **spike passthrough at matched jitter and lag**, not on jitter, for
+the reason above. Watch overshoot too: a Kalman filter with a learned motion
+model can produce it and One Euro cannot.
 
-**Do the preset sweep first.** It is the highest ratio of expected gain to risk
-available here, needs no dependency, and sharpens the baseline that any learned
-filter must beat.
+**The preset sweep is done, and it found nothing.** The presets are
+Pareto-optimal once outlier rejection is counted, so there is no cheap retuning
+to try before a learned filter — that option is closed, not pending.
 
 ## Sources
 
