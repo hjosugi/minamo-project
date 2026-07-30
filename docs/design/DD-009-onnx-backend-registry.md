@@ -50,9 +50,12 @@ optional to recommended.
   backend live; covered by tests.
 - [ ] One ONNX model integrated and benchmarked on real hardware, with the
   benchmark table filled in. This is the remaining hardware-gated step; the
-  registry, interface, and benchmark harness are in place, and the model
-  integration lands when a licensed model and a WebGPU test device are
-  available. Issue stays open until then.
+  registry, interface, and benchmark harness are in place. The *model* is no
+  longer the open question — [../research/onnx-wholebody-pose.md](../research/onnx-wholebody-pose.md)
+  (#269) recommends RTMW-m @256x192 (Apache-2.0, whole-body 133 keypoints) and
+  records that it is top-down, so the backend is a detector plus a pose session
+  and the fps target must be measured end to end. What remains is the WebGPU
+  test device. Issue stays open until then.
 
 ## Risks
 

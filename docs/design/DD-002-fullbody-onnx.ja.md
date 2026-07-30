@@ -44,6 +44,8 @@ interface PoseBackend {
 | YOLO11-pose (n/s) | 17 | 一段階、前処理/後処理が簡単; AGPLライセンスの影響を確認 |
 | RTMPose (t/s) | 17/26 | トップダウン、人物検出ステージが必要; 寛容なライセンス |
 | MoveNet Thunder | 17 | TF起源、簡単な変換、古い |
+| RTMW (m/l/x) | 133 | 全身; Apache-2.0; top-down のため検出器 + pose の2セッション。最初の統合として推奨 — [../research/onnx-wholebody-pose.md](../research/onnx-wholebody-pose.md) (#269) 参照 |
+| RTMW3D | 133 | 座標分類による単眼3D。下記の lifting ギャップに対応するが、より重く未評価のため見送り |
 
 ライセンスは一級の選択基準です: AGPLモデルはデフォルトビルドに出荷できません; ユーザー側のプラグインとして使用できます。
 

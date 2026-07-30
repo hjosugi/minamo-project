@@ -57,6 +57,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [research/multi-camera-fusion.md](research/multi-camera-fusion.md) (#183)
 - [research/phone-camera-companion.md](research/phone-camera-companion.md) (#184)
 - [research/imu-stick-integration.md](research/imu-stick-integration.md) (#185)
+- [research/onnx-wholebody-pose.md](research/onnx-wholebody-pose.md) (#269)
 - [research/2026-07-code-and-research-audit.md](research/2026-07-code-and-research-audit.md) (#246-#278)
 
 ## Product
