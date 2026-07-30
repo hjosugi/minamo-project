@@ -59,6 +59,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [research/imu-stick-integration.md](research/imu-stick-integration.md) (#185)
 - [research/onnx-wholebody-pose.md](research/onnx-wholebody-pose.md) (#269)
 - [research/audio-arkit-lipsync.md](research/audio-arkit-lipsync.md) (#268)
+- [research/learned-smoothing-filters.md](research/learned-smoothing-filters.md) (#270)
 - [research/2026-07-code-and-research-audit.md](research/2026-07-code-and-research-audit.md) (#246-#278)
 
 ## Product
@@ -106,6 +107,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 - [benchmarks/quality-gates.md](benchmarks/quality-gates.md)
 - [benchmarks/hand-stability-report.md](benchmarks/hand-stability-report.md)
+- [benchmarks/filter-response.md](benchmarks/filter-response.md) — One Euro jitter/lag baseline (#270)
 - [benchmarks/face-quality-benchmarks.md](benchmarks/face-quality-benchmarks.md)
 - [benchmarks/drum-benchmark-metrics.md](benchmarks/drum-benchmark-metrics.md)
 - [benchmarks/drum-benchmark-runner.md](benchmarks/drum-benchmark-runner.md)
