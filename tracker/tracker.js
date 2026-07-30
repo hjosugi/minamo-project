@@ -65,7 +65,8 @@ import {
   handTargetDebugRows,
   isEditableTarget,
   loadJson,
-  mirrorFacePayload,
+  mirrorFacePayloadInPlace,
+  mergeWarningsInto,
   normalizeDrumKitConfig,
   normalizeHandCalibrationProfile,
   normalizeProfile,
@@ -85,7 +86,7 @@ import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import { waitForVideoMetadata, startVideoPlayback } from '../shared/camera-startup.js';
 import { setupPageI18n } from '../shared/i18n.js';
-import { mat4ToQuat, applyPitchOffset } from '../shared/pose-math.js';
+import { mat4ToQuatInto, applyPitchOffset } from '../shared/pose-math.js';
 import { fingerCurl, fingerSpread, fingerVector } from '../shared/hand-math.js';
 import {
   AUDIO_LIPSYNC_TARGET_LATENCY_MS,
@@ -181,6 +182,12 @@ let handProfile = normalizeHandCalibrationProfile(loadJson(localStorage, HAND_PR
 let drumKit = normalizeDrumKitConfig(loadJson(localStorage, DRUM_KIT_STORAGE_KEY, createDefaultDrumKitConfig('default')));
 let resolvedAssets = null;
 
+// Stands in for "no hands this frame" so the loop stops allocating a throwaway
+// array 60 times a second (#259). Frozen because it is shared across every frame:
+// a stray push would otherwise leave a phantom hand behind for the rest of the
+// session, which is far harder to notice than the TypeError.
+const EMPTY_HANDS = Object.freeze([]);
+
 const state = {
   running: false,
   mirror: Boolean(settings.mirror),
@@ -195,11 +202,18 @@ const state = {
   raw: new Float32Array(NUM_CHANNELS),
   quat: [0, 0, 0, 1],
   pos: [0, 0, 0.4],
-  _posScratch: new Float32Array(3), // reused by the head-position filter (#259)
+  // Buffers and objects the 60 fps loop refills instead of reallocating (#259).
+  // Everything here is either consumed synchronously (encode, overlay drawing) or
+  // snapshotted by its consumer — see the comment on state._frame.
+  _posScratch: new Float32Array(3), // head-position filter
+  _quatIn: [0, 0, 0, 1], // this frame's head rotation, before filtering
+  _posIn: [0, 0, 0.4], // this frame's head position, before stabilizing
+  _frameWarnings: [], // warnings raised while building this frame
+  _warningSet: new Set(), // membership test for the state.warnings dedupe
   posePoints: new Float32Array(NUM_POSE_POINTS * 3),
   hasPose: false,
   hasHands: false,
-  hands: [],
+  hands: EMPTY_HANDS,
   handTargets: null,
   lastHandResult: null,
   lastHandInferenceMs: -Infinity,
@@ -224,7 +238,16 @@ const state = {
   confidenceTracker: new LandmarkConfidenceTracker(),
   cameraControls: { supported: [], attempted: [], unavailable: true, lowLightNudged: false },
   selectedChannel: ARKIT_52.indexOf('jawOpen'),
-  warnings: [],
+  warnings: [], // refilled in place each frame; never replaced
+  // The outgoing frame, refilled per frame rather than rebuilt. Safe to reuse
+  // because both consumers that outlive the frame snapshot it: createMotionRecord
+  // is JSON.stringify-ed on the spot, and createDatasetRecord copies every array
+  // out via roundNumberArray. tests/run-tests.mjs pins that, since reuse here is
+  // only correct for as long as it holds.
+  // Fields are pointed at the live state buffers each frame, exactly as the
+  // per-frame literal used to be; only the wrappers are reused.
+  _frame: { t: 0, seq: 0, face: { quat: null, pos: null, weights: null }, pose: null, hands: null },
+  _framePose: { points: null },
   quality: { state: 'idle', score: 0, reasons: [], warnings: [] },
   lastFps: 0,
   qualityCanvas: document.createElement('canvas'),
@@ -729,6 +752,17 @@ function blockingCapabilityMessage(warnings) {
 
 let lastVideoTime = -1;
 
+/**
+ * `target.push(...source)` without the spread's per-call argument array — this
+ * runs several times per frame at 60 fps (#259).
+ * @template T
+ * @param {T[]} target
+ * @param {Iterable<T>} source
+ */
+function pushAll(target, source) {
+  for (const item of source) target.push(item);
+}
+
 function loop() {
   if (!state.running) return;
   const nowMs = performance.now();
@@ -764,7 +798,8 @@ function loop() {
     const selectedLandmarks = faceIndex >= 0 ? faceRes.faceLandmarks?.[faceIndex] : null;
     const hasFace = faceIndex >= 0 && faceRes.faceBlendshapes && faceRes.faceBlendshapes[faceIndex];
     let shouldSendFace = false;
-    const frameWarnings = [];
+    const frameWarnings = state._frameWarnings;
+    frameWarnings.length = 0;
 
     if (hasFace) {
       state.trackedFaceBox = faceSelection.box;
@@ -783,22 +818,22 @@ function loop() {
       }
 
       // --- head pose from the facial transformation matrix (cm -> m)
-      let quat = [0, 0, 0, 1];
-      let pos = [0, 0, 0.4];
+      const quat = state._quatIn;
+      const pos = state._posIn;
       const mats = faceRes.facialTransformationMatrixes;
       if (mats && mats[faceIndex]) {
         const m = mats[faceIndex].data;
-        quat = mat4ToQuat(m);
-        pos = [m[12] / 100, m[13] / 100, m[14] / 100];
+        mat4ToQuatInto(quat, m);
+        pos[0] = m[12] / 100;
+        pos[1] = m[13] / 100;
+        pos[2] = m[14] / 100;
+      } else {
+        quat[0] = 0; quat[1] = 0; quat[2] = 0; quat[3] = 1;
+        pos[0] = 0; pos[1] = 0; pos[2] = 0.4;
       }
 
       // --- mirror: reflect rotation across the YZ plane and swap L/R channels
-      if (state.mirror) {
-        const mirrored = mirrorFacePayload({ quat, pos, weights: state.raw });
-        quat = mirrored.quat;
-        pos = mirrored.pos;
-        state.raw.set(mirrored.weights);
-      }
+      if (state.mirror) mirrorFacePayloadInPlace(quat, pos, state.raw);
 
       const gaze = resolveGaze(state.raw, selectedLandmarks, { mirror: state.mirror, calibration: profile.gaze });
       state.raw.set(applyGazeToWeights(state.raw, gaze));
@@ -807,7 +842,7 @@ function loop() {
 
       // --- safety, calibration, and One Euro filtering
       const sanitized = sanitizeWeights(state.raw);
-      frameWarnings.push(...sanitized.warnings);
+      pushAll(frameWarnings, sanitized.warnings);
       sampleGuidedCalibration(sanitized.weights);
       const calibratedWeights = applyCalibrationProfile(sanitized.weights, profile);
       const lossState = state.trackingLossSmoother.update(true, calibratedWeights, nowMs);
@@ -857,9 +892,9 @@ function loop() {
     }
 
     state.hasHands = false;
-    state.hands = [];
+    state.hands = EMPTY_HANDS;
     state.handTargets = null;
-    state.handDebugRows = [];
+    // handTargets and handDebugRows are set by both branches below.
     if (handRes && handRes.landmarks && handRes.landmarks.length > 0) {
       state.hasHands = true;
       state.hands = handRes.landmarks;
@@ -869,7 +904,7 @@ function loop() {
       const stableHands = state.handTargetStabilizer.update(calibratedHandTargets, nowMs);
       state.handTargets = stableHands.targets.length ? stableHands.targets : null;
       state.handDebugRows = handTargetDebugRows(state.handTargets || calibratedHandTargets);
-      frameWarnings.push(...stableHands.warnings);
+      pushAll(frameWarnings, stableHands.warnings);
       if (stableHands.warnings.some((warning) => warning.startsWith('HAND_CURL_CLAMPED') || warning.startsWith('HAND_SPREAD_CLAMPED'))) {
         frameWarnings.push('HAND_FAST_MOTION_BLUR');
       }
@@ -884,7 +919,7 @@ function loop() {
       const stableHands = state.handTargetStabilizer.update([], nowMs);
       state.handTargets = stableHands.targets.length ? stableHands.targets : null;
       state.handDebugRows = handTargetDebugRows(state.handTargets || []);
-      frameWarnings.push(...stableHands.warnings);
+      pushAll(frameWarnings, stableHands.warnings);
     }
 
     state.drumOverlayState = deriveDrumOverlayState(state.handTargets || [], drumKit);
@@ -904,7 +939,7 @@ function loop() {
     });
     if (state.handsEnabled && state.quality.warnings.includes(WARNING_TAXONOMY.lowLight)) frameWarnings.push('HAND_LOW_LIGHT');
     if (state.handsEnabled && state.quality.warnings.includes(WARNING_TAXONOMY.motionBlur)) frameWarnings.push('HAND_FAST_MOTION_BLUR');
-    state.warnings = [...new Set([...frameWarnings, ...state.quality.warnings])];
+    mergeWarningsInto(state.warnings, state._warningSet, frameWarnings, state.quality.warnings);
 
     // --- encode and send
     if (shouldSendFace) {
@@ -924,13 +959,19 @@ function loop() {
         ? voiceAccent.headNod * Math.sin(nowMs * 0.018)
         : 0;
       const faceQuat = applyPitchOffset(state.quat, voiceNod);
-      const frame = {
-        t: Math.round(nowMs),
-        seq: state.seq++,
-        face: { quat: faceQuat, pos: state.pos, weights: voiceAccent.weights },
-        pose: state.hasPose ? { points: state.posePoints } : null,
-        hands: state.handTargets,
-      };
+      const frame = state._frame;
+      frame.t = Math.round(nowMs);
+      frame.seq = state.seq++;
+      frame.face.quat = faceQuat;
+      frame.face.pos = state.pos;
+      frame.face.weights = voiceAccent.weights;
+      if (state.hasPose) {
+        state._framePose.points = state.posePoints;
+        frame.pose = state._framePose;
+      } else {
+        frame.pose = null;
+      }
+      frame.hands = state.handTargets;
       const buf = encodeFrame(frame);
       state.lastPacketBytes = buf.byteLength;
       state.transport.send(buf);

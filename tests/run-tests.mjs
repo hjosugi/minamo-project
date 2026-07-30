@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { takeLateFailures, withStubbedDom } from './helpers/dom-stub.mjs';
 import { localizeDesktopStatus } from '../desktop/status-i18n.js';
-import { applyPitchOffset, mat4ToQuat } from '../shared/pose-math.js';
+import { applyPitchOffset, mat4ToQuat, mat4ToQuatInto } from '../shared/pose-math.js';
 import { fingerCurl, fingerSpread, fingerVector, jointAngle } from '../shared/hand-math.js';
 import { roomLayout, slotOffsetX } from '../shared/room-layout.js';
 import { execFileSync } from 'node:child_process';
@@ -143,7 +143,7 @@ import {
   normalizeParticipantId,
 } from '../shared/room-envelope.js';
 import { OneEuroFilter, OneEuroQuat } from '../shared/filters.js';
-import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX } from '../shared/blendshapes.js';
+import { ARKIT_52, NUM_CHANNELS, NUM_POSE_POINTS, CHANNEL_INDEX, MIRROR_INDEX } from '../shared/blendshapes.js';
 import {
   CALIBRATION_GUIDE_TOTAL_MS,
   HAND_CALIBRATION_TOTAL_MS,
@@ -183,6 +183,8 @@ import {
   gazeAngularErrorDegrees,
   isEditableTarget,
   mirrorFacePayload,
+  mirrorFacePayloadInPlace,
+  mergeWarningsInto,
   mirrorWeights,
   normalizeDrumKitConfig,
   normalizeHandCalibrationProfile,
@@ -1518,6 +1520,125 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const classList = { mirrored: false, toggle(name, value) { if (name === 'mirrored') this.mirrored = value; } };
   assert.equal(setMirrorPreviewClass({ classList }, true), true);
   assert.equal(classList.mirrored, true);
+}
+
+{
+  // The allocation-free forms the 60 fps tracker loop uses must agree with the
+  // allocating ones they replaced (#259) — otherwise this is not a perf change,
+  // it is a silent behaviour change nobody would see until a stream looked wrong.
+
+  // mat4ToQuatInto fills the caller's array and returns it.
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const out = [9, 9, 9, 9];
+  assert.equal(mat4ToQuatInto(out, identity), out, 'mat4ToQuatInto must return the array it was handed');
+  const matrices = [
+    identity,
+    [1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1], // 180 about x
+    [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1], // 180 about y
+    [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], // 180 about z
+    [], // degenerate: every branch of the dispatch, plus the identity fallback
+    [0, 0, 0],
+  ];
+  for (const matrix of matrices) {
+    assert.deepEqual(mat4ToQuatInto([0, 0, 0, 0], matrix), mat4ToQuat(matrix),
+      `mat4ToQuatInto must match mat4ToQuat for ${JSON.stringify(matrix)}`);
+  }
+
+  // The in-place mirror swaps channel pairs with no scratch buffer, which is only
+  // valid because MIRROR_INDEX is an involution. If a one-way channel is ever
+  // added, that assumption breaks silently, so it is checked rather than trusted.
+  for (let i = 0; i < NUM_CHANNELS; i++) {
+    assert.equal(MIRROR_INDEX[MIRROR_INDEX[i]], i,
+      `MIRROR_INDEX must be an involution; channel ${i} (${ARKIT_52[i]}) maps to ${MIRROR_INDEX[i]} which maps back to ${MIRROR_INDEX[MIRROR_INDEX[i]]}`);
+  }
+
+  const source = new Float32Array(NUM_CHANNELS);
+  for (let i = 0; i < NUM_CHANNELS; i++) source[i] = (i % 7) / 7;
+  source[CHANNEL_INDEX.eyeBlinkLeft] = Number.NaN; // mirrorWeights coerces this to 0
+  const mirrorQuat = [0.1, 0.2, -0.3, 0.9];
+  const mirrorPos = [0.2, 0.1, 0.4];
+  const expected = mirrorFacePayload({ quat: mirrorQuat, pos: mirrorPos, weights: source });
+  const inPlaceQuat = mirrorQuat.slice();
+  const inPlacePos = mirrorPos.slice();
+  const inPlaceWeights = Float32Array.from(source);
+  mirrorFacePayloadInPlace(inPlaceQuat, inPlacePos, inPlaceWeights);
+  assert.deepEqual(inPlaceQuat, expected.quat, 'in-place mirror must reflect the rotation the same way');
+  assert.deepEqual(inPlacePos, expected.pos, 'in-place mirror must reflect the position the same way');
+  for (let i = 0; i < NUM_CHANNELS; i++) {
+    assert.equal(inPlaceWeights[i], expected.weights[i],
+      `in-place mirror must match mirrorFacePayload on channel ${i} (${ARKIT_52[i]})`);
+  }
+
+  // Mirroring is its own inverse, which is the involution above observed end to
+  // end. Finite channels only: the NaN coercion is deliberately not reversible.
+  const finiteWeights = Float32Array.from(source, (w) => (Number.isFinite(w) ? w : 0));
+  const twiceQuat = mirrorQuat.slice();
+  const twicePos = mirrorPos.slice();
+  const twiceWeights = Float32Array.from(finiteWeights);
+  for (let pass = 0; pass < 2; pass++) mirrorFacePayloadInPlace(twiceQuat, twicePos, twiceWeights);
+  assert.deepEqual(twiceQuat, mirrorQuat, 'mirroring twice must restore the rotation');
+  assert.deepEqual(twicePos, mirrorPos, 'mirroring twice must restore the position');
+  assert.deepEqual(Array.from(twiceWeights), Array.from(finiteWeights), 'mirroring twice must restore every channel');
+
+  // mergeWarningsInto replaces `[...new Set([...a, ...b])]` without allocating.
+  const dedup = [];
+  const seen = new Set();
+  const a = ['WEIGHT_CLAMPED:jawOpen', 'HAND_LOW_CONFIDENCE', 'WEIGHT_CLAMPED:jawOpen'];
+  const b = ['HAND_LOW_CONFIDENCE', 'QUALITY_LOW_LIGHT'];
+  const merged = mergeWarningsInto(dedup, seen, a, b);
+  assert.equal(merged, dedup, 'mergeWarningsInto must fill the array it was handed');
+  assert.deepEqual(merged, [...new Set([...a, ...b])], 'must match the spread-into-a-Set expression it replaced');
+  mergeWarningsInto(dedup, seen, ['DRUMMER_MODE_NEEDS_HANDS'], null);
+  assert.deepEqual(dedup, ['DRUMMER_MODE_NEEDS_HANDS'], 'the previous frame\'s warnings must not survive into this one');
+  assert.deepEqual(mergeWarningsInto(dedup, seen, null, null), [], 'no sources means no warnings');
+}
+
+{
+  // The tracker refills one frame object, one pose wrapper and one warnings array
+  // every frame rather than rebuilding them (#259). That is only correct while the
+  // consumers outliving a frame keep their own copy, so the copy is asserted here
+  // instead of assumed — this test is what makes the reuse safe to keep.
+  const weights = new Float32Array(NUM_CHANNELS);
+  weights[CHANNEL_INDEX.jawOpen] = 0.5;
+  const frame = {
+    t: 10,
+    seq: 3,
+    face: { quat: [0, 0, 0, 1], pos: [0.1, 0.2, 0.4], weights },
+    pose: { points: new Float32Array(NUM_POSE_POINTS * 3).fill(0.25) },
+    hands: [],
+  };
+  const warnings = ['WEIGHT_CLAMPED:jawOpen'];
+  const record = createDatasetRecord({ frame, warnings, label: 'reuse', license: '0BSD' });
+  const snapshot = JSON.stringify(record);
+
+  // Exactly what the next frame does to the buffers the stored record came from.
+  frame.t = 999;
+  frame.seq = 4;
+  frame.face.quat[0] = 0.9;
+  frame.face.pos[0] = -0.9;
+  weights[CHANNEL_INDEX.jawOpen] = 0;
+  frame.pose.points.fill(-1);
+  warnings.length = 0;
+  warnings.push('SOMETHING_ELSE');
+
+  assert.equal(JSON.stringify(record), snapshot,
+    'createDatasetRecord retains its record, so it must snapshot the frame and warnings the tracker reuses');
+
+  // createMotionRecord does alias `warnings` and `hands`, which is only safe
+  // because recordFrame JSON-stringifies the result on the spot. The arrays it
+  // does copy are pinned so a regression to aliasing face/pose is caught.
+  const motionFrame = {
+    t: 1,
+    seq: 1,
+    face: { quat: [0, 0, 0, 1], pos: [0, 0, 0.4], weights },
+    pose: { points: new Float32Array(NUM_POSE_POINTS * 3) },
+    hands: null,
+  };
+  const motion = createMotionRecord(motionFrame, { warnings: [] });
+  motionFrame.face.pos[2] = 5;
+  motionFrame.pose.points[0] = 5;
+  assert.equal(motion.face.pos[2], 0.4, 'createMotionRecord must copy face.pos out of the reused frame');
+  assert.equal(motion.pose.points[0], 0, 'createMotionRecord must copy pose.points out of the reused frame');
 }
 
 {

@@ -7,13 +7,15 @@
 // the typed tree to import from shared/, which it does not do today.
 
 /**
- * Convert a column-major 4x4 transform to a normalized [x, y, z, w] quaternion.
- * Missing entries fall back to the identity matrix, so a short or sparse input
- * yields a usable rotation instead of NaN.
+ * Convert a column-major 4x4 transform to a normalized [x, y, z, w] quaternion,
+ * writing into `out`. Same math as {@link mat4ToQuat}; this form exists so the
+ * 60 fps tracker loop can hold one quaternion for the life of the session
+ * instead of allocating a fresh array per frame (#259).
+ * @param {number[]} out length >= 4; receives [x, y, z, w]
  * @param {ArrayLike<number>} m
- * @returns {number[]}
+ * @returns {number[]} `out`
  */
-export function mat4ToQuat(m) {
+export function mat4ToQuatInto(out, m) {
   const m00 = m[0] ?? 1, m01 = m[4] ?? 0, m02 = m[8] ?? 0;
   const m10 = m[1] ?? 0, m11 = m[5] ?? 1, m12 = m[9] ?? 0;
   const m20 = m[2] ?? 0, m21 = m[6] ?? 0, m22 = m[10] ?? 1;
@@ -45,7 +47,22 @@ export function mat4ToQuat(m) {
     z = 0.25 * s;
   }
   const len = Math.hypot(x, y, z, w) || 1;
-  return [x / len, y / len, z / len, w / len];
+  out[0] = x / len;
+  out[1] = y / len;
+  out[2] = z / len;
+  out[3] = w / len;
+  return out;
+}
+
+/**
+ * Convert a column-major 4x4 transform to a normalized [x, y, z, w] quaternion.
+ * Missing entries fall back to the identity matrix, so a short or sparse input
+ * yields a usable rotation instead of NaN.
+ * @param {ArrayLike<number>} m
+ * @returns {number[]}
+ */
+export function mat4ToQuat(m) {
+  return mat4ToQuatInto([0, 0, 0, 1], m);
 }
 
 /**
