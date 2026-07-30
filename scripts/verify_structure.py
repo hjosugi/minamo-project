@@ -1570,6 +1570,7 @@ def validate_desktop_contracts() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
     release = read('.github/workflows/release.yml')
+    release_metadata_validator = read('scripts/validate-release-metadata.mjs')
     updater_manifest_validator = read('scripts/validate-updater-manifest.mjs')
     release_smoke = read('scripts/release-smoke.mjs')
     vite = read('vite.config.ts')
@@ -1646,6 +1647,7 @@ def validate_desktop_contracts() -> None:
         'TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}',
         'uploadUpdaterJson: true',
         'updaterJsonPreferNsis: true',
+        'scripts/validate-release-metadata.mjs',
         'Validate the complete signed updater manifest',
         'scripts/validate-updater-manifest.mjs',
     ]:
@@ -1669,6 +1671,12 @@ def validate_desktop_contracts() -> None:
             '.github/workflows/release.yml',
             'release builds must not restore target caches because partial artifacts can make retries fail',
         )
+    for path in ['package.json', 'src-tauri/tauri.conf.json', 'src-tauri/Cargo.toml', 'docs/releases']:
+        if path not in release_metadata_validator:
+            add_error(
+                'scripts/validate-release-metadata.mjs',
+                f'release metadata validator missing {path}',
+            )
     for platform in ['linux-x86_64', 'windows-x86_64', 'darwin-aarch64', 'darwin-x86_64']:
         if platform not in updater_manifest_validator:
             add_error('scripts/validate-updater-manifest.mjs', f'updater manifest gate missing {platform}')

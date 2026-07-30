@@ -58,14 +58,7 @@ jobs:
       - name: Validate release metadata
         env:
           TAG: ${{ steps.release_tag.outputs.tag }}
-        run: |
-          version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
-          tauri_version="$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json', 'utf8')).version")"
-          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)"
-          test "$TAG" = "v$version"
-          test "$tauri_version" = "$version"
-          test "$cargo_version" = "$version"
-          test -f "docs/releases/$TAG.md"
+        run: node scripts/validate-release-metadata.mjs "$TAG"
 
       - name: Prepare draft GitHub Release
         id: release

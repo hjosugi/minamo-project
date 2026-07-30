@@ -56,7 +56,15 @@ import {
   parseGlb,
   summarizeGltf,
 } from '../scripts/inspect-glb.mjs';
-import { validateUpdaterManifest } from '../scripts/validate-updater-manifest.mjs';
+import {
+  REQUIRED_UPDATER_PLATFORMS,
+  validateUpdaterManifest,
+} from '../scripts/validate-updater-manifest.mjs';
+import {
+  parseCargoPackageVersion,
+  validateReleaseMetadata,
+  validateReleaseMetadataAtRoot,
+} from '../scripts/validate-release-metadata.mjs';
 import {
   AVATAR_DECODER_SUPPORT,
   describeAvatarLoadError,
@@ -274,26 +282,22 @@ for (const file of required) {
 }
 
 {
-  const platformNames = [
-    'linux-x86_64',
-    'windows-x86_64',
-    'darwin-aarch64',
-    'darwin-x86_64',
-  ];
+  const platformNames = [...REQUIRED_UPDATER_PLATFORMS];
+  const version = '9.8.7';
   const manifest = {
-    version: '0.1.15',
+    version,
     platforms: Object.fromEntries(platformNames.map((name) => [name, {
       signature: 's'.repeat(100),
       url: `https://api.github.com/releases/assets/${name}`,
     }])),
   };
-  assert.deepEqual(validateUpdaterManifest(manifest, '0.1.15'), platformNames);
-  assert.throws(() => validateUpdaterManifest(manifest, '0.1.14'), /does not match/);
+  assert.deepEqual(validateUpdaterManifest(manifest, version), platformNames);
+  assert.throws(() => validateUpdaterManifest(manifest, '9.8.6'), /does not match/);
   assert.throws(
     () => validateUpdaterManifest({
       ...manifest,
       platforms: { ...manifest.platforms, 'darwin-x86_64': undefined },
-    }, '0.1.15'),
+    }, version),
     /missing darwin-x86_64/,
   );
   assert.throws(
@@ -306,9 +310,63 @@ for (const file of required) {
           url: 'http://updates.invalid/appimage',
         },
       },
-    }, '0.1.15'),
+    }, version),
     /must use HTTPS/,
   );
+  assert.throws(
+    () => validateUpdaterManifest({
+      ...manifest,
+      platforms: {
+        ...manifest.platforms,
+        'windows-x86_64': {
+          ...manifest.platforms['windows-x86_64'],
+          url: 'not a URL',
+        },
+      },
+    }, version),
+    /is invalid/,
+  );
+}
+
+{
+  const version = '9.8.7';
+  const releaseMetadata = {
+    tag: `v${version}`,
+    packageVersion: version,
+    tauriVersion: version,
+    cargoVersion: version,
+    releaseNotesPath: `docs/releases/v${version}.md`,
+    releaseNotesExists: true,
+  };
+  assert.equal(
+    parseCargoPackageVersion(`[package]\nname = "example"\nversion = "${version}"\n\n[dependencies]\n`),
+    version,
+  );
+  assert.deepEqual(validateReleaseMetadata(releaseMetadata), {
+    tag: `v${version}`,
+    version,
+    releaseNotesPath: `docs/releases/v${version}.md`,
+  });
+  assert.throws(
+    () => validateReleaseMetadata({ ...releaseMetadata, tag: 'v9.8.6' }),
+    /release tag v9.8.6 does not match/,
+  );
+  assert.throws(
+    () => validateReleaseMetadata({ ...releaseMetadata, tauriVersion: '9.8.6' }),
+    /Tauri version 9.8.6 does not match/,
+  );
+  assert.throws(
+    () => validateReleaseMetadata({ ...releaseMetadata, cargoVersion: '9.8.6' }),
+    /Cargo version 9.8.6 does not match/,
+  );
+  assert.throws(
+    () => validateReleaseMetadata({ ...releaseMetadata, releaseNotesExists: false }),
+    /release notes are missing/,
+  );
+  const currentVersion = JSON.parse(
+    fs.readFileSync(path.join(root, 'package.json'), 'utf8'),
+  ).version;
+  assert.equal(validateReleaseMetadataAtRoot(`v${currentVersion}`, root).version, currentVersion);
 }
 
 {
