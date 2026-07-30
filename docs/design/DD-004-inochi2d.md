@@ -75,3 +75,15 @@ editor. Export uses the same `minamo.expression-map.v1` format as VRM.
   the screen. The Inox2D context is an internal texture producer.
 - A redistributable real-puppet visual/latency matrix remains tracked by #230;
   #229 covers the runtime and browser lifecycle, not that separate evidence.
+- **Upstream fork (#275).** The Inochi2D ecosystem forked at v0.8 into the
+  nijigenerate org (`nijigenerate` editor, `nijilive` runtime and renamed puppet
+  standard). Decision, recorded in
+  [../research/inochi2d-fork-strategy.md](../research/inochi2d-fork-strategy.md):
+  **stay frozen on the pinned inox2d revision.** Every line involved is
+  pre-production by its own statement — inox2d's README says prototype, and
+  nijigenerate ships only nightlies that "may crash unexpectedly" — so there is no
+  stable line to track, and all of them are BSD-2-Clause so nothing forces a move.
+  Revisit when nijilive tags a stable release *and* a nijigenerate-exported puppet
+  fails against the pinned runtime, or when `nicxlive` ships a WebGL/WASM target.
+  The compatibility test that would settle the first half needs a puppet nobody in
+  this repo owns.

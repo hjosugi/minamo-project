@@ -60,6 +60,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [research/onnx-wholebody-pose.md](research/onnx-wholebody-pose.md) (#269)
 - [research/audio-arkit-lipsync.md](research/audio-arkit-lipsync.md) (#268)
 - [research/learned-smoothing-filters.md](research/learned-smoothing-filters.md) (#270)
+- [research/inochi2d-fork-strategy.md](research/inochi2d-fork-strategy.md) (#275)
 - [research/2026-07-code-and-research-audit.md](research/2026-07-code-and-research-audit.md) (#246-#278)
 
 ## Product

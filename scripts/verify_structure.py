@@ -103,6 +103,8 @@ REQUIRED = [
     'docs/research/audio-arkit-lipsync.md',
     'docs/research/audio-arkit-lipsync.ja.md',
     'docs/research/learned-smoothing-filters.md',
+    'docs/research/inochi2d-fork-strategy.md',
+    'docs/research/inochi2d-fork-strategy.ja.md',
     'docs/research/learned-smoothing-filters.ja.md',
     'docs/benchmarks/filter-response.md',
     'docs/benchmarks/filter-response.ja.md',
@@ -2103,6 +2105,7 @@ def validate_research_docs() -> None:
         'docs/research/onnx-wholebody-pose.md': '#269',
         'docs/research/audio-arkit-lipsync.md': '#268',
         'docs/research/learned-smoothing-filters.md': '#270',
+        'docs/research/inochi2d-fork-strategy.md': '#275',
     }
     for rel, issue in research_docs.items():
         text = read(rel)
