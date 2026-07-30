@@ -54,6 +54,8 @@ cd relay-node && node --check server.mjs
   `latest.json` を上書き競合させずに拡張すること。
 - Releaseの配布ファイルにLinuxの `.AppImage`/`.deb`、Windowsの
   `.exe`/`.msi`、`aarch64` と `x86_64` の両macOS `.dmg` が含まれること。
+- 各macOS targetはupdater対応の `.app.tar.gz` も生成して署名すること。
+  DMGだけではTauri updater artifactにならない。
 - 各ネイティブインストーラーのファイル名にバージョン、プラットフォーム、
   アーキテクチャが含まれ、そのバージョンがタグと一致すること。
 - リリースノートには既知のブラウザ、HTTPS、WebTransport、およびモデルのフォールバックに関する

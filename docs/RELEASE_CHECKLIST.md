@@ -54,6 +54,8 @@ camera, relay-token, WebTransport, or OBS smoke tests.
   each job extends one `latest.json` instead of racing to overwrite it.
 - Release assets include Linux `.AppImage`/`.deb`, Windows `.exe`/`.msi`, and
   both `aarch64` and `x86_64` macOS `.dmg` files.
+- Each macOS target also builds and signs its updater-enabled `.app.tar.gz`;
+  a DMG by itself is not a Tauri updater artifact.
 - Each native installer filename includes the version, platform, and
   architecture; its version matches the tag.
 - Release notes mention known browser, HTTPS, WebTransport, and model fallback
