@@ -41,6 +41,7 @@ import {
   DrumHitDetector,
   DRUM_DOWNSTROKE_MIN_SPEED_MPS,
   DRUM_MIN_HIT_SPEED_MPS,
+  DRUM_REARM_MIN_LIFT_M,
   fetchAndVerifyModel,
   clampFingerState,
   defaultEye,
@@ -518,6 +519,49 @@ describe('audio and drum helpers', () => {
     ]).length).toBe(1);
   });
 
+  it('re-arms a zone on the rebound so fast rolls are not capped by the cooldown (#123)', () => {
+    expect(DRUM_REARM_MIN_LIFT_M).toBe(0.012);
+    const zones = [{ id: 'snare', type: 'snare' as const, center: { x: 0, y: 0.5, z: 0 }, radius: 0.12, cooldownMs: 45 }];
+    // +Y is down. A stroke lands the tip on the head at 0.5; a lift raises it.
+    const stroke = (timeMs: number) => ({
+      id: 'stick-r', timeMs, previousTimeMs: timeMs - 8,
+      position: { x: 0, y: 0.5, z: 0 }, previousPosition: { x: 0, y: 0.47, z: 0 },
+      hand: 'Right' as const,
+    });
+    const lift = (timeMs: number, height: number) => ({
+      id: 'stick-r', timeMs, previousTimeMs: timeMs - 8,
+      position: { x: 0, y: 0.5 - height, z: 0 }, previousPosition: { x: 0, y: 0.5, z: 0 },
+      hand: 'Right' as const,
+    });
+
+    // A double-stroke roll at 30 ms per stroke — 33 hits/s on ONE zone, well
+    // inside the 45 ms cooldown. Every stroke lifts, so every stroke counts.
+    const roller = new DrumHitDetector(zones);
+    let rollHits = 0;
+    for (let i = 0; i < 8; i++) {
+      const t = i * 30;
+      rollHits += roller.detect(stroke(t)).length;
+      roller.detect(lift(t + 15, 0.03)); // rebound between strokes
+    }
+    expect(rollHits).toBe(8);
+
+    // Threshold jitter around the head — the stick oscillates by 6 mm, under
+    // the rebound threshold, so nothing re-arms and the cooldown still holds.
+    // This is the regression backlog 061 added the cooldown for.
+    const jitterer = new DrumHitDetector(zones);
+    expect(jitterer.detect(stroke(0)).length).toBe(1);
+    let jitterHits = 0;
+    for (let t = 8; t <= 40; t += 8) {
+      jitterHits += jitterer.detect(t % 16 === 0 ? stroke(t) : lift(t, 0.006)).length;
+    }
+    expect(jitterHits).toBe(0);
+
+    // And the cooldown remains the fallback when no lift is ever observed, so
+    // a dropped rebound degrades to the old time-based behaviour rather than
+    // silencing the zone.
+    expect(jitterer.detect(stroke(60)).length).toBe(1);
+  });
+
   it('adds conservative audio-assisted mouth accent', () => {
     expect(voiceActivityMouthAccent(0.1, 0.2)).toBeGreaterThan(0.1);
     expect(voiceActivityMouthAccent(0.9, 0.02)).toBeGreaterThanOrEqual(0.9);
@@ -722,6 +766,31 @@ describe('drum benchmark clips (issues #121, #123)', () => {
     const result = score(findClip('fast-roll'));
     expect(result.recall).toBeGreaterThanOrEqual(0.9);
     expect(result.falseDoubleHits).toBe(0);
+    // 16ths at 200 bpm never reach the separation window, which is exactly why
+    // this clip alone does not stress the roll path.
+    expect(result.minDetectedSeparationMs).toBeGreaterThan(drumBenchmarkClips.minimumSeparationMs);
+  });
+
+  it('passes a 32nd-note roll whose strokes sit below the separation window (#123)', () => {
+    const clip = findClip('fast-roll-32nd');
+    const result = score(clip);
+    // The clip has to actually stress the detector, or the gate proves nothing.
+    expect(result.minDetectedSeparationMs).toBeLessThan(drumBenchmarkClips.minimumSeparationMs);
+    expect(result.recall).toBe(1);
+    expect(result.precision).toBe(1);
+    // Every detection is backed by a distinct expected hit, so none of these
+    // sub-window gaps is a double-trigger. Under the previous rule this clip
+    // reported one false double per stroke pair and could never pass.
+    expect(result.falseDoubleHits).toBe(0);
+    expect(clip.expectedHitTimesMs.length).toBe(12);
+  });
+
+  it('still counts a spurious re-trigger that matches no expected hit (#123)', () => {
+    const result = score(findClip('double-trigger-regression'));
+    expect(result.minDetectedSeparationMs).toBeLessThan(drumBenchmarkClips.minimumSeparationMs);
+    expect(result.falseDoubleHits).toBe(1);
+    expect(result.matched).toBe(2);
+    expect(result.detected).toBe(3);
   });
 
   it('detects no hits for the false-positive hold clip', () => {

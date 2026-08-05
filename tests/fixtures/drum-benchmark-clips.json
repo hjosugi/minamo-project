@@ -27,11 +27,33 @@
     {
       "id": "fast-roll",
       "bpm": 200,
+      "subdivision": 16,
       "zoneId": "snare",
       "zoneType": "snare",
+      "note": "16th notes at 200 bpm = 75 ms between strokes, comfortably above minimumSeparationMs. Kept as the baseline roll; it does not reach the ceiling, which is why fast-roll-32nd exists.",
       "expectedHitTimesMs": [0, 75, 150, 225, 300, 375, 450, 525, 600],
       "detectedHitTimesMs": [2, 77, 148, 228, 301, 377, 449, 527, 603],
       "pass": { "recall": 0.9, "falseDoubleHits": 0 }
+    },
+    {
+      "id": "fast-roll-32nd",
+      "bpm": 220,
+      "subdivision": 32,
+      "zoneId": "snare",
+      "zoneType": "snare",
+      "note": "32nd notes at 220 bpm = 34.1 ms between strokes on one zone, below the 35 ms minimumSeparationMs and below every per-zone cooldown in use. This is the clip that actually stresses the roll path (#123); the declared clip set already asked for 180-220 bpm, so the upper bound of that range was unreachable under the previous scoring rule.",
+      "expectedHitTimesMs": [0, 34, 68, 102, 136, 171, 205, 239, 273, 307, 341, 375],
+      "detectedHitTimesMs": [2, 33, 70, 101, 138, 170, 207, 238, 275, 306, 343, 374],
+      "pass": { "recall": 0.9, "falseDoubleHits": 0 }
+    },
+    {
+      "id": "double-trigger-regression",
+      "zoneId": "snare",
+      "zoneType": "snare",
+      "note": "One real stroke plus a spurious re-trigger 11 ms later with no intervening lift. The extra detection matches no expected hit, so it must still be counted as a false double: roll tolerance must not become double-trigger blindness (backlog 061).",
+      "expectedHitTimesMs": [0, 500],
+      "detectedHitTimesMs": [1, 12, 501],
+      "pass": { "falseDoubleHits": 1 }
     },
     {
       "id": "false-positive-hold",

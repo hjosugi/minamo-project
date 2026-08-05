@@ -88,9 +88,16 @@ Signals:
 - hand movement matches stick movement
 - audio onset exists near the visual event
 
+The rebound is the primary re-arm, not the cooldown (#123). After a hit the zone
+is disarmed until the tip lifts `DRUM_REARM_MIN_LIFT_M` (12 mm) clear of where
+that hit fired, because a stick cannot strike twice without lifting. `cooldownMs`
+remains as the fallback for when no lift is observed — a dropped detection, or a
+stick tracked through occlusion. Gating on elapsed time alone caps one zone at
+1000/`cooldownMs` hits per second, which a double-stroke or buzz roll exceeds.
+
 False positive prevention:
 
-- no repeated hits inside cooldown
+- no repeated hits until the stick rebounds, or the cooldown expires
 - no hit if stick is moving upward into the zone
 - no hit if confidence is low and no audio onset exists
 - no hit if only hand landmark jumps but stick detector is absent
