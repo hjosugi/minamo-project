@@ -108,6 +108,8 @@ REQUIRED = [
     'docs/research/webgpu-renderer-migration.md',
     'docs/research/occlusion-robust-hands.md',
     'docs/research/occlusion-robust-hands.ja.md',
+    'docs/research/midi-performance-input.md',
+    'docs/research/midi-performance-input.ja.md',
     'docs/research/webgpu-renderer-migration.ja.md',
     'docs/research/kgm2-bitrate.ja.md',
     'scripts/bench-kgm2-bitrate.mjs',
@@ -2116,6 +2118,7 @@ def validate_research_docs() -> None:
         'docs/research/kgm2-bitrate.md': '#277',
         'docs/research/webgpu-renderer-migration.md': '#276',
         'docs/research/occlusion-robust-hands.md': '#271',
+        'docs/research/midi-performance-input.md': '#278',
     }
     for rel, issue in research_docs.items():
         text = read(rel)
