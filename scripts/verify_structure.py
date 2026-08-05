@@ -2065,9 +2065,36 @@ def validate_drum_docs() -> None:
     if not isinstance(clips, dict) or 'clips' not in clips:
         add_error('tests/fixtures/drum-benchmark-clips.json', 'benchmark clips fixture must have a "clips" array')
         return
-    for name in ('single-snare', 'alternating-hands', 'fast-roll', 'false-positive-hold'):
+    for name in (
+        'single-snare',
+        'alternating-hands',
+        'fast-roll',
+        'fast-roll-32nd',
+        'double-trigger-regression',
+        'false-positive-hold',
+    ):
         if not any(clip.get('id') == name for clip in clips['clips']):
             add_error('tests/fixtures/drum-benchmark-clips.json', f'benchmark clips fixture missing clip: {name}')
+    # The roll stress clip only proves something while its strokes stay below
+    # the separation window it is meant to stress (#123).
+    separation = clips.get('minimumSeparationMs')
+    stress = next((clip for clip in clips['clips'] if clip.get('id') == 'fast-roll-32nd'), None)
+    if stress and isinstance(separation, (int, float)):
+        times = stress.get('detectedHitTimesMs') or []
+        gaps = [b - a for a, b in zip(times, times[1:])]
+        if not gaps or min(gaps) >= separation:
+            add_error(
+                'tests/fixtures/drum-benchmark-clips.json',
+                'fast-roll-32nd must keep its strokes closer than minimumSeparationMs to stress the roll path',
+            )
+    drum_core = read('src/core/drum.ts')
+    for needle in ['DRUM_REARM_MIN_LIFT_M', 'minDetectedSeparationMs', 'matchedDetections']:
+        if needle not in drum_core:
+            add_error('src/core/drum.ts', f'rebound re-arm / roll scoring missing: {needle}')
+    metrics = read('docs/benchmarks/drum-benchmark-metrics.md')
+    for needle in ['rebound', 'fast-roll-32nd', 'minDetectedSeparationMs']:
+        if needle not in metrics:
+            add_error('docs/benchmarks/drum-benchmark-metrics.md', f'roll metric documentation missing: {needle}')
     runner = read('scripts/drum-benchmark.ts')
     for needle in [
         'minamo.drum-benchmark-manifest.v1',

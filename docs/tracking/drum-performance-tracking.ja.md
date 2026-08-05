@@ -88,9 +88,11 @@ Signals:
 - hand movement matches stick movement
 - audio onset exists near the visual event
 
+再アームの主体はクールダウンではなくリバウンドである (#123)。ヒット後、そのゾーンはチップが当該ヒットの発火位置から `DRUM_REARM_MIN_LIFT_M` (12 mm) 以上持ち上がるまで解除されない。スティックは持ち上げずに2度打つことができないためである。`cooldownMs` はリフトが観測されない場合 — 検出落ち、オクルージョン越しの追跡 — のフォールバックとして残る。経過時間のみで判定すると1ゾーンあたり 1000/`cooldownMs` hits/s が上限となり、ダブルストロークやバズロールはこれを超える。
+
 False positive prevention:
 
-- no repeated hits inside cooldown
+- no repeated hits until the stick rebounds, or the cooldown expires
 - no hit if stick is moving upward into the zone
 - no hit if confidence is low and no audio onset exists
 - no hit if only hand landmark jumps but stick detector is absent

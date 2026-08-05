@@ -19,6 +19,19 @@ import type { DrumHitEvent, HandState, Vec3 } from './types';
 export const DRUM_DOWNSTROKE_MIN_SPEED_MPS = 0.5;
 // Minimum overall stick speed (m/s) required to register a hit.
 export const DRUM_MIN_HIT_SPEED_MPS = 0.45;
+// Rebound re-arm (#123). A stick physically cannot strike twice without lifting
+// between strokes, so a zone re-arms on the lift instead of waiting out
+// `cooldownMs`. Metres, +Y down: the tip must rise this far above the y at which
+// the previous hit fired. Threshold detail: a resting stick jitters well under a
+// centimetre, while a real stroke lifts several, so this separates a double
+// stroke from a threshold oscillation without capping the roll rate.
+//
+// The time-based cooldown remains as a fallback for when no lift is observed
+// (a dropped detection, a stick tracked through occlusion), which is what
+// backlog 061 added it for. Without the lift path, `cooldownMs` alone caps a
+// single zone at 1000/cooldownMs hits per second — 22 at 45 ms — and a
+// double-stroke or buzz roll exceeds that.
+export const DRUM_REARM_MIN_LIFT_M = 0.012;
 
 export interface DrumZone {
   id: string;
@@ -94,6 +107,14 @@ export interface DrumBenchmarkResult {
   p95TimingErrorMs: number | null;
   zoneAccuracy: number | null;
   handAssignmentAccuracy: number | null;
+  /**
+   * Smallest gap between two detections on the same zone, or null when a zone
+   * never fires twice. Informational rather than a gate: it is what shows a
+   * roll clip actually reached the rate it claims to stress (#123). A clip
+   * whose minimum separation never drops below `minimumSeparationMs` has not
+   * exercised the roll path at all.
+   */
+  minDetectedSeparationMs: number | null;
 }
 
 export interface DrumBenchmarkExpectedHit {
@@ -119,8 +140,16 @@ export interface DrumDatasetAnnotation {
   };
 }
 
+interface ZoneHitState {
+  lastHitMs: number;
+  /** Tip y at which the last hit fired; the rebound is measured against it. */
+  lastHitY: number;
+  /** False until the tip lifts clear of `lastHitY` (or the cooldown expires). */
+  armed: boolean;
+}
+
 export class DrumHitDetector {
-  private readonly lastHitMs = new Map<string, number>();
+  private readonly zoneState = new Map<string, ZoneHitState>();
 
   constructor(private readonly zones: DrumZone[]) {}
 
@@ -132,11 +161,17 @@ export class DrumHitDetector {
     const downstroke = velocity.y > DRUM_DOWNSTROKE_MIN_SPEED_MPS;
 
     for (const zone of this.zones) {
+      const state = this.zoneState.get(zone.id);
+      // +Y is down, so a lifted tip has a SMALLER y than where the hit fired.
+      if (state && !state.armed && sample.position.y <= state.lastHitY - DRUM_REARM_MIN_LIFT_M) {
+        state.armed = true;
+      }
       const dist = distance(sample.position, zone.center);
-      const last = this.lastHitMs.get(zone.id) ?? -Infinity;
+      const last = state?.lastHitMs ?? -Infinity;
       const cooledDown = sample.timeMs - last >= zone.cooldownMs;
-      if (dist <= zone.radius && downstroke && speed >= DRUM_MIN_HIT_SPEED_MPS && cooledDown) {
-        this.lastHitMs.set(zone.id, sample.timeMs);
+      const ready = state ? state.armed || cooledDown : true;
+      if (dist <= zone.radius && downstroke && speed >= DRUM_MIN_HIT_SPEED_MPS && ready) {
+        this.zoneState.set(zone.id, { lastHitMs: sample.timeMs, lastHitY: sample.position.y, armed: false });
         const hit: DrumHitEvent = {
           eventId: `${sample.id}:${zone.id}:${Math.round(sample.timeMs)}`,
           timeNs: Math.round(sample.timeMs * 1_000_000),
@@ -316,15 +351,26 @@ export function scoreDrumBenchmarkEvents(
       if (detected) matches.push({ expected, detected, errorMs: closest });
     }
   }
+  // A pair of detections closer than `minimumSeparationMs` is only a false
+  // double when it is not backed by two distinct expected hits (#123). A real
+  // roll legitimately puts strokes closer together than the separation window —
+  // 32nd notes at 220 bpm are 34.1 ms apart — and counting those as
+  // double-triggers made the fast-roll gate unreachable by construction rather
+  // than by detector accuracy.
+  const matchedDetections = new Set<DrumHitEvent>(matches.map((match) => match.detected));
   let falseDoubleHits = 0;
+  let minDetectedSeparationMs: number | null = null;
   const sorted = [...detectedHits].sort((a, b) => a.timeNs - b.timeNs);
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1];
     const current = sorted[i];
     if (!prev || !current) continue;
-    if (current.zoneId === prev.zoneId && (current.timeNs - prev.timeNs) / 1_000_000 < minimumSeparationMs) {
-      falseDoubleHits++;
-    }
+    if (current.zoneId !== prev.zoneId) continue;
+    const gapMs = (current.timeNs - prev.timeNs) / 1_000_000;
+    if (minDetectedSeparationMs === null || gapMs < minDetectedSeparationMs) minDetectedSeparationMs = gapMs;
+    if (gapMs >= minimumSeparationMs) continue;
+    if (matchedDetections.has(prev) && matchedDetections.has(current)) continue;
+    falseDoubleHits++;
   }
   const timingErrors = matches.map((match) => match.errorMs).sort((a, b) => a - b);
   const zoneMatches = matches.filter((match) => match.expected.zoneId !== undefined);
@@ -349,6 +395,7 @@ export function scoreDrumBenchmarkEvents(
     handAssignmentAccuracy: handMatches.length
       ? handMatches.filter((match) => match.detected.hand === match.expected.hand).length / handMatches.length
       : null,
+    minDetectedSeparationMs,
   };
 }
 
