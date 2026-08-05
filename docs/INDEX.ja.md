@@ -64,6 +64,7 @@
 - [research/webgpu-renderer-migration.md](research/webgpu-renderer-migration.md) (#276)
 - [research/occlusion-robust-hands.md](research/occlusion-robust-hands.md) (#271)
 - [research/midi-performance-input.ja.md](research/midi-performance-input.ja.md) (#278)
+- [research/face-expression-gaze-quality.ja.md](research/face-expression-gaze-quality.ja.md) (#273)
 - [research/2026-07-code-and-research-audit.ja.md](research/2026-07-code-and-research-audit.ja.md) (#246-#278)
 
 ## 製品

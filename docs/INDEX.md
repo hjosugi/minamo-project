@@ -65,6 +65,7 @@ Primary language is English; documents that originated in Japanese keep a
 - [research/webgpu-renderer-migration.md](research/webgpu-renderer-migration.md) (#276)
 - [research/occlusion-robust-hands.md](research/occlusion-robust-hands.md) (#271)
 - [research/midi-performance-input.md](research/midi-performance-input.md) (#278)
+- [research/face-expression-gaze-quality.md](research/face-expression-gaze-quality.md) (#273)
 - [research/2026-07-code-and-research-audit.md](research/2026-07-code-and-research-audit.md) (#246-#278)
 
 ## Product

@@ -110,6 +110,8 @@ REQUIRED = [
     'docs/research/occlusion-robust-hands.ja.md',
     'docs/research/midi-performance-input.md',
     'docs/research/midi-performance-input.ja.md',
+    'docs/research/face-expression-gaze-quality.md',
+    'docs/research/face-expression-gaze-quality.ja.md',
     'docs/research/webgpu-renderer-migration.ja.md',
     'docs/research/kgm2-bitrate.ja.md',
     'scripts/bench-kgm2-bitrate.mjs',
@@ -2119,6 +2121,7 @@ def validate_research_docs() -> None:
         'docs/research/webgpu-renderer-migration.md': '#276',
         'docs/research/occlusion-robust-hands.md': '#271',
         'docs/research/midi-performance-input.md': '#278',
+        'docs/research/face-expression-gaze-quality.md': '#273',
     }
     for rel, issue in research_docs.items():
         text = read(rel)
