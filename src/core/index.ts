@@ -9,5 +9,6 @@ export * from './stability';
 export * from './audio';
 export * from './drum';
 export * from './multiCamera';
+export * from './bleMidiStick';
 export * from './ml';
 export * from './mockFrame';
