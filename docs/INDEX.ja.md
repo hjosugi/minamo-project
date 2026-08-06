@@ -114,6 +114,7 @@
 - [benchmarks/quality-gates.md](benchmarks/quality-gates.md)
 - [benchmarks/hand-stability-report.md](benchmarks/hand-stability-report.md)
 - [benchmarks/filter-response.md](benchmarks/filter-response.md) — One Euro jitter/lag baseline (#270)
+- [benchmarks/multi-camera-fusion.md](benchmarks/multi-camera-fusion.md) — 2カメラ・ドラム融合プロトタイプ結果 (#241)
 - [benchmarks/face-quality-benchmarks.md](benchmarks/face-quality-benchmarks.md)
 - [benchmarks/drum-benchmark-metrics.md](benchmarks/drum-benchmark-metrics.md)
 - [benchmarks/drum-benchmark-runner.md](benchmarks/drum-benchmark-runner.md)

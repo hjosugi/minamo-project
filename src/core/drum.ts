@@ -334,22 +334,35 @@ export function scoreDrumBenchmarkEvents(
 ): DrumBenchmarkResult {
   const unmatched = [...detectedHits].sort((a, b) => a.timeNs - b.timeNs);
   const matches: Array<{ expected: DrumBenchmarkExpectedHit; detected: DrumHitEvent; errorMs: number }> = [];
+  // Two passes, same-zone first (#241). Two limbs land on the same beat in most
+  // grooves — a backbeat snare under hi-hat eighths is the common case — and a
+  // single time-only pass lets one expected hit consume the other's detection.
+  // That scored a perfectly zone-correct run as a zone error per backbeat, and
+  // it also stole detections from expected hits that had a correct one waiting,
+  // depressing recall. Reserving same-zone pairs first removes both artifacts.
+  // Pass two still matches across zones, so a genuine misattribution is counted
+  // as one rather than quietly dropped, and expected hits with no `zoneId` keep
+  // the original time-only behaviour.
+  const pending: DrumBenchmarkExpectedHit[] = [];
   for (const expected of expectedHits) {
-    let index = -1;
-    let closest = Infinity;
-    for (let candidateIndex = 0; candidateIndex < unmatched.length; candidateIndex++) {
-      const candidate = unmatched[candidateIndex];
-      if (!candidate) continue;
-      const error = Math.abs(candidate.timeNs / 1_000_000 - expected.timeMs);
-      if (error <= toleranceMs && error < closest) {
-        closest = error;
-        index = candidateIndex;
-      }
+    if (expected.zoneId === undefined) {
+      pending.push(expected);
+      continue;
     }
-    if (index >= 0) {
-      const [detected] = unmatched.splice(index, 1);
-      if (detected) matches.push({ expected, detected, errorMs: closest });
+    const index = closestWithin(unmatched, expected.timeMs, toleranceMs, (candidate) => candidate.zoneId === expected.zoneId);
+    if (index < 0) {
+      pending.push(expected);
+      continue;
     }
+    const [detected] = unmatched.splice(index, 1);
+    if (detected) matches.push({ expected, detected, errorMs: Math.abs(detected.timeNs / 1_000_000 - expected.timeMs) });
+    else pending.push(expected);
+  }
+  for (const expected of pending) {
+    const index = closestWithin(unmatched, expected.timeMs, toleranceMs);
+    if (index < 0) continue;
+    const [detected] = unmatched.splice(index, 1);
+    if (detected) matches.push({ expected, detected, errorMs: Math.abs(detected.timeNs / 1_000_000 - expected.timeMs) });
   }
   // A pair of detections closer than `minimumSeparationMs` is only a false
   // double when it is not backed by two distinct expected hits (#123). A real
@@ -413,6 +426,28 @@ export function createDrumDatasetAnnotation(
       license,
     },
   };
+}
+
+/** Index of the detection closest to `timeMs` within tolerance, or -1. */
+function closestWithin(
+  detections: readonly DrumHitEvent[],
+  timeMs: number,
+  toleranceMs: number,
+  predicate?: (candidate: DrumHitEvent) => boolean,
+): number {
+  let index = -1;
+  let closest = Infinity;
+  for (let candidateIndex = 0; candidateIndex < detections.length; candidateIndex++) {
+    const candidate = detections[candidateIndex];
+    if (!candidate) continue;
+    if (predicate && !predicate(candidate)) continue;
+    const error = Math.abs(candidate.timeNs / 1_000_000 - timeMs);
+    if (error <= toleranceMs && error < closest) {
+      closest = error;
+      index = candidateIndex;
+    }
+  }
+  return index;
 }
 
 function strongestOnset(

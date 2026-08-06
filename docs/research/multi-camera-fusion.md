@@ -59,3 +59,12 @@ full-body ONNX (#23/#222) land, since both supply pieces this feature would
 depend on. Prototype follow-up #241 defines extrinsic calibration, timestamp
 skew/drift limits, a single-camera A/B baseline, and kit-zone accuracy metrics.
 No prototype code exists in this research pass.
+
+## Prototype status
+
+The #241 prototype now exists — `src/core/multiCamera.ts` with a deterministic
+benchmark — and its measured result is recorded in
+[../benchmarks/multi-camera-fusion.md](../benchmarks/multi-camera-fusion.md).
+The software gates pass on synthetic material; the hardware gates (two real
+cameras, consented clips, measured drift) remain open, so the decision above is
+unchanged and multi-camera fusion stays out of MVP.

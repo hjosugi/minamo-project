@@ -43,6 +43,22 @@ import {
   DRUM_MIN_HIT_SPEED_MPS,
   DRUM_REARM_MIN_LIFT_M,
   fetchAndVerifyModel,
+  applyClockAlignment,
+  backProjectImagePoint,
+  cameraLookAt,
+  evaluateCalibration,
+  fuseCameraHitCandidates,
+  fuseCameraObservations,
+  intersectRayWithZonePlane,
+  measureCaptureTimestampAlignment,
+  projectStagePoint,
+  toStickTipSamples,
+  triangulateRays,
+  MULTICAM_MAX_DRIFT_MS_PER_MIN,
+  MULTICAM_MAX_RAY_GAP_M,
+  MULTICAM_MAX_REPROJECTION_ERROR_PX,
+  MULTICAM_MAX_SYNC_RESIDUAL_MS,
+  STAGE_CALIBRATION_SCHEMA,
   clampFingerState,
   defaultEye,
   defaultMouth,
@@ -562,9 +578,338 @@ describe('audio and drum helpers', () => {
     expect(jitterer.detect(stroke(60)).length).toBe(1);
   });
 
+  it('matches simultaneous limbs to their own zone before falling back to time (#241)', () => {
+    // A backbeat: snare and hi-hat on the same instant, both detected correctly.
+    const hit = (zoneId: string, timeMs: number, hand: 'Left' | 'Right') => ({
+      eventId: `${zoneId}:${timeMs}`,
+      timeNs: timeMs * 1_000_000,
+      zoneId,
+      zoneType: zoneId === 'snare' ? ('snare' as const) : ('hihat' as const),
+      position: { x: 0, y: 0, z: 0 },
+      velocity: { x: 0, y: 1, z: 0 },
+      speed: 1,
+      confidence: 0.9,
+      audioAligned: false,
+      hand,
+    });
+    const perfect = scoreDrumBenchmarkEvents(
+      [{ timeMs: 600, zoneId: 'hihat', hand: 'Right' }, { timeMs: 600, zoneId: 'snare', hand: 'Left' }],
+      [hit('hihat', 601, 'Right'), hit('snare', 599, 'Left')],
+    );
+    // Time-only matching let the hi-hat's expectation take the snare detection,
+    // scoring a flawless run at 0.5 on both zone and hand.
+    expect(perfect.matched).toBe(2);
+    expect(perfect.zoneAccuracy).toBe(1);
+    expect(perfect.handAssignmentAccuracy).toBe(1);
+
+    // A genuine misattribution is still counted: nothing on the snare exists,
+    // so the snare's expectation falls back to the hi-hat detection and the
+    // zone is scored wrong rather than quietly unmatched.
+    const wrong = scoreDrumBenchmarkEvents(
+      [{ timeMs: 600, zoneId: 'snare', hand: 'Left' }],
+      [hit('hihat', 601, 'Left')],
+    );
+    expect(wrong.matched).toBe(1);
+    expect(wrong.zoneAccuracy).toBe(0);
+
+    // Expected hits without a zone keep the original time-only behaviour.
+    expect(scoreDrumBenchmark([600], [hit('hihat', 601, 'Right')]).matched).toBe(1);
+  });
+
   it('adds conservative audio-assisted mouth accent', () => {
     expect(voiceActivityMouthAccent(0.1, 0.2)).toBeGreaterThan(0.1);
     expect(voiceActivityMouthAccent(0.9, 0.02)).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+describe('calibrated two-camera drum fusion (issue #241)', () => {
+  const intrinsics = { fx: 900, fy: 900, cx: 640, cy: 360, width: 1280, height: 720 };
+  const zones = [
+    { id: 'snare', type: 'snare' as const, center: { x: 0, y: 0, z: 0 }, radius: 0.16, cooldownMs: 45 },
+    { id: 'hihat', type: 'hihat' as const, center: { x: -0.52, y: -0.1, z: 0.1 }, radius: 0.14, cooldownMs: 40 },
+  ];
+
+  function calibrate(cameraId: string, eye: { x: number; y: number; z: number }, stageFrameId = 'kit') {
+    const extrinsics = cameraLookAt(eye, { x: 0, y: -0.1, z: 0.05 });
+    expect(extrinsics).not.toBeNull();
+    return {
+      schema: STAGE_CALIBRATION_SCHEMA,
+      cameraId,
+      stageFrameId,
+      capturedAtMs: 0,
+      intrinsics,
+      extrinsics: extrinsics!,
+    } as const;
+  }
+
+  const front = calibrate('front', { x: 0, y: -0.95, z: -1.75 });
+  const side = calibrate('side', { x: 1.62, y: -0.62, z: -0.3 });
+  const checkpoints = (calibration: typeof front) => [
+    { x: 0, y: 0, z: 0 },
+    { x: -0.52, y: -0.1, z: 0.1 },
+    { x: 0.3, y: -0.3, z: 0.2 },
+    { x: -0.2, y: -0.05, z: -0.1 },
+  ].map((stage) => ({ stage, image: projectStagePoint(calibration, stage)! }));
+
+  const acceptedFront = { calibration: front, quality: evaluateCalibration(front, checkpoints(front)) };
+  const acceptedSide = { calibration: side, quality: evaluateCalibration(side, checkpoints(side)) };
+
+  it('round-trips projection and triangulates the stage point both cameras see', () => {
+    const truth = { x: 0.12, y: -0.05, z: 0.08 };
+    const frontImage = projectStagePoint(front, truth)!;
+    const sideImage = projectStagePoint(side, truth)!;
+    const triangulated = triangulateRays(backProjectImagePoint(front, frontImage)!, backProjectImagePoint(side, sideImage)!)!;
+    expect(triangulated.position.x).toBeCloseTo(truth.x, 6);
+    expect(triangulated.position.y).toBeCloseTo(truth.y, 6);
+    expect(triangulated.position.z).toBeCloseTo(truth.z, 6);
+    expect(triangulated.rayGapM).toBeLessThan(1e-9);
+
+    // A point behind the camera never projects, and two rays from the same
+    // camera are degenerate rather than silently "triangulated".
+    expect(projectStagePoint(front, { x: 0, y: 0, z: -3 })).toBeNull();
+    const ray = backProjectImagePoint(front, frontImage)!;
+    expect(triangulateRays(ray, ray)).toBeNull();
+  });
+
+  it('accepts a good calibration and rejects a nudged one on reprojection error', () => {
+    expect(MULTICAM_MAX_REPROJECTION_ERROR_PX).toBe(3);
+    expect(acceptedFront.quality.accepted).toBe(true);
+    expect(acceptedFront.quality.meanReprojectionErrorPx).toBeLessThan(1e-6);
+
+    // Three checkpoints cannot pin a six-degree-of-freedom transform.
+    expect(evaluateCalibration(front, checkpoints(front).slice(0, 3)).accepted).toBe(false);
+
+    // A camera bumped 4 cm sideways after calibration: same orientation, so
+    // nothing re-aims to hide the shift, which is what a knocked tripod does.
+    const bumped = {
+      ...front,
+      extrinsics: { ...front.extrinsics, translation: { ...front.extrinsics.translation, x: front.extrinsics.translation.x + 0.04 } },
+    };
+    const drifted = evaluateCalibration(bumped, checkpoints(front));
+    expect(drifted.accepted).toBe(false);
+    expect(drifted.rejectionReason).toContain('reprojection error');
+
+    // A non-orthonormal rotation is refused before any point is projected.
+    const skewed = { ...front, extrinsics: { rotation: [1, 0, 0, 0, 1, 0, 0, 0, 2], translation: { x: 0, y: 0, z: 1 } } };
+    expect(evaluateCalibration(skewed, checkpoints(front)).rejectionReason).toContain('orthonormal');
+  });
+
+  it('measures capture skew and drift, and corrects both', () => {
+    const skew = (stageMs: number) => stageMs + 137.4 + (2.4 / 60_000) * stageMs;
+    const alignment = measureCaptureTimestampAlignment([0, 2000, 4000, 6000, 8000].map((stageMs) => ({
+      primaryMs: stageMs,
+      secondaryMs: skew(stageMs),
+    })));
+    expect(alignment.accepted).toBe(true);
+    expect(alignment.offsetMs).toBeCloseTo(137.4, 3);
+    expect(alignment.driftMsPerMinute).toBeCloseTo(2.4, 3);
+    expect(alignment.maxResidualMs).toBeLessThan(MULTICAM_MAX_SYNC_RESIDUAL_MS);
+    expect(applyClockAlignment(skew(5000), alignment)).toBeCloseTo(5000, 6);
+
+    // Too few events, no time span, and runaway drift are each refused.
+    expect(measureCaptureTimestampAlignment([{ primaryMs: 0, secondaryMs: 10 }]).accepted).toBe(false);
+    expect(measureCaptureTimestampAlignment([0, 0, 0].map((t) => ({ primaryMs: t, secondaryMs: t + 5 }))).rejectionReason)
+      .toContain('span enough time');
+    const fast = measureCaptureTimestampAlignment([0, 2000, 4000].map((stageMs) => ({
+      primaryMs: stageMs,
+      secondaryMs: stageMs + 20 + (MULTICAM_MAX_DRIFT_MS_PER_MIN * 4 / 60_000) * stageMs,
+    })));
+    expect(fast.accepted).toBe(false);
+    expect(fast.rejectionReason).toContain('drift');
+  });
+
+  it('refuses to fuse uncalibrated, unaligned, or foreign-stage sources', () => {
+    const truth = { x: 0.02, y: -0.02, z: 0.03 };
+    const observe = (cameraId: string, calibration: typeof front, timeMs: number) => ({
+      cameraId,
+      stickId: 'Right',
+      timeMs,
+      image: projectStagePoint(calibration, truth)!,
+      confidence: 0.8,
+    });
+    const observations = [observe('front', front, 100), observe('side', side, 100)];
+
+    const rejectedCalibration = fuseCameraObservations(observations, [
+      acceptedFront,
+      { calibration: side, quality: { ...acceptedSide.quality, accepted: false, rejectionReason: 'moved' } },
+    ]);
+    expect(rejectedCalibration.fused).toHaveLength(0);
+    expect(rejectedCalibration.degradedToSingleCamera).toBe(true);
+    expect(rejectedCalibration.rejected.map((entry) => entry.reason)).toContain('uncalibrated');
+
+    const unaligned = fuseCameraObservations(observations, [
+      acceptedFront,
+      { ...acceptedSide, clockAlignment: measureCaptureTimestampAlignment([{ primaryMs: 0, secondaryMs: 5 }]) },
+    ]);
+    expect(unaligned.fused).toHaveLength(0);
+    expect(unaligned.rejected.map((entry) => entry.reason)).toContain('clockUnaligned');
+
+    // Two cameras calibrated against different stage frames disqualify each
+    // other rather than being combined into meaningless coordinates.
+    const foreign = calibrate('side', { x: 1.62, y: -0.62, z: -0.3 }, 'other-kit');
+    const mismatched = fuseCameraObservations(observations, [
+      acceptedFront,
+      { calibration: foreign, quality: evaluateCalibration(foreign, checkpoints(foreign)) },
+    ]);
+    expect(mismatched.fused).toHaveLength(0);
+    expect(mismatched.usableCameras).toHaveLength(0);
+    expect(mismatched.rejected.map((entry) => entry.reason)).toContain('stageFrameMismatch');
+
+    // Stale and non-finite input never reach the geometry.
+    const stale = fuseCameraObservations(observations, [acceptedFront, acceptedSide], { nowMs: 5000, maxAgeMs: 120 });
+    expect(stale.rejected.every((entry) => entry.reason === 'stale')).toBe(true);
+    const garbage = fuseCameraObservations(
+      [{ ...observe('front', front, 100), image: { x: Number.NaN, y: 0.5 } }],
+      [acceptedFront, acceptedSide],
+    );
+    expect(garbage.rejected.map((entry) => entry.reason)).toEqual(['nonFinite']);
+  });
+
+  it('triangulates a trajectory into the existing detector and never guesses depth from one view', () => {
+    // A descending stroke onto the snare, sampled by both cameras.
+    const path = [
+      { timeMs: 0, position: { x: 0, y: -0.09, z: 0 } },
+      { timeMs: 16, position: { x: 0, y: -0.05, z: 0 } },
+      { timeMs: 32, position: { x: 0, y: 0, z: 0 } },
+    ];
+    const observations = path.flatMap((step) => [front, side].map((calibration) => ({
+      cameraId: calibration.cameraId,
+      stickId: 'Right',
+      timeMs: step.timeMs,
+      image: projectStagePoint(calibration, step.position)!,
+      confidence: 0.8,
+      hand: 'Right' as const,
+    })));
+    const report = fuseCameraObservations(observations, [acceptedFront, acceptedSide]);
+    expect(report.fused).toHaveLength(3);
+    expect(report.degradedToSingleCamera).toBe(false);
+    expect(report.fused[2].position.y).toBeCloseTo(0, 6);
+    expect(report.fused[0].rayGapM).toBeLessThan(1e-6);
+
+    const samples = toStickTipSamples(report.fused);
+    expect(samples).toHaveLength(2);
+    const hits = new DrumHitDetector(zones).detect(samples[1]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].zoneId).toBe('snare');
+    expect(hits[0].hand).toBe('Right');
+
+    // One camera alone yields no stage samples: a single ray leaves depth free,
+    // so the caller stays on the single-camera pipeline instead.
+    const singleView = fuseCameraObservations(
+      observations.filter((entry) => entry.cameraId === 'front'),
+      [acceptedFront, acceptedSide],
+    );
+    expect(singleView.fused).toHaveLength(0);
+    expect(singleView.rejected.every((entry) => entry.reason === 'singleView')).toBe(true);
+  });
+
+  it('corroborates a stroke both cameras saw and settles the zone from 3D, not from either view', () => {
+    const truth = { x: -0.5, y: -0.1, z: 0.12 };
+    const candidate = (calibration: typeof front, timeMs: number, zoneId: string, confidence: number) => ({
+      cameraId: calibration.cameraId,
+      stickId: 'Right',
+      timeMs,
+      zoneId,
+      zoneType: 'hihat' as const,
+      image: projectStagePoint(calibration, truth)!,
+      velocity: { x: 0, y: 1.2, z: 0 },
+      speed: 1.2,
+      confidence,
+      hand: 'Right' as const,
+    });
+    // The front camera mislabels the stroke as a snare hit; the side camera
+    // calls it a hi-hat. Triangulation decides, and it decides for the hi-hat.
+    const report = fuseCameraHitCandidates(
+      [candidate(front, 500, 'snare', 0.7), candidate(side, 506, 'hihat', 0.65)],
+      [acceptedFront, acceptedSide],
+      { zones },
+    );
+    expect(report.hits).toHaveLength(1);
+    expect(report.hits[0].corroborated).toBe(true);
+    expect(report.hits[0].planeConstrained).toBe(false);
+    expect(report.hits[0].event.zoneId).toBe('hihat');
+    expect(report.hits[0].event.timeNs / 1_000_000).toBeCloseTo(503, 6);
+    // Corroboration is evidence, so the fused stroke outranks either input.
+    expect(report.hits[0].event.confidence).toBeGreaterThan(0.7);
+    expect(report.hits[0].sources).toHaveLength(2);
+  });
+
+  it('keeps a stroke only one camera saw, and does not double-count a disagreeing pair', () => {
+    const truth = { x: -0.5, y: -0.1, z: 0.12 };
+    const single = fuseCameraHitCandidates(
+      [{
+        cameraId: 'front',
+        stickId: 'Right',
+        timeMs: 500,
+        zoneId: 'hihat',
+        zoneType: 'hihat' as const,
+        image: projectStagePoint(front, truth)!,
+        velocity: { x: 0, y: 1.2, z: 0 },
+        speed: 1.2,
+        confidence: 0.8,
+        hand: 'Right' as const,
+      }],
+      [acceptedFront, acceptedSide],
+      { zones },
+    );
+    // The occlusion case: one view, resolved against the calibrated head plane
+    // and marked so nothing downstream mistakes it for a stereo fix.
+    expect(single.hits).toHaveLength(1);
+    expect(single.hits[0].corroborated).toBe(false);
+    expect(single.hits[0].planeConstrained).toBe(true);
+    expect(single.hits[0].event.zoneId).toBe('hihat');
+    expect(single.hits[0].event.confidence).toBeLessThan(0.8);
+
+    // Same stroke, but the side camera's ray misses by more than the gap
+    // threshold — a drifted calibration. Both still resolve onto the hi-hat, so
+    // without the de-duplication this stroke would be counted twice.
+    const offset = { x: truth.x, y: truth.y, z: truth.z + 0.1 };
+    const disagreeing = fuseCameraHitCandidates(
+      [
+        { cameraId: 'front', stickId: 'Right', timeMs: 500, zoneId: 'hihat', zoneType: 'hihat' as const, image: projectStagePoint(front, truth)!, velocity: { x: 0, y: 1.2, z: 0 }, speed: 1.2, confidence: 0.8 },
+        { cameraId: 'side', stickId: 'Right', timeMs: 504, zoneId: 'hihat', zoneType: 'hihat' as const, image: projectStagePoint(side, offset)!, velocity: { x: 0, y: 1.2, z: 0 }, speed: 1.2, confidence: 0.6 },
+      ],
+      [acceptedFront, acceptedSide],
+      { zones },
+    );
+    expect(disagreeing.hits).toHaveLength(1);
+    expect(disagreeing.hits[0].corroborated).toBe(false);
+    expect(disagreeing.rejected.map((entry) => entry.reason)).toContain('rayGap');
+    expect(MULTICAM_MAX_RAY_GAP_M).toBe(0.03);
+  });
+
+  it('keeps two simultaneous strokes on different zones apart', () => {
+    // A backbeat: snare and hi-hat struck on the same instant. Matching by time
+    // alone would merge them; matching by ray agreement does not.
+    const strokes = [
+      { zoneId: 'snare', zoneType: 'snare' as const, position: { x: 0.01, y: 0, z: 0.01 }, hand: 'Left' as const },
+      { zoneId: 'hihat', zoneType: 'hihat' as const, position: { x: -0.5, y: -0.1, z: 0.11 }, hand: 'Right' as const },
+    ];
+    const candidates = strokes.flatMap((stroke) => [front, side].map((calibration) => ({
+      cameraId: calibration.cameraId,
+      stickId: stroke.hand,
+      timeMs: 900,
+      zoneId: stroke.zoneId,
+      zoneType: stroke.zoneType,
+      image: projectStagePoint(calibration, stroke.position)!,
+      velocity: { x: 0, y: 1.1, z: 0 },
+      speed: 1.1,
+      confidence: 0.8,
+      hand: stroke.hand,
+    })));
+    const report = fuseCameraHitCandidates(candidates, [acceptedFront, acceptedSide], { zones });
+    expect(report.hits).toHaveLength(2);
+    expect(report.hits.every((hit) => hit.corroborated)).toBe(true);
+    expect(new Set(report.hits.map((hit) => hit.event.zoneId))).toEqual(new Set(['snare', 'hihat']));
+    expect(report.hits.find((hit) => hit.event.zoneId === 'snare')?.event.hand).toBe('Left');
+  });
+
+  it('resolves single-view depth only onto a calibrated head, never into open air', () => {
+    const onHead = backProjectImagePoint(front, projectStagePoint(front, { x: -0.5, y: -0.1, z: 0.1 })!)!;
+    expect(intersectRayWithZonePlane(onHead, zones)?.zoneId).toBe('hihat');
+    // A stick waved well clear of the kit intersects no zone at all.
+    const offKit = backProjectImagePoint(front, projectStagePoint(front, { x: 1.4, y: -0.1, z: 0.1 })!)!;
+    expect(intersectRayWithZonePlane(offKit, zones)).toBeNull();
   });
 });
 
