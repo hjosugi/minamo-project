@@ -8,5 +8,6 @@ export * from './hand';
 export * from './stability';
 export * from './audio';
 export * from './drum';
+export * from './multiCamera';
 export * from './ml';
 export * from './mockFrame';
