@@ -48,6 +48,15 @@ because WebKit eventually shipped it. Here, feature detection must degrade to
 **"MIDI is unavailable on this browser"** and stay there — not "MIDI later". Any
 UI copy has to say so plainly rather than implying a missing permission.
 
+> **Correction (#240): that copy is right for Safari and wrong for Firefox.**
+> Firefox implements Web MIDI, but `requestMIDIAccess()` **always rejects**
+> (localhost excepted) until the user installs a generated *site permission
+> add-on*. Feature detection passes and the promise still fails, so "unavailable
+> on this browser" is both false and unactionable there. Presence of the API and
+> "the API will resolve here" are separate facts and the UI has to treat them as
+> such — see
+> [ble-midi-drum-sticks.md](ble-midi-drum-sticks.md) and `selectStickTransport`.
+
 The consequence for the desktop app (#50) is sharper, and it is easy to miss:
 
 | Platform | Tauri webview | Web MIDI |

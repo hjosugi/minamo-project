@@ -65,6 +65,7 @@
 - [research/occlusion-robust-hands.md](research/occlusion-robust-hands.md) (#271)
 - [research/midi-performance-input.ja.md](research/midi-performance-input.ja.md) (#278)
 - [research/face-expression-gaze-quality.ja.md](research/face-expression-gaze-quality.ja.md) (#273)
+- [research/ble-midi-drum-sticks.md](research/ble-midi-drum-sticks.md) — BLE ドラムスティックプロファイルのプロトタイプ結果 (#240)
 - [research/2026-07-code-and-research-audit.ja.md](research/2026-07-code-and-research-audit.ja.md) (#246-#278)
 
 ## 製品

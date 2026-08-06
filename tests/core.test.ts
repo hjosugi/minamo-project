@@ -43,6 +43,18 @@ import {
   DRUM_MIN_HIT_SPEED_MPS,
   DRUM_REARM_MIN_LIFT_M,
   fetchAndVerifyModel,
+  BleMidiPacketDecoder,
+  BleMidiStickSession,
+  BLE_MIDI_CHARACTERISTIC_UUID,
+  BLE_MIDI_SERVICE_UUID,
+  BLE_MIDI_TIMESTAMP_WRAP_MS,
+  describeStickDevice,
+  extractStickStrikes,
+  fuseStickHitsWithVisual,
+  GM_PERCUSSION_ZONE_TYPES,
+  selectStickTransport,
+  stickStrikeToDrumHit,
+  velocityToSpeed,
   applyClockAlignment,
   backProjectImagePoint,
   cameraLookAt,
@@ -619,6 +631,291 @@ describe('audio and drum helpers', () => {
   it('adds conservative audio-assisted mouth accent', () => {
     expect(voiceActivityMouthAccent(0.1, 0.2)).toBeGreaterThan(0.1);
     expect(voiceActivityMouthAccent(0.9, 0.02)).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+describe('BLE-MIDI drum stick (issue #240)', () => {
+  // Packet builders matching RP-052: header carries the 6 high timestamp bits,
+  // each message is preceded by a byte carrying the 7 low bits.
+  const header = (timeMs: number) => 0x80 | ((timeMs >> 7) & 0x3f);
+  const stamp = (timeMs: number) => 0x80 | (timeMs & 0x7f);
+  const NOTE_ON_CH10 = 0x99;
+  const SNARE = 38;
+  const CLOSED_HIHAT = 42;
+
+  it('decodes single, multi-message, and running-status packets', () => {
+    expect(BLE_MIDI_SERVICE_UUID).toBe('03b80e5a-ede8-4b33-a751-6ce34ec4c700');
+    expect(BLE_MIDI_CHARACTERISTIC_UUID).toBe('7772e5db-3868-4112-a1a9-f2669d106bf3');
+
+    const single = new BleMidiPacketDecoder().decode([header(1000), stamp(1000), NOTE_ON_CH10, SNARE, 100]);
+    expect(single.messages).toEqual([{ deviceTimeMs: 1000, status: NOTE_ON_CH10, data1: SNARE, data2: 100 }]);
+
+    const multi = new BleMidiPacketDecoder().decode([
+      header(1000), stamp(1000), NOTE_ON_CH10, SNARE, 100,
+      stamp(1010), NOTE_ON_CH10, CLOSED_HIHAT, 80,
+    ]);
+    expect(multi.messages.map((message) => message.deviceTimeMs)).toEqual([1000, 1010]);
+
+    // Running status: the second message omits the status byte entirely.
+    const running = new BleMidiPacketDecoder().decode([
+      header(2000), stamp(2000), NOTE_ON_CH10, SNARE, 100,
+      stamp(2010), CLOSED_HIHAT, 90,
+    ]);
+    expect(running.messages).toHaveLength(2);
+    expect(running.messages[1]).toEqual({ deviceTimeMs: 2010, status: NOTE_ON_CH10, data1: CLOSED_HIHAT, data2: 90 });
+  });
+
+  it('unwraps the 13-bit timestamp, within a packet and across the rollover', () => {
+    expect(BLE_MIDI_TIMESTAMP_WRAP_MS).toBe(8192);
+
+    // The header's high bits are sent once per packet, so a packet whose
+    // messages straddle a 128 ms boundary must advance them itself. Without
+    // that, the second stroke here decodes 118 ms *earlier* than the first.
+    const straddle = new BleMidiPacketDecoder().decode([
+      header(1020), stamp(1020), NOTE_ON_CH10, SNARE, 100,
+      stamp(1030), NOTE_ON_CH10, CLOSED_HIHAT, 80,
+    ]);
+    expect(straddle.messages.map((message) => message.deviceTimeMs)).toEqual([1020, 1030]);
+
+    // The device clock repeats every 8.192 s; a stroke after the rollover must
+    // not land before the one before it.
+    const decoder = new BleMidiPacketDecoder();
+    decoder.decode([header(8000), stamp(8000), NOTE_ON_CH10, SNARE, 100]);
+    const wrapped = decoder.decode([header(100), stamp(100), NOTE_ON_CH10, SNARE, 100]);
+    expect(wrapped.messages[0].deviceTimeMs).toBe(8292);
+
+    // reset() is what a reconnect calls: the device starts counting again.
+    decoder.reset();
+    const reconnected = decoder.decode([header(50), stamp(50), NOTE_ON_CH10, SNARE, 100]);
+    expect(reconnected.messages[0].deviceTimeMs).toBe(50);
+  });
+
+  it('degrades rather than throwing on malformed or unsupported packets', () => {
+    const decoder = new BleMidiPacketDecoder();
+    // Too short, no header bit, and a header with bit6 set are all rejected
+    // whole rather than parsed partway.
+    expect(decoder.decode([0x80, 0x80]).malformedBytes).toBe(2);
+    expect(decoder.decode([0x00, 0x80, NOTE_ON_CH10, SNARE, 100]).malformedBytes).toBe(5);
+    expect(decoder.decode([0xc0, 0x80, NOTE_ON_CH10, SNARE, 100]).malformedBytes).toBe(5);
+
+    // Truncated mid-message: emit nothing rather than a note with a missing
+    // velocity byte.
+    const truncated = decoder.decode([header(10), stamp(10), NOTE_ON_CH10, SNARE]);
+    expect(truncated.messages).toHaveLength(0);
+    expect(truncated.malformedBytes).toBeGreaterThan(0);
+
+    // A data byte with bit7 set is corruption, not a note.
+    expect(decoder.decode([header(10), stamp(10), NOTE_ON_CH10, 0xff, 100]).messages).toHaveLength(0);
+
+    // SysEx is skipped and flagged; a stick has no reason to send one, and
+    // reading its payload as notes would fire hits that never happened.
+    const sysex = decoder.decode([header(10), stamp(10), 0xf0, 0x7e, 0x00]);
+    expect(sysex.skippedSysEx).toBe(true);
+    expect(sysex.messages).toHaveLength(0);
+
+    // System Real-Time bytes are legal anywhere and carry no hit.
+    const clocked = decoder.decode([header(20), stamp(20), 0xf8, stamp(21), NOTE_ON_CH10, SNARE, 90]);
+    expect(clocked.messages).toHaveLength(1);
+  });
+
+  it('treats a velocity-0 note-on as a note-off, not a strike', () => {
+    const decoder = new BleMidiPacketDecoder();
+    const decoded = decoder.decode([
+      header(10), stamp(10), NOTE_ON_CH10, SNARE, 0,
+      stamp(11), 0x89, SNARE, 64,
+      stamp(12), NOTE_ON_CH10, SNARE, 96,
+    ]);
+    const strikes = extractStickStrikes(decoded.messages);
+    expect(strikes).toHaveLength(1);
+    expect(strikes[0]).toMatchObject({ note: SNARE, velocity: 96, channel: 9 });
+  });
+
+  it('maps GM percussion notes to zones and velocity to a stage speed', () => {
+    const strike = { deviceTimeMs: 500, note: SNARE, velocity: 127, channel: 9 };
+    const hit = stickStrikeToDrumHit(strike);
+    expect(hit?.zoneType).toBe('snare');
+    // The stick knows when and how hard, never where. A zero position is how a
+    // consumer tells a stick-only hit from a vision hit.
+    expect(hit?.position).toEqual({ x: 0, y: 0, z: 0 });
+    expect(hit?.speed).toBeCloseTo(6, 6);
+    expect(velocityToSpeed(1)).toBeCloseTo(0.5, 3);
+    expect(velocityToSpeed(0)).toBe(0.5);
+    expect(velocityToSpeed(Number.NaN)).toBe(0);
+
+    expect(GM_PERCUSSION_ZONE_TYPES[36]).toBe('kick');
+    expect(GM_PERCUSSION_ZONE_TYPES[51]).toBe('ride');
+    // Pedal hi-hat is a foot signal, not a stick strike.
+    expect(GM_PERCUSSION_ZONE_TYPES[44]).toBe('pedal');
+    // An unmapped note produces nothing rather than an 'unknown' zone hit.
+    expect(stickStrikeToDrumHit({ ...strike, note: 3 })).toBeNull();
+
+    // A learn step overrides the GM default, and channels can name the stick.
+    const remapped = stickStrikeToDrumHit(strike, {
+      mapping: { notes: { [SNARE]: { zoneId: 'rim', zoneType: 'snare' } }, handByChannel: { 9: 'Left' } },
+    });
+    expect(remapped?.zoneId).toBe('rim');
+    expect(remapped?.hand).toBe('Left');
+
+    // Device time is mapped onto the host clock when an alignment is supplied.
+    const aligned = stickStrikeToDrumHit(strike, { toHostTimeMs: (deviceMs) => deviceMs + 1000 });
+    expect(aligned?.timeNs).toBe(1_500_000_000);
+  });
+
+  it('aligns the stick clock to the host clock with the shared fit', () => {
+    // The stick's 13-bit clock is unrelated to the host's, and BLE adds a
+    // latency offset on top. The fit from #241 is the same problem, so it is
+    // reused rather than re-derived.
+    const toDevice = (hostMs: number) => hostMs - 4210 + (1.8 / 60_000) * hostMs;
+    const alignment = measureCaptureTimestampAlignment([0, 2000, 4000, 6000].map((hostMs) => ({
+      primaryMs: hostMs,
+      secondaryMs: toDevice(hostMs),
+    })));
+    expect(alignment.accepted).toBe(true);
+    const hit = stickStrikeToDrumHit(
+      { deviceTimeMs: toDevice(5000), note: SNARE, velocity: 100, channel: 9 },
+      { toHostTimeMs: (deviceMs) => applyClockAlignment(deviceMs, alignment) },
+    );
+    expect(hit!.timeNs / 1_000_000).toBeCloseTo(5000, 3);
+  });
+
+  it('lets the stick time a stroke the camera positioned, and neither source silence the other', () => {
+    const visual = (zoneType: 'snare' | 'hihat', timeMs: number, position: { x: number; y: number; z: number }) => ({
+      eventId: `v:${zoneType}:${timeMs}`,
+      timeNs: timeMs * 1_000_000,
+      zoneId: zoneType,
+      zoneType,
+      position,
+      velocity: { x: 0, y: 1, z: 0 },
+      speed: 1.4,
+      confidence: 0.7,
+      audioAligned: false,
+    });
+    const stickHits = [
+      stickStrikeToDrumHit({ deviceTimeMs: 1000, note: SNARE, velocity: 110, channel: 9 })!,
+      // A stroke the camera missed — the occlusion case the accessory is for.
+      stickStrikeToDrumHit({ deviceTimeMs: 2000, note: CLOSED_HIHAT, velocity: 70, channel: 9 })!,
+    ];
+    const visualHits = [
+      visual('snare', 1018, { x: 0.02, y: 0, z: 0.01 }),
+      // A stroke the stick missed — a dropped packet must not delete it.
+      visual('hihat', 3000, { x: -0.5, y: -0.1, z: 0.1 }),
+    ];
+
+    const fused = fuseStickHitsWithVisual(stickHits, visualHits, 30);
+    expect(fused).toHaveLength(3);
+
+    const merged = fused[0];
+    expect(merged.positioned).toBe(true);
+    expect(merged.stickTimed).toBe(true);
+    // The stick wins on timing and velocity, the camera on position.
+    expect(merged.event.timeNs).toBe(1_000_000_000);
+    expect(merged.event.position).toEqual({ x: 0.02, y: 0, z: 0.01 });
+    expect(merged.event.speed).toBeCloseTo(stickHits[0].speed, 6);
+    expect(merged.event.confidence).toBeGreaterThan(0.7);
+
+    expect(fused[1]).toMatchObject({ positioned: false, stickTimed: true });
+    expect(fused[2]).toMatchObject({ positioned: true, stickTimed: false });
+    expect(fused[2].event.eventId).toBe('v:hihat:3000');
+  });
+
+  it('does not replay strokes across a reconnect', () => {
+    const session = new BleMidiStickSession();
+    // Nothing is ingested before connect.
+    expect(session.ingest([header(10), stamp(10), NOTE_ON_CH10, SNARE, 100])).toHaveLength(0);
+
+    session.connect();
+    const packet = [header(500), stamp(500), NOTE_ON_CH10, SNARE, 100];
+    expect(session.ingest(packet)).toHaveLength(1);
+    // A retransmitted packet is the same stroke, not a second one.
+    expect(session.ingest(packet)).toHaveLength(0);
+
+    session.disconnect();
+    session.connect();
+    // After a reconnect the device clock restarts, so the buffered packet
+    // decodes to the same host time again. Emitting it twice would make the
+    // avatar play a stroke the drummer never played.
+    expect(session.ingest(packet)).toHaveLength(0);
+    const status = session.getStatus();
+    expect(status.reconnects).toBe(1);
+    expect(status.emitted).toBe(1);
+    expect(status.suppressedDuplicates).toBe(2);
+
+    // A genuinely new stroke still gets through after the reconnect.
+    expect(session.ingest([header(900), stamp(900), NOTE_ON_CH10, CLOSED_HIHAT, 90])).toHaveLength(1);
+  });
+
+  it('chooses a transport from capabilities, never from the user agent', () => {
+    // Web MIDI wins when present: an OS-paired BLE-MIDI stick is an ordinary
+    // MIDI port, so the OS owns pairing, reconnect and the BLE-MIDI decode.
+    const chrome = selectStickTransport({ hasWebMidi: true, hasWebBluetooth: true, hasNativeBridge: false });
+    expect(chrome.preferred).toBe('webMidi');
+    expect(chrome.available).toEqual(['webMidi', 'webBluetooth']);
+
+    // Firefox implements Web MIDI but rejects until a site permission add-on is
+    // installed, so "unavailable" would be wrong and "later" would be useless.
+    const firefox = selectStickTransport({
+      hasWebMidi: true, hasWebBluetooth: false, hasNativeBridge: false, webMidiNeedsSitePermissionAddon: true,
+    });
+    expect(firefox.preferred).toBe('webMidi');
+    expect(firefox.diagnostic).toContain('add-on');
+
+    // Safari/WebKit has neither API and none in progress, so the copy names the
+    // way out and says the camera path is unaffected.
+    const safari = selectStickTransport({ hasWebMidi: false, hasWebBluetooth: false, hasNativeBridge: false });
+    expect(safari.preferred).toBeNull();
+    expect(safari.diagnostic).toContain('desktop app');
+    expect(safari.diagnostic).toContain('unaffected');
+
+    // The desktop app on macOS/Linux: WebKit webview, so the native bridge is
+    // the only path and is preferred over nothing.
+    expect(selectStickTransport({ hasWebMidi: false, hasWebBluetooth: false, hasNativeBridge: true }).preferred).toBe('native');
+  });
+
+  it('survives arbitrary bytes from the air, holding its output invariants', () => {
+    // Packets come off a wireless link from a device nobody controls, so the
+    // decoder is on the same untrusted path the binary parsers were fuzzed on
+    // (#262). Seeded so a failure is reproducible.
+    let seed = 0x9e3779b9;
+    const nextByte = () => {
+      seed = (seed + 0x6d2b79f5) >>> 0;
+      let t = seed;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) & 0xff;
+    };
+
+    const decoder = new BleMidiPacketDecoder();
+    for (let iteration = 0; iteration < 20_000; iteration++) {
+      const length = nextByte() % 24;
+      const packet = Array.from({ length }, nextByte);
+      const result = decoder.decode(packet);
+      expect(result.malformedBytes).toBeGreaterThanOrEqual(0);
+      for (const message of result.messages) {
+        // Never emit a data byte that was really a status or timestamp byte,
+        // and never emit a time that is not a usable number.
+        expect(message.data1).toBeLessThan(0x80);
+        expect(message.data2).toBeLessThan(0x80);
+        expect(Number.isFinite(message.deviceTimeMs)).toBe(true);
+        expect(message.deviceTimeMs).toBeGreaterThanOrEqual(0);
+        expect(message.status).toBeGreaterThanOrEqual(0x80);
+        expect(message.status).toBeLessThan(0xf0);
+      }
+      // Anything that survives to a hit must be a hit the schema allows.
+      for (const strike of extractStickStrikes(result.messages)) {
+        expect(strike.velocity).toBeGreaterThan(0);
+        const hit = stickStrikeToDrumHit(strike);
+        if (!hit) continue;
+        expect(Number.isFinite(hit.speed)).toBe(true);
+        expect(hit.speed).toBeGreaterThan(0);
+        expect(Number.isFinite(hit.timeNs)).toBe(true);
+      }
+    }
+  });
+
+  it('never puts a device identifier in a log line', () => {
+    expect(describeStickDevice({ name: 'Freedrum', id: 'aa:bb:cc:dd:ee:ff' })).toBe('Freedrum (id redacted)');
+    expect(describeStickDevice({ id: 'aa:bb:cc:dd:ee:ff' })).not.toContain('aa:bb');
+    expect(describeStickDevice({})).toContain('id redacted');
   });
 });
 
