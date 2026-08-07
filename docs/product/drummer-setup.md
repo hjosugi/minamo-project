@@ -3,6 +3,39 @@
 
 # Drummer Setup Guide
 
+## Percussion kits
+
+The tracker is not limited to a five-piece kit played with sticks. Pick the kit
+in **Percussion kit**; each brings its own zone layout and its own idea of what
+a strike looks like.
+
+| Kit | Zones | Strike |
+| --- | --- | --- |
+| Drum kit | hi-hat, snare, tom, ride, crash, kick | stick grip |
+| Cajon | bass, slap L/R, tap L/R | open hand |
+| Congas | quinto, conga, tumba, two edges | open hand |
+| Bongos | macho, hembra, two edges | open hand |
+| Hand percussion | left, centre, right, aux | open hand |
+| Hybrid | bass, slap, aux hat, aux snare, kick | stick **or** hand |
+
+Why the strike style is per kit and not global: a stick grip is a partly closed
+hand (finger curl above ~0.35) and an open-palm slap is the opposite (below
+~0.35), so the two can never both be true. A single hardcoded stick check meant a
+cajon player's hand could sit dead centre in a calibrated zone and never register
+a strike. The style is evaluated **per hand**, which is what makes the hybrid kit
+work: a stick in one hand and a bare hand on the other both count in the same
+frame.
+
+Switching kit replaces the zone set, so its calibration starts over — it is a
+different instrument in a different place.
+
+The MIDI path reaches the same zones. `GM_PERCUSSION_ZONE_TYPES` in
+`src/core/bleMidiStick.ts` maps the whole General MIDI percussion range —
+bongos and congas onto `head`/`edge`, and shakers, blocks, scrapers and bells
+onto `percussion` — so an e-kit or pad controller drives a hand-percussion kit
+without a camera. Notes outside 35-81 still produce no hit rather than a
+guessed one.
+
 ## Camera
 
 - Put the camera high enough to see sticks, wrists, snare, hi-hat, and ride.

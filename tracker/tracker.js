@@ -86,6 +86,16 @@ import { applyVoiceActivityAccents } from '../shared/voice-activity.js';
 import { responseLooksLikeAsset } from '../shared/asset-probe.js';
 import { waitForVideoMetadata, startVideoPlayback } from '../shared/camera-startup.js';
 import { setupPageI18n } from '../shared/i18n.js';
+import {
+  DEFAULT_SITUATION_ID,
+  applySituationToTrackerSettings,
+  getSituationPreset,
+  isSituationId,
+  situationObsPlan,
+  situationViewerUrl,
+} from '../shared/situation-presets.js';
+import { createObsBridge } from '../shared/obs-bridge.js';
+import { PERCUSSION_KITS, getPercussionKit } from '../shared/percussion.js';
 import { mat4ToQuatInto, applyPitchOffset } from '../shared/pose-math.js';
 import { fingerCurl, fingerSpread, fingerVector } from '../shared/hand-math.js';
 import {
@@ -109,6 +119,7 @@ const { t } = setupPageI18n({
     refreshCameras().catch(() => {});
     updateChannelControls();
     updateDrumKitUi();
+    updateSituationUi();
     updateDatasetCaptureUi();
     updateSmoothingControls();
     renderLightingChecklist();
@@ -301,6 +312,9 @@ function normalizeTrackerSettings(raw) {
   }
   if (!SMOOTHING_GROUPS[base.smoothingGroup]) base.smoothingGroup = 'face';
   base.headLeanRangeCm = normalizeHeadLeanRangeCm(base.headLeanRangeCm);
+  if (!isSituationId(base.situation)) base.situation = DEFAULT_SITUATION_ID;
+  if (!/^wss?:\/\//i.test(String(base.obsUrl || ''))) base.obsUrl = DEFAULT_TRACKER_SETTINGS.obsUrl;
+  base.obsAutoScene = Boolean(base.obsAutoScene);
   if (!['seated', 'standing'].includes(base.bodyMode)) base.bodyMode = 'seated';
   base.faceLock = Boolean(base.faceLock);
   base.drummerMode = Boolean(base.drummerMode);
@@ -1464,6 +1478,9 @@ function applySettingsToUi() {
   $('inpWsUrl').value = settings.wsUrl;
   $('inpWtUrl').value = settings.wtUrl;
   $('inpWtHash').value = settings.wtHash;
+  $('selSituation').value = settings.situation;
+  $('inpObsUrl').value = settings.obsUrl;
+  $('chkObsAutoScene').checked = Boolean(settings.obsAutoScene);
   $('chkMirror').checked = Boolean(settings.mirror);
   $('chkPose').checked = Boolean(settings.pose);
   $('chkHands').checked = Boolean(settings.hands);
@@ -1488,9 +1505,13 @@ function applySettingsToUi() {
   updateViewerLink();
   updateChannelControls();
   updateDrumKitUi();
+  updateSituationUi();
 }
 
 function readSettingsFromUi() {
+  settings.situation = isSituationId($('selSituation').value) ? $('selSituation').value : DEFAULT_SITUATION_ID;
+  settings.obsUrl = $('inpObsUrl').value.trim() || DEFAULT_TRACKER_SETTINGS.obsUrl;
+  settings.obsAutoScene = $('chkObsAutoScene').checked;
   settings.mode = $('selMode').value;
   settings.room = $('inpRoom').value || 'demo';
   settings.participantId = normalizeParticipantId($('inpParticipantId').value, settings.participantId || createParticipantId());
@@ -1567,7 +1588,52 @@ function saveDrumKit() {
   updateDrumKitUi();
 }
 
+// The kit and zone selectors are rebuilt from the catalogue rather than written
+// into the markup: each kit brings its own zone list, and the labels are
+// translated, so a language toggle has to be able to re-render them.
+function renderPercussionKitOptions() {
+  const select = $('selPercussionKit');
+  if (select.value !== drumKit.kit || select.options.length !== PERCUSSION_KITS.length) {
+    select.replaceChildren(...PERCUSSION_KITS.map((kit) => new Option(t(kit.labelKey), kit.id)));
+  } else {
+    for (const option of select.options) {
+      const kit = PERCUSSION_KITS.find((entry) => entry.id === option.value);
+      if (kit) option.textContent = t(kit.labelKey);
+    }
+  }
+  select.value = drumKit.kit;
+}
+
+function renderDrumZoneOptions() {
+  const select = $('selDrumZone');
+  const wanted = drumKit.zones.map((zone) => zone.id).join(',');
+  const current = [...select.options].map((option) => option.value).join(',');
+  const previous = select.value;
+  if (wanted !== current) {
+    select.replaceChildren(...drumKit.zones.map((zone) => new Option(t(`tracker.ui.zone.${zone.id}`, zone.label), zone.id)));
+    // Keep the player's selection across a re-render; fall back to the first
+    // zone when the kit changed and the old zone no longer exists.
+    select.value = drumKit.zones.some((zone) => zone.id === previous) ? previous : drumKit.zones[0].id;
+  } else {
+    for (const option of select.options) {
+      const zone = drumKit.zones.find((z) => z.id === option.value);
+      if (zone) option.textContent = t(`tracker.ui.zone.${zone.id}`, zone.label);
+    }
+  }
+}
+
+function applyPercussionKit(kitId) {
+  // A kit change swaps the whole zone set, so the stored calibration for the old
+  // kit cannot carry over — it is a different instrument in a different place.
+  drumKit = normalizeDrumKitConfig(createDefaultDrumKitConfig(drumKit.name || 'default', kitId));
+  saveDrumKit();
+  state.drumPlacementArmed = false;
+  setStatus('tracker.status.percussionKitChanged', { kit: t(getPercussionKit(kitId).labelKey) }, 'idle');
+}
+
 function updateDrumKitUi() {
+  renderPercussionKitOptions();
+  renderDrumZoneOptions();
   const zone = selectedDrumZone();
   if (zone) {
     $('rngDrumZoneRadius').value = String(zone.radius);
@@ -1636,6 +1702,134 @@ async function copyDrumObsUrl() {
     setStatus('tracker.status.obsUrlCopied', undefined, 'open');
   } catch {
     setStatusText(url.toString(), 'open');
+  }
+}
+
+// ---------------------------------------------------------------- situations
+
+// One live OBS connection, reused across situation switches so changing scenes
+// costs a scene-switch request rather than a reconnect handshake.
+let obsBridge = null;
+
+function currentSituation() {
+  return getSituationPreset(settings.situation);
+}
+
+function situationObsSceneName(preset) {
+  return t(preset.obs.sceneNameKey);
+}
+
+function updateSituationUi() {
+  const preset = currentSituation();
+  $('situationStatus').textContent = t(preset.labelKey);
+  $('situationDescription').textContent = t(preset.descriptionKey);
+  // The drum kit panel is meaningless outside the drum situation, and leaving it
+  // on screen was the whole reason the app read as drum-only.
+  $('drummerSetup').hidden = preset.id !== 'drum';
+  // What Minamo is deliberately not going to do, listed rather than assumed.
+  // Read straight off the preset: this runs on every language toggle, and the
+  // list does not depend on the room or the token.
+  $('obsHandoffList').replaceChildren(...preset.obs.sources
+    .filter((source) => source.owner === 'obs')
+    .map((source) => {
+      const item = document.createElement('li');
+      item.textContent = t(source.hintKey);
+      return item;
+    }));
+}
+
+/**
+ * Switch situations, all the way down to the running pipeline.
+ *
+ * Flipping the checkboxes is not enough: pose and hand inference load their own
+ * models, audio lipsync owns a mic stream, and resolution/fps are camera
+ * constraints. This does what each individual control's handler would have done,
+ * but only for the things the new situation actually changes — a switch that
+ * keeps the same resolution must not stutter the camera.
+ */
+async function applySituation(id) {
+  const before = { resolution: settings.resolution, fps: settings.fps, audioLipsync: settings.audioLipsync };
+  Object.assign(settings, applySituationToTrackerSettings(settings, id));
+
+  // The situation's filter preset is a face-group choice; per-group smoothing the
+  // streamer tuned elsewhere is left alone.
+  const filter = FILTER_PRESETS[settings.filterPreset];
+  if (filter) {
+    settings.minCutoff = filter.minCutoff;
+    settings.beta = filter.beta;
+    settings.smoothing = {
+      ...settings.smoothing,
+      face: { filterPreset: settings.filterPreset, minCutoff: filter.minCutoff, beta: filter.beta },
+    };
+  }
+
+  applySettingsToUi();
+  resetFilters();
+  persistSettings();
+
+  if (settings.pose) await ensurePoseLandmarkerIfRunning();
+  await ensureHandLandmarkerIfRunning();
+  if (settings.audioLipsync !== before.audioLipsync) {
+    if (settings.audioLipsync && state.running) await startAudioLipsync();
+    else stopAudioLipsync();
+  }
+  if (settings.resolution !== before.resolution || settings.fps !== before.fps) await restartCameraIfRunning();
+
+  if ($('chkObsAutoScene').checked && obsBridge?.identified) await pushSituationToObs();
+}
+
+async function copyObsSourceUrl() {
+  persistSettings();
+  const url = situationViewerUrl(settings.situation, {
+    baseUrl: new URL('../viewer/', location.href).toString(),
+    mode: settings.mode,
+    room: settings.room || 'demo',
+    token: settings.token,
+    wsUrl: settings.wsUrl,
+    wtUrl: settings.wtUrl,
+    wtHash: settings.wtHash,
+  });
+  try {
+    await navigator.clipboard.writeText(url);
+    setStatus('tracker.status.obsSourceUrlCopied', undefined, 'open');
+  } catch {
+    setStatusText(url, 'open');
+  }
+}
+
+async function pushSituationToObs() {
+  const preset = currentSituation();
+  // Lay the sources out against OBS's real canvas rather than the 1080p
+  // reference, so a 720p or 1440p project still gets the intended framing.
+  const canvas = await obsBridge.videoCanvas().catch(() => undefined);
+  const plan = situationObsPlan(settings.situation, {
+    baseUrl: new URL('../viewer/', location.href).toString(),
+    canvas,
+    mode: settings.mode,
+    room: settings.room || 'demo',
+    token: settings.token,
+    wsUrl: settings.wsUrl,
+    wtUrl: settings.wtUrl,
+    wtHash: settings.wtHash,
+  });
+  await obsBridge.applyPlan(plan, situationObsSceneName(preset));
+  setStatus('tracker.status.obsSceneApplied', { scene: situationObsSceneName(preset) }, 'open');
+}
+
+async function connectObs() {
+  persistSettings();
+  obsBridge?.close();
+  obsBridge = createObsBridge({ url: settings.obsUrl, password: $('inpObsPassword').value });
+  setStatus('tracker.status.obsConnecting', undefined, 'wait');
+  try {
+    await obsBridge.connect();
+    await pushSituationToObs();
+  } catch (error) {
+    obsBridge?.close();
+    obsBridge = null;
+    // OBS's own message is the actionable part (wrong password, plugin off), so
+    // it is surfaced rather than replaced with a generic failure.
+    setStatusText(error instanceof Error ? error.message : String(error), 'error');
   }
 }
 
@@ -2011,6 +2205,16 @@ function cameraErrorMessage(e) {
   return e?.message || t('tracker.camera.failed');
 }
 
+async function ensurePoseLandmarkerIfRunning() {
+  if (!state.poseEnabled || !state.running || state.poseLandmarker || !state._fileset) return;
+  const assets = await resolveModelAssets();
+  state.poseLandmarker = await PoseLandmarker.createFromOptions(state._fileset, {
+    baseOptions: { modelAssetPath: assets.poseModel, delegate: 'GPU' },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  });
+}
+
 async function ensureHandLandmarkerIfRunning() {
   if (!state.handsEnabled || !state.running || state.handLandmarker || !state._fileset) return;
   const assets = await resolveModelAssets();
@@ -2069,14 +2273,7 @@ $('chkMirror').addEventListener('change', (e) => {
 $('chkPose').addEventListener('change', async (e) => {
   state.poseEnabled = e.target.checked;
   persistSettings();
-  if (state.poseEnabled && state.running && !state.poseLandmarker && state._fileset) {
-    const assets = await resolveModelAssets();
-    state.poseLandmarker = await PoseLandmarker.createFromOptions(state._fileset, {
-      baseOptions: { modelAssetPath: assets.poseModel, delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numPoses: 1,
-    });
-  }
+  await ensurePoseLandmarkerIfRunning();
 });
 
 $('chkHands').addEventListener('change', async (e) => {
@@ -2124,6 +2321,9 @@ $('selFps').addEventListener('change', restartCameraIfRunning);
 $('rngHeadLean').addEventListener('input', persistSettings);
 $('selBodyMode').addEventListener('change', persistSettings);
 overlay.addEventListener('pointerdown', placeSelectedDrumZoneFromEvent);
+$('selPercussionKit').addEventListener('change', (e) => {
+  applyPercussionKit(e.target.value);
+});
 $('selDrumZone').addEventListener('change', updateDrumKitUi);
 $('rngDrumZoneRadius').addEventListener('input', (e) => {
   updateSelectedDrumZone({ radius: Number(e.target.value) });
@@ -2154,6 +2354,23 @@ $('btnResetDrumKit').addEventListener('click', () => {
   setStatus('tracker.status.drumKitReset', undefined, 'idle');
 });
 $('btnCopyDrumObsUrl').addEventListener('click', copyDrumObsUrl);
+
+$('selSituation').addEventListener('change', (e) => {
+  applySituation(e.target.value).catch((error) => {
+    setStatusText(error instanceof Error ? error.message : String(error), 'error');
+  });
+});
+$('btnCopyObsUrl').addEventListener('click', copyObsSourceUrl);
+$('btnConnectObs').addEventListener('click', connectObs);
+$('inpObsUrl').addEventListener('input', persistSettings);
+$('chkObsAutoScene').addEventListener('change', () => {
+  persistSettings();
+  if ($('chkObsAutoScene').checked && obsBridge?.identified) {
+    pushSituationToObs().catch((error) => {
+      setStatusText(error instanceof Error ? error.message : String(error), 'error');
+    });
+  }
+});
 
 $('selMode').addEventListener('change', () => {
   updateModeFields();

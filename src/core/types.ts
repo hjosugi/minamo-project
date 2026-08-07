@@ -93,7 +93,10 @@ export interface DrumHitEvent {
   hand?: Handedness;
   stickId?: string;
   zoneId: string;
-  zoneType: 'snare' | 'hihat' | 'ride' | 'crash' | 'tom' | 'floorTom' | 'kick' | 'pedal' | 'unknown';
+  // Kit zones, then the hand-percussion zones a cajon/conga/bongo kit uses
+  // (shared/percussion.js). A MIDI conga strike used to be dropped because
+  // the union had nowhere to put it.
+  zoneType: 'snare' | 'hihat' | 'ride' | 'crash' | 'tom' | 'floorTom' | 'kick' | 'pedal' | 'bass' | 'slap' | 'tap' | 'head' | 'edge' | 'percussion' | 'unknown';
   position: Vec3;
   velocity: Vec3;
   speed: number;

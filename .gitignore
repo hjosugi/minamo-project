@@ -18,3 +18,5 @@ tests/fixtures/.generated/
 graphify-out/
 # Personal Claude Code permission overrides; not team-wide settings.
 .claude/settings.local.json
+# Fetched locally by scripts/fetch-avatar.sh; not redistributed with the repo.
+assets/avatars/

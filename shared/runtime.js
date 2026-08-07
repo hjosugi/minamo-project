@@ -3,6 +3,12 @@
 // tested in CI without a camera or GPU.
 
 import { ARKIT_52, CHANNEL_INDEX, MIRROR_INDEX, NUM_CHANNELS, NUM_POSE_POINTS } from './blendshapes.js';
+import {
+  DEFAULT_PERCUSSION_KIT_ID,
+  getPercussionKit,
+  isPercussionKitId,
+  strikeMatches,
+} from './percussion.js';
 
 export const WARNING_TAXONOMY = Object.freeze({
   insecureContext: 'INSECURE_CONTEXT',
@@ -54,16 +60,13 @@ export const HAND_CALIBRATION_STEPS = Object.freeze([
 export const HAND_CALIBRATION_TOTAL_MS = HAND_CALIBRATION_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
 export const DRUM_KIT_STORAGE_KEY = 'minamo.drum-kit.calibration.v1';
 export const DRUM_KIT_SCHEMA = 'minamo.drum-kit-calibration.v1';
-export const DRUM_ZONE_DEFS = Object.freeze([
-  Object.freeze({ id: 'hihat', label: 'Hi-hat', type: 'hihat', x: 0.32, y: 0.58, radius: 0.075 }),
-  Object.freeze({ id: 'snare', label: 'Snare', type: 'snare', x: 0.50, y: 0.66, radius: 0.085 }),
-  Object.freeze({ id: 'tom', label: 'Tom', type: 'tom', x: 0.58, y: 0.52, radius: 0.08 }),
-  Object.freeze({ id: 'ride', label: 'Ride', type: 'ride', x: 0.72, y: 0.50, radius: 0.09 }),
-  Object.freeze({ id: 'crash', label: 'Crash', type: 'crash', x: 0.38, y: 0.42, radius: 0.095 }),
-  Object.freeze({ id: 'kick', label: 'Kick', type: 'kick', x: 0.50, y: 0.82, radius: 0.105 }),
-]);
+// The five-piece stick kit, kept as its own export because it is the default and
+// several call sites name it directly. The full catalogue — cajon, congas,
+// bongos, hand percussion, hybrid — lives in shared/percussion.js.
+export const DRUM_ZONE_DEFS = getPercussionKit(DEFAULT_PERCUSSION_KIT_ID).zones;
 
 export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
+  situation: 'talk',
   mode: 'local',
   room: 'demo',
   participantId: '',
@@ -90,9 +93,15 @@ export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
   smoothingGroup: 'face',
   smoothing: DEFAULT_SMOOTHING_SETTINGS,
   privacyLocalOnly: true,
+  // OBS control endpoint. The password is deliberately absent: it is read from
+  // the field when connecting and never persisted, the same rule the relay room
+  // token follows.
+  obsUrl: 'ws://127.0.0.1:4455',
+  obsAutoScene: false,
 });
 
 export const DEFAULT_VIEWER_SETTINGS = Object.freeze({
+  situation: 'talk',
   mode: 'local',
   room: 'demo',
   token: '',
@@ -593,12 +602,18 @@ export function handTargetDebugRows(targets = []) {
   });
 }
 
-export function createDefaultDrumKitConfig(name = 'default') {
+/**
+ * @param {string} [name]
+ * @param {string} [kitId] percussion kit id; defaults to the five-piece stick kit
+ */
+export function createDefaultDrumKitConfig(name = 'default', kitId = DEFAULT_PERCUSSION_KIT_ID) {
+  const kit = getPercussionKit(kitId);
   return {
     schema: DRUM_KIT_SCHEMA,
     name,
+    kit: kit.id,
     createdAt: new Date().toISOString(),
-    zones: DRUM_ZONE_DEFS.map((zone) => ({
+    zones: kit.zones.map((zone) => ({
       id: zone.id,
       label: zone.label,
       type: zone.type,
@@ -611,7 +626,10 @@ export function createDefaultDrumKitConfig(name = 'default') {
 }
 
 export function normalizeDrumKitConfig(config) {
-  const base = /** @type {any} */ (createDefaultDrumKitConfig(config?.name || 'default'));
+  // The kit decides the zone set, so it has to be resolved before the base is
+  // built — otherwise a stored cajon config comes back with drum-kit zones.
+  const kitId = isPercussionKitId(config?.kit) ? config.kit : DEFAULT_PERCUSSION_KIT_ID;
+  const base = /** @type {any} */ (createDefaultDrumKitConfig(config?.name || 'default', kitId));
   if (!config || typeof config !== 'object' || (config.schema && config.schema !== DRUM_KIT_SCHEMA)) return base;
   base.createdAt = typeof config.createdAt === 'string' ? config.createdAt : base.createdAt;
   const incoming = new Map(Array.isArray(config.zones) ? config.zones.map((zone) => [String(zone.id || ''), zone]) : []);
@@ -667,10 +685,17 @@ export function deriveDrumOverlayState(hands = [], config = createDefaultDrumKit
       gesture,
       zoneId: inZone ? nearest.zone.id : null,
       zoneType: inZone ? nearest.zone.type : null,
-      active: Boolean(inZone && gesture.drumGrip),
+      // Per hand, and per kit. This used to be a bare `gesture.drumGrip`, which
+      // silently made hand percussion untrackable: a slap is an open palm, and
+      // open palm and stick grip are mutually exclusive by finger curl, so a
+      // cajon player's hand could sit in a calibrated zone and never register.
+      // Evaluating per hand is also what lets a stick and a bare hand work at
+      // once on a hybrid rig.
+      active: Boolean(inZone && strikeMatches(kit.kit, gesture)),
     };
   });
   return {
+    kit: kit.kit,
     zones: kit.zones,
     hands: handStates,
     activeZoneIds: [...new Set(handStates.filter((hand) => hand.active && hand.zoneId).map((hand) => hand.zoneId))],

@@ -30,7 +30,7 @@
               }
             }
           },
-          "zoneType": { "enum": ["snare", "hihat", "ride", "crash", "tom", "kick"] },
+          "zoneType": { "enum": ["snare", "hihat", "ride", "crash", "tom", "kick", "bass", "slap", "tap", "head", "edge", "percussion"] },
           "hand": { "enum": ["Left", "Right"] },
           "timeMs": { "type": "number" }
         }

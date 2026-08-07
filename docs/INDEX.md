@@ -75,7 +75,10 @@ Primary language is English; documents that originated in Japanese keep a
 - [product/creator-ux.md](product/creator-ux.md) ([日本語](product/creator-ux.ja.md))
 - [product/onboarding.md](product/onboarding.md)
 - [product/desktop-app.md](product/desktop-app.md)
+- [product/situation-presets.md](product/situation-presets.md) ([日本語](product/situation-presets.ja.md)) — talk / game / karaoke / collab / drum presets
 - [product/obs-setup.md](product/obs-setup.md)
+- [product/obs-integration.md](product/obs-integration.md) ([日本語](product/obs-integration.ja.md)) — obs-websocket scene handoff
+- [product/default-avatar.md](product/default-avatar.md) ([日本語](product/default-avatar.ja.md)) — CC0 VRM the viewer opens on
 - [product/drummer-setup.md](product/drummer-setup.md)
 - [product/drum-obs-overlay.md](product/drum-obs-overlay.md) — transparent OBS drum overlay (#120)
 - [product/drum-dataset.schema.json](product/drum-dataset.schema.json) — YOLO stick/drum label schema (#122)

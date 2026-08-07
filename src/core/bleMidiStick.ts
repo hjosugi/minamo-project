@@ -251,6 +251,31 @@ export const GM_PERCUSSION_ZONE_TYPES: Readonly<Record<number, DrumHitEvent['zon
   44: 'pedal', // Pedal Hi-Hat is a foot signal, not a stick strike.
   49: 'crash', 52: 'crash', 55: 'crash', 57: 'crash',
   51: 'ride', 53: 'ride', 59: 'ride',
+  // Accessories that sit inside the kit range and were skipped with it: a
+  // cowbell or tambourine strike was being dropped the same way a conga was.
+  54: 'percussion', // Tambourine
+  56: 'percussion', // Cowbell
+  58: 'percussion', // Vibraslap
+
+  // GM 60-81, the hand-percussion range. This used to stop at 59, so an e-kit
+  // or pad controller playing congas or bongos produced notes that
+  // `stickStrikeToDrumHit` dropped on the floor — it returns null for an
+  // unmapped note, so the strike vanished rather than arriving as `unknown`.
+  60: 'head', 61: 'head', // Hi/Low Bongo
+  63: 'head', 64: 'head', // Open Hi Conga, Low Conga
+  62: 'edge', // Mute Hi Conga — a damped stroke sits at the rim; closest zone the conga kit has.
+  65: 'head', 66: 'head', // Hi/Low Timbale
+  // Everything below is a shaker, block, scraper or bell: struck or rattled, with
+  // no head and no edge to distinguish, so they share the generic zone that the
+  // hand-percussion kit exposes.
+  67: 'percussion', 68: 'percussion', // Agogo
+  69: 'percussion', 70: 'percussion', // Cabasa, Maracas
+  71: 'percussion', 72: 'percussion', // Whistles
+  73: 'percussion', 74: 'percussion', // Guiro
+  75: 'percussion', // Claves
+  76: 'percussion', 77: 'percussion', // Wood blocks
+  78: 'percussion', 79: 'percussion', // Cuica
+  80: 'percussion', 81: 'percussion', // Triangle
 };
 
 export interface StickNoteMapping {

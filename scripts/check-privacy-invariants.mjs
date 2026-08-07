@@ -60,6 +60,10 @@ const REVIEWED_SINKS = {
     { name: 'send', count: 2, why: 'sends a KGM1-WIRE motion packet as binary, and the same packet base64-encoded on the JSON fallback path' },
     { name: 'writer.write', count: 1, why: 'writes a KGM1-WIRE motion datagram' },
   ],
+  'shared/obs-bridge.js': [
+    { name: 'WebSocket', count: 1, why: 'opens the local obs-websocket control socket (default ws://127.0.0.1:4455)' },
+    { name: 'send', count: 1, why: 'sends obs-websocket Identify and Request frames — scene names, source names and the viewer URL; no media and no tracking frame' },
+  ],
   'shared/pairing.js': [],
   'shared/e2ee.js': [],
 };

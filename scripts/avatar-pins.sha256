@@ -1,0 +1,7 @@
+# Pinned known-good SHA-256 for the default avatar (#41).
+# Path is relative to assets/avatars/. fetch-avatar.sh verifies the
+# download against this; a mismatch fails the fetch and deletes the file.
+# Regenerate after a deliberate model change with:
+#   scripts/fetch-avatar.sh --update-pins
+# then review the diff before committing.
+1e177c1a7b14f783a9c48395831db8616260d3bddd4154cb2784b779adca49b5  default.vrm
