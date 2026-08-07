@@ -16,8 +16,18 @@ on:
 permissions:
   contents: write
 
+# Both trigger paths must land in the SAME group, or a workflow_dispatch and a
+# tag push for one release run concurrently (#355). `github.ref` is
+# `refs/tags/v0.1.19` while `inputs.tag` is `v0.1.19`, so the two never compared
+# equal and v0.1.19 built its full installer matrix twice, with two draft
+# releases open at once. `github.ref_name` is the bare tag on a tag push, which
+# is the same value `prepare` resolves.
+#
+# `cancel-in-progress` stays false on purpose: cancelling a release mid-upload
+# leaves a partial set of assets on the draft. The group key is therefore the
+# only thing preventing a double publish.
 concurrency:
-  group: release-${{ inputs.tag || github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -67,6 +77,21 @@ jobs:
           TAG: ${{ steps.release_tag.outputs.tag }}
         run: |
           notes="docs/releases/$TAG.md"
+          # POST /releases happily creates a SECOND release for a tag that
+          # already has a draft one, which is how v0.1.19 ended up with two
+          # drafts open at once (#355). The concurrency group is the real fix;
+          # this is the backstop for the cases it cannot see, such as a draft
+          # left behind by an earlier run or a tag that is already published.
+          # A failed run's `cleanup` removes its own draft, so an honest retry
+          # still finds nothing here.
+          existing_tags="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[].tag_name'
+          )"
+          if printf '%s\n' "$existing_tags" | grep -qxF "$TAG"; then
+            echo "a GitHub Release already exists for $TAG." >&2
+            echo "Delete the existing release (or publish a new tag) before re-running." >&2
+            exit 1
+          fi
           release_id="$(
             gh api \
               --method POST \
