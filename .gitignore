@@ -20,3 +20,7 @@ graphify-out/
 .claude/settings.local.json
 # Fetched locally by scripts/fetch-avatar.sh; not redistributed with the repo.
 assets/avatars/
+.claude/skills/graphify/
+.copilot/skills/graphify/
+.codex/skills/graphify/
+.codex/hooks.json

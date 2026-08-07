@@ -27,7 +27,9 @@
     "bench:filters": "node scripts/bench-filter-response.mjs",
     "bench:multicam": "tsx scripts/bench-multicam-fusion.ts",
     "bench:allocs": "node --expose-gc --import tsx scripts/bench-frame-allocs.ts",
-    "coverage": "c8 node tests/run-tests.mjs && node scripts/check-coverage.mjs"
+    "coverage": "c8 node tests/run-tests.mjs && node scripts/check-coverage.mjs",
+    "graphify:setup": "sh scripts/graphify.sh setup",
+    "graphify:update": "sh scripts/graphify.sh update"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.35",
