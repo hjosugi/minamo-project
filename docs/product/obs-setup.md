@@ -3,6 +3,11 @@
 
 # OBS Setup
 
+This page is the manual browser-source route. To have Minamo build and switch the
+OBS scene for you — and to see what Minamo deliberately leaves to OBS — see
+[obs-integration.md](obs-integration.md) and
+[situation-presets.md](situation-presets.md).
+
 ## Browser source
 
 1. Start the tracker and connect to a room.
@@ -33,6 +38,7 @@ viewer/?preset=obs&mode=ws&room=stage&token=<token>&bg=transparent&hud=0&camera=
 viewer/?preset=obs&mode=wt&room=stage&token=<token>&wtUrl=https://localhost:4433&wtHash=<hex>&bg=transparent&hud=0&camera=locked
 viewer/?preset=obs&room=stage&vrm=<cors-url-to-model.vrm>&bg=transparent&hud=0&camera=locked
 viewer/?preset=obs&room=stage&bg=transparent&hud=0&camera=locked&drum=1
+viewer/?preset=obs&situation=game&room=stage&bg=transparent&hud=0&camera=locked
 viewer/?room=stage&scene=anime&bg=solid&bgColor=%23151221&bloom=1&vignette=1&camera=locked
 ```
 
@@ -55,4 +61,9 @@ Use `bgColor=%23rrggbb`, `bloom=0|1`, and `vignette=0|1` to serialize the full
 scene state. The viewer **Copy URL** button writes the current scene, transport,
 room, background, post-FX, HUD, drum overlay, and camera state into one
 reproducible URL. The tracker **Copy OBS overlay URL** button emits an OBS-ready
-transparent URL with `drum=1` for the hand-derived drum overlay.
+transparent URL with `drum=1` for the hand-derived drum overlay, and
+**Copy OBS source URL** emits the same thing for the current situation.
+
+`scene=` selects the lighting preset; `situation=` selects the situation
+preset, which sets a lighting preset among other things. An explicit
+`scene=` after a `situation=` still wins.

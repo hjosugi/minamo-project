@@ -115,7 +115,45 @@
           <li id="checkConfidence" data-state="idle"><b data-i18n="tracker.ui.checklist.wait">wait</b><span data-i18n="tracker.ui.checklist.confidence">stable landmark confidence</span><small data-i18n="tracker.ui.checklist.startCamera">start camera</small></li>
         </ul>
       </div>
-      <div class="drummer-setup">
+      <div class="situation-setup">
+        <div class="calibration-guide-head">
+          <strong data-i18n="tracker.ui.situation.title">Situation</strong>
+          <output id="situationStatus">talk</output>
+        </div>
+        <div class="form-grid compact">
+          <div class="field">
+            <span data-i18n="tracker.ui.field.situation">situation</span>
+            <select id="selSituation">
+              <option value="talk" data-i18n="situation.talk.label">Just chatting</option>
+              <option value="game" data-i18n="situation.game.label">Game stream</option>
+              <option value="sing" data-i18n="situation.sing.label">Karaoke</option>
+              <option value="collab" data-i18n="situation.collab.label">Collab</option>
+              <option value="drum" data-i18n="situation.drum.label">Drum performance</option>
+            </select>
+          </div>
+        </div>
+        <p class="note" id="situationDescription" data-i18n="situation.talk.description">Bust-up framing for a talk stream.</p>
+        <div class="controls">
+          <button id="btnCopyObsUrl" data-i18n="tracker.ui.btn.copyObsSourceUrl">Copy OBS source URL</button>
+          <button id="btnConnectObs" data-i18n="tracker.ui.btn.connectObs">Connect OBS</button>
+          <label class="check"><input type="checkbox" id="chkObsAutoScene" /><span data-i18n="tracker.ui.check.obsAutoScene">Switch OBS scene with situation</span></label>
+        </div>
+        <div class="form-grid compact">
+          <div class="field">
+            <span data-i18n="tracker.ui.field.obsUrl">obs-websocket url</span>
+            <input type="text" id="inpObsUrl" value="ws://127.0.0.1:4455" spellcheck="false" autocomplete="off" />
+          </div>
+          <div class="field">
+            <span data-i18n="tracker.ui.field.obsPassword">obs-websocket password</span>
+            <input type="password" id="inpObsPassword" autocomplete="off" />
+          </div>
+        </div>
+        <div class="obs-handoff">
+          <span data-i18n="tracker.ui.situation.obsOwns">OBS supplies these:</span>
+          <ul class="obs-handoff-list" id="obsHandoffList"></ul>
+        </div>
+      </div>
+      <div class="drummer-setup" id="drummerSetup" hidden>
         <div class="calibration-guide-head">
           <strong data-i18n="tracker.ui.drummer.title">Drummer setup</strong>
           <output id="drumKitStatus">0/6 zones</output>
@@ -129,15 +167,14 @@
         </div>
         <div class="form-grid compact">
           <div class="field">
+            <span data-i18n="tracker.ui.field.percussionKit">percussion kit</span>
+            <select id="selPercussionKit"></select>
+          </div>
+          <div class="field">
             <span data-i18n="tracker.ui.field.zone">zone</span>
-            <select id="selDrumZone">
-              <option value="hihat" data-i18n="tracker.ui.zone.hihat">Hi-hat</option>
-              <option value="snare" data-i18n="tracker.ui.zone.snare">Snare</option>
-              <option value="tom" data-i18n="tracker.ui.zone.tom">Tom</option>
-              <option value="ride" data-i18n="tracker.ui.zone.ride">Ride</option>
-              <option value="crash" data-i18n="tracker.ui.zone.crash">Crash</option>
-              <option value="kick" data-i18n="tracker.ui.zone.kick">Kick</option>
-            </select>
+            <!-- Options are built from the selected kit: a cajon and a five-piece
+                 kit do not share a zone list. -->
+            <select id="selDrumZone"></select>
           </div>
           <div class="field">
             <span data-i18n="tracker.ui.field.radius">radius</span>

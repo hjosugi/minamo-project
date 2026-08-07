@@ -457,6 +457,7 @@ output {
 .signal-checklist li[data-state='check'] b { color: var(--warn); }
 
 .dataset-capture,
+.situation-setup,
 .drummer-setup {
   display: grid;
   gap: 8px;
@@ -467,7 +468,28 @@ output {
   background: rgba(15, 18, 32, 0.42);
 }
 .dataset-capture .controls,
+.situation-setup .controls,
 .drummer-setup .controls { margin-top: 0; }
+.situation-setup .note { margin-top: 0; }
+.obs-handoff { display: grid; gap: 5px; font-size: 11px; color: var(--ink-dim); }
+.obs-handoff-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+/* Sources OBS owns, shown as inert chips: they are a handoff note, not a
+   control, so they must not read as something Minamo will create. */
+.obs-handoff-list li {
+  padding: 3px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
 .drum-zone-list {
   margin: 2px 0 0;
   padding: 0;

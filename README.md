@@ -43,6 +43,15 @@ webcam — free, low-latency, and local-first.
   and surfaces virtual camera backend status per OS
 - VRM viewer (three-vrm), experimental offline Inochi2D `.inp/.inx` WASM
   rendering, layered PNG/PSD, and a built-in bot fallback
+- Five situation presets — just chatting, game stream, karaoke, collab and drum
+  performance — that reconfigure tracking and the viewer together
+  ([docs](docs/product/situation-presets.md))
+- OBS integration over obs-websocket: Minamo creates and switches the scene for
+  its own browser sources and leaves backgrounds, capture, audio, chat and alerts
+  to OBS ([docs](docs/product/obs-integration.md))
+- An optional CC0 default avatar (`scripts/fetch-avatar.sh`) so the viewer opens
+  on a real humanoid VRM instead of the built-in bot
+  ([docs](docs/product/default-avatar.md))
 - Avatar compression tooling — GLB inspection (`pnpm inspect:glb`) and the
   `kagami-pack` planner (`pnpm pack:avatar`) — plus a transparent OBS drum
   overlay at `viewer/drum-overlay.html`

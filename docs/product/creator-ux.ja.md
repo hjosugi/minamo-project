@@ -37,10 +37,17 @@ Good:
 
 ## 4. Presets
 
+シチュエーションプリセットとして実装済みです。各プリセットが何を変えるかは
+[situation-presets.ja.md](situation-presets.ja.md) を参照してください。
+
+- 雑談
+- ゲーム配信
+- 歌枠
+- コラボ
+- ドラム演奏
+
+シチュエーションではなくハードウェア軸のもので、未実装:
+
 - low-end laptop
 - normal webcam
 - high-FPS webcam
-- face-focused streamer
-- hand-focused streamer
-- drummer
-- remote collaboration

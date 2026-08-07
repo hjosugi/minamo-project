@@ -242,6 +242,34 @@ import {
   reduceDrumOverlay,
 } from '../shared/drum-overlay.js';
 import {
+  DEFAULT_SITUATION_ID,
+  applySituationToTrackerSettings,
+  applySituationToViewerSettings,
+  getSituationPreset,
+  isSituationId,
+  situationIds,
+  situationObsPlan,
+  situationViewerUrl,
+} from '../shared/situation-presets.js';
+import {
+  DEFAULT_PERCUSSION_KIT_ID,
+  PERCUSSION_KITS,
+  STRIKE_STYLES,
+  getPercussionKit,
+  isPercussionKitId,
+  percussionKitIds,
+  strikeMatches,
+} from '../shared/percussion.js';
+import {
+  OBS_WEBSOCKET_RPC_VERSION,
+  buildIdentifyPayload,
+  buildObsAuthResponse,
+  buildObsSourceRequests,
+  buildObsTransformRequests,
+  createObsBridge,
+  parseObsMessage,
+} from '../shared/obs-bridge.js';
+import {
   KAGAMI_PACK_SCHEMA,
   formatSizeTable,
   planAvatarPack,
@@ -1875,6 +1903,51 @@ function kgm2FaceFrame(seq, overrides = {}) {
   const glbSummary = summarizeGltf(glbParsed.json, glbParsed.length);
   assert.equal(glbSummary.counts.vertices, 42);
   assert.equal(glbSummary.counts.morphTargets, 2);
+
+  // Compression-variant fixtures (#223).
+  //
+  // The inspector warns when an asset is already compressed, which is what stops
+  // `pnpm pack:avatar` from re-encoding an encoded model — but until now nothing
+  // fed it an asset that declares one, so that branch was dead in the tests.
+  //
+  // These are declaration-level fixtures on purpose. Decoding a genuinely
+  // KTX2/meshopt/Draco-encoded payload needs a WebGL context for
+  // `KTX2Loader.detectSupport(renderer)` and a Basis transcoder, neither of
+  // which exists in this headless suite; that half of #223 stays a manual check.
+  // The declaration is still the part the planner and the loader branch on.
+  const uncompressed = parseGlb(encodeJsonGlb({
+    asset: { version: '2.0' },
+    extensionsUsed: ['VRMC_vrm'],
+    extensions: { VRMC_vrm: { humanoid: { humanBones: { hips: { node: 0 } } }, expressions: { preset: { aa: {} } } } },
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, targets: [{ POSITION: 1 }] }] }],
+    accessors: [{ count: 12 }, { count: 12 }],
+  }));
+  const uncompressedSummary = summarizeGltf(uncompressed.json, uncompressed.length);
+  assert.equal(
+    uncompressedSummary.warnings.some((warning) => warning.startsWith('Already uses')),
+    false,
+    'an uncompressed asset must not be reported as already compressed',
+  );
+
+  for (const extension of ['KHR_texture_basisu', 'EXT_meshopt_compression', 'KHR_draco_mesh_compression']) {
+    const compressed = parseGlb(encodeJsonGlb({
+      asset: { version: '2.0' },
+      extensionsUsed: ['VRMC_vrm', extension],
+      extensions: { VRMC_vrm: { humanoid: { humanBones: { hips: { node: 0 } } }, expressions: { preset: { aa: {} } } } },
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 }, targets: [{ POSITION: 1 }] }] }],
+      accessors: [{ count: 12 }, { count: 12 }],
+    }));
+    const summary = summarizeGltf(compressed.json, compressed.length);
+    assert.ok(summary.extensionsUsed.includes(extension), `${extension} must survive inspection`);
+    assert.ok(
+      summary.warnings.includes(`Already uses ${extension}`),
+      `${extension} must be reported so the packer does not re-encode an encoded asset`,
+    );
+    // The rig has to stay readable through a compressed declaration, because
+    // that is what the checklist gate gets scored on.
+    assert.deepEqual(summary.vrm.humanBones, ['hips']);
+    assert.deepEqual(summary.vrm.expressions, ['aa']);
+  }
   assert.equal(glbSummary.vrm.expressions.length, 3);
   assert.equal(glbSummary.vrm.springBoneJoints, 2);
   assert.equal(glbSummary.animations[0].durationSeconds, 1.25);
@@ -2190,6 +2263,306 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(decayed.zones.find((zone) => zone.zoneId === 'snare').flash, 0);
   assert.equal(decayed.activeZoneIds.length, 0);
   assert.equal(decayed.hitCount, 2);
+}
+
+{
+  // Percussion kits: drumsticks are one technique, not the only one.
+  //
+  // The regression this guards: zone activation was a bare `gesture.drumGrip`,
+  // so hand percussion was untrackable. A slap is an open palm, open palm needs
+  // finger curl below 0.35 and a stick grip needs it above — mutually
+  // exclusive — so a cajon player's hand sat in a calibrated zone forever
+  // without registering one strike.
+  const stickHand = { curls: [0.55, 0.55, 0.62, 0.7, 0.72] };
+  const openHand = { curls: [0.1, 0.1, 0.1, 0.1, 0.1] };
+  assert.equal(classifyHandGesture(stickHand).drumGrip, true);
+  assert.equal(classifyHandGesture(openHand).openPalm, true);
+  assert.equal(classifyHandGesture(openHand).drumGrip, false, 'open palm and stick grip must stay exclusive');
+
+  assert.deepEqual(percussionKitIds(), ['drum-kit', 'cajon', 'congas', 'bongos', 'hand-percussion', 'hybrid']);
+  assert.equal(getPercussionKit('nope').id, DEFAULT_PERCUSSION_KIT_ID, 'unknown kit must fall back, not throw');
+  assert.equal(isPercussionKitId('cajon'), true);
+  assert.equal(getPercussionKit('drum-kit').strike, 'stick');
+  assert.equal(getPercussionKit('cajon').strike, 'hand');
+  assert.equal(getPercussionKit('hybrid').strike, 'mixed');
+
+  // Strike style, per kit.
+  assert.equal(strikeMatches('cajon', classifyHandGesture(openHand)), true);
+  assert.equal(strikeMatches('cajon', classifyHandGesture(stickHand)), false);
+  assert.equal(strikeMatches('drum-kit', classifyHandGesture(stickHand)), true);
+  assert.equal(strikeMatches('drum-kit', classifyHandGesture(openHand)), false);
+  // A hybrid rig accepts both, so a stick hand and a bare hand both count.
+  assert.equal(strikeMatches('hybrid', classifyHandGesture(openHand)), true);
+  assert.equal(strikeMatches('hybrid', classifyHandGesture(stickHand)), true);
+
+  // The kit decides the zone set, and it survives a normalize round-trip.
+  const cajon = createDefaultDrumKitConfig('my cajon', 'cajon');
+  assert.equal(cajon.kit, 'cajon');
+  assert.deepEqual(cajon.zones.map((z) => z.id), ['bass', 'slap-left', 'slap-right', 'tap-left', 'tap-right']);
+  assert.equal(normalizeDrumKitConfig(cajon).kit, 'cajon');
+  assert.deepEqual(normalizeDrumKitConfig(cajon).zones.map((z) => z.id), cajon.zones.map((z) => z.id));
+  assert.equal(normalizeDrumKitConfig({ ...cajon, kit: 'bogus' }).kit, DEFAULT_PERCUSSION_KIT_ID);
+  // An older stored config predates the kit field and must still load as a kit.
+  assert.equal(normalizeDrumKitConfig({ schema: cajon.schema, name: 'legacy', zones: [] }).kit, 'drum-kit');
+
+  // End to end: an open palm on a calibrated cajon zone now registers.
+  const calibrate = (config) => ({ ...config, zones: config.zones.map((z) => ({ ...z, calibrated: true })) });
+  // handWristToDrumStage maps wrist x/y to (0.5 + x, 0.5 - y); the cajon bass
+  // zone sits at (0.50, 0.52), so this wrist is dead centre in it.
+  const atBass = { handedness: 'Right', wrist: [0, -0.02], ...openHand };
+  const cajonState = deriveDrumOverlayState([atBass], calibrate(cajon));
+  assert.equal(cajonState.kit, 'cajon');
+  assert.equal(cajonState.hands[0].zoneId, 'bass');
+  assert.equal(cajonState.hands[0].active, true, 'an open-palm slap must register on a cajon');
+  assert.deepEqual(cajonState.activeZoneIds, ['bass']);
+
+  // The same hand on a stick kit must not: that is the technique the kit expects.
+  const stickKit = calibrate(createDefaultDrumKitConfig('kit', 'drum-kit'));
+  const openOnSnare = deriveDrumOverlayState([{ handedness: 'Right', wrist: [0, -0.16], ...openHand }], stickKit);
+  assert.equal(openOnSnare.hands[0].zoneId, 'snare');
+  assert.equal(openOnSnare.hands[0].active, false);
+  const stickOnSnare = deriveDrumOverlayState([{ handedness: 'Right', wrist: [0, -0.16], ...stickHand }], stickKit);
+  assert.equal(stickOnSnare.hands[0].active, true);
+
+  // Hybrid: one stick hand and one bare hand, both live in the same frame.
+  const hybrid = calibrate(createDefaultDrumKitConfig('hybrid', 'hybrid'));
+  const bothHands = deriveDrumOverlayState([
+    { handedness: 'Left', wrist: [-0.08, -0.06], ...openHand },
+    { handedness: 'Right', wrist: [0.18, -0.12], ...stickHand },
+  ], hybrid);
+  assert.equal(bothHands.hands.every((hand) => hand.active), true, 'a hybrid rig must accept both techniques at once');
+  assert.equal(new Set(bothHands.activeZoneIds).size, 2);
+
+  // Every kit and strike style must be renderable in both languages.
+  for (const kit of PERCUSSION_KITS) {
+    assert.ok(MESSAGES.en[kit.labelKey], `missing en string ${kit.labelKey}`);
+    assert.ok(MESSAGES.ja[kit.labelKey], `missing ja string ${kit.labelKey}`);
+    assert.ok(STRIKE_STYLES[kit.strike], `${kit.id} names an unknown strike style`);
+  }
+  for (const style of Object.values(STRIKE_STYLES)) {
+    assert.ok(MESSAGES.en[style.labelKey], `missing en string ${style.labelKey}`);
+    assert.ok(MESSAGES.ja[style.labelKey], `missing ja string ${style.labelKey}`);
+  }
+}
+
+{
+  // Situation presets reconfigure the tracker and viewer together.
+  assert.deepEqual(situationIds(), ['talk', 'game', 'sing', 'collab', 'drum']);
+  assert.equal(getSituationPreset('nope').id, DEFAULT_SITUATION_ID, 'an unknown id must fall back, not throw');
+  assert.equal(isSituationId('game'), true);
+  assert.equal(isSituationId('podcast'), false);
+
+  // The shape each situation is documented as having.
+  const game = getSituationPreset('game');
+  assert.equal(game.tracking.hands, false, 'the game preset must not load the hand model');
+  assert.equal(game.tracking.pose, false);
+  assert.equal(game.tracking.resolution, '480p');
+  assert.equal(game.tracking.fps, '30');
+  assert.equal(getSituationPreset('sing').tracking.bodyMode, 'standing');
+  assert.equal(getSituationPreset('sing').tracking.filterPreset, 'responsive');
+  assert.equal(getSituationPreset('talk').tracking.hands, false, 'hands leave frame in a seated talk shot');
+  assert.equal(getSituationPreset('drum').tracking.drummerMode, true);
+  assert.equal(getSituationPreset('drum').viewer.drumOverlay, true);
+  for (const id of situationIds()) {
+    assert.equal(getSituationPreset(id).viewer.transparent, true, `${id} must render transparent for OBS`);
+    // Only the drum situation may turn the kit overlay on.
+    assert.equal(getSituationPreset(id).viewer.drumOverlay, id === 'drum', `${id} drum overlay`);
+  }
+
+  // A situation changes what the streamer is doing, never where motion goes.
+  const trackerBefore = {
+    mode: 'wt', room: 'stage', token: 'secret', cameraId: 'cam-7',
+    privacyLocalOnly: true, hands: true, resolution: '1080p', situation: 'drum',
+  };
+  const trackerAfter = applySituationToTrackerSettings(trackerBefore, 'game');
+  assert.equal(trackerAfter.situation, 'game');
+  assert.equal(trackerAfter.hands, false);
+  assert.equal(trackerAfter.resolution, '480p');
+  for (const key of ['mode', 'room', 'token', 'cameraId', 'privacyLocalOnly']) {
+    assert.equal(trackerAfter[key], trackerBefore[key], `${key} must survive a situation switch`);
+  }
+  assert.equal(trackerBefore.hands, true, 'applySituationToTrackerSettings must not mutate its input');
+
+  // The viewer keeps the streamer's own background colour: every situation is
+  // transparent, so the colour only shows in the windowed preview.
+  const viewerAfter = applySituationToViewerSettings(
+    { backgroundColor: '#123456', room: 'stage', scenePreset: 'flat' },
+    'sing',
+  );
+  assert.equal(viewerAfter.backgroundColor, '#123456');
+  assert.equal(viewerAfter.scenePreset, 'anime');
+  assert.equal(viewerAfter.bloom, true);
+
+  // The OBS-ready URL carries everything a browser source needs.
+  const url = new URL(situationViewerUrl('drum', {
+    baseUrl: 'http://localhost:8000/viewer/', mode: 'ws', room: 'stage', token: 'tok', wsUrl: 'wss://relay/ws',
+  }));
+  assert.equal(url.searchParams.get('preset'), 'obs');
+  assert.equal(url.searchParams.get('situation'), 'drum');
+  assert.equal(url.searchParams.get('bg'), 'transparent');
+  assert.equal(url.searchParams.get('hud'), '0');
+  assert.equal(url.searchParams.get('camera'), 'locked');
+  assert.equal(url.searchParams.get('drum'), '1');
+  assert.equal(url.searchParams.get('wsUrl'), 'wss://relay/ws');
+  // wt-only parameters must not leak into a ws source URL.
+  assert.equal(url.searchParams.has('wtHash'), false);
+
+  // OBS owns backgrounds, capture, audio, chat and alerts; Minamo owns its own
+  // browser sources and says so.
+  const plan = situationObsPlan('drum', { baseUrl: 'http://localhost:8000/viewer/', room: 'stage' });
+  assert.deepEqual(plan.sources.map((source) => source.id), ['avatar', 'drum-overlay']);
+  assert.match(plan.sources[1].url, /\/viewer\/drum-overlay\.html$/);
+  assert.ok(plan.delegated.length > 0, 'a situation must declare what OBS supplies');
+  assert.ok(plan.delegated.every((source) => MESSAGES.en[source.hintKey]), 'delegated hints must be translatable');
+  assert.equal(plan.delegated.some((source) => source.id === 'avatar'), false);
+
+  // A 720p project must get the 1080p layout scaled onto it, not clipped by it.
+  const scaled = situationObsPlan('game', {
+    baseUrl: 'http://localhost:8000/viewer/', canvas: { width: 1280, height: 720 },
+  });
+  const full = situationObsPlan('game', { baseUrl: 'http://localhost:8000/viewer/' });
+  assert.equal(scaled.canvas.width, 1280);
+  assert.equal(scaled.sources[0].bounds.x, Math.round(full.sources[0].bounds.x * (1280 / 1920)));
+  assert.equal(scaled.sources[0].bounds.height, Math.round(full.sources[0].bounds.height * (720 / 1080)));
+  assert.ok(scaled.sources[0].bounds.x + scaled.sources[0].bounds.width <= 1280, 'the corner wipe must stay on canvas');
+
+  // Every label the UI renders must exist in both string tables.
+  for (const id of situationIds()) {
+    const preset = getSituationPreset(id);
+    for (const key of [preset.labelKey, preset.descriptionKey, preset.obs.sceneNameKey]) {
+      assert.ok(MESSAGES.en[key], `missing en string ${key}`);
+      assert.ok(MESSAGES.ja[key], `missing ja string ${key}`);
+    }
+  }
+}
+
+{
+  // obs-websocket v5 handoff (shared/obs-bridge.js).
+  const { createHash } = await import('node:crypto');
+  const sha256B64 = (text) => createHash('sha256').update(text).digest('base64');
+
+  // The v5 digest, checked against an independently computed one rather than a
+  // memorised constant.
+  const salt = 'lM1GncleQOaCu9lT1yeUZhFYnqhsLLP1G5lAGo3ixaI=';
+  const challenge = '+IxH4CnCiqpX1rM9scsNynZzbOe4KhDeYcTNS3PDaeY=';
+  const expected = sha256B64(`${sha256B64(`supersecretpassword${salt}`)}${challenge}`);
+  assert.equal(await buildObsAuthResponse('supersecretpassword', { challenge, salt }), expected);
+
+  const authed = await buildIdentifyPayload({ op: 0, d: { rpcVersion: 1, authentication: { challenge, salt } } }, 'supersecretpassword');
+  assert.equal(authed.op, 1);
+  assert.equal(authed.d.rpcVersion, OBS_WEBSOCKET_RPC_VERSION);
+  assert.equal(authed.d.authentication, expected);
+
+  // Authentication disabled in OBS: no digest, and no password required.
+  const open = await buildIdentifyPayload({ op: 0, d: { rpcVersion: 1 } });
+  assert.equal('authentication' in open.d, false);
+  await assert.rejects(
+    () => buildIdentifyPayload({ op: 0, d: { rpcVersion: 1, authentication: { challenge, salt } } }, ''),
+    /requires a WebSocket password/,
+  );
+
+  assert.equal(parseObsMessage('not json'), null);
+  assert.equal(parseObsMessage('{"nope":1}'), null);
+  assert.deepEqual(parseObsMessage('{"op":2,"d":{}}'), { op: 2, d: {} });
+
+  const plan = situationObsPlan('talk', { baseUrl: 'http://localhost:8000/viewer/', room: 'stage' });
+
+  // Nothing exists yet: create the scene and its sources.
+  const fresh = buildObsSourceRequests(plan, { sceneName: 'Minamo - Just chatting' });
+  assert.deepEqual(fresh.map((request) => request.requestType), ['CreateScene', 'CreateInput']);
+  assert.equal(fresh[1].requestData.inputKind, 'browser_source');
+  assert.equal(fresh[1].requestData.inputSettings.url, plan.sources[0].url);
+  assert.match(fresh[1].requestData.inputSettings.css, /rgba\(0, 0, 0, 0\)/);
+
+  // Switching situations mid-stream must re-point the source, not stack a
+  // second avatar on top of the first.
+  const existing = buildObsSourceRequests(plan, {
+    sceneName: 'Minamo - Just chatting',
+    existingScenes: ['Minamo - Just chatting'],
+    existingInputs: [plan.sources[0].name],
+  });
+  assert.deepEqual(existing.map((request) => request.requestType), ['SetInputSettings']);
+  assert.equal(existing[0].requestData.inputName, plan.sources[0].name);
+
+  const transforms = buildObsTransformRequests(plan, {
+    sceneName: 'Minamo - Just chatting',
+    sceneItemIds: { [plan.sources[0].name]: 4 },
+  });
+  assert.equal(transforms.length, 1);
+  assert.equal(transforms[0].requestData.sceneItemId, 4);
+  assert.equal(transforms[0].requestData.sceneItemTransform.boundsType, 'OBS_BOUNDS_SCALE_INNER');
+  assert.equal(transforms[0].requestData.sceneItemTransform.positionX, plan.sources[0].bounds.x);
+
+  // An unresolved id is skipped: an unpositioned source is visible and fixable,
+  // a transform aimed at a guessed id moves something the streamer put there.
+  assert.deepEqual(buildObsTransformRequests(plan, { sceneName: 'x', sceneItemIds: {} }), []);
+
+  // End to end against a fake socket: identify, then realize the plan.
+  const sent = [];
+  const listeners = new Map();
+  const socket = {
+    addEventListener: (type, handler) => listeners.set(type, handler),
+    close: () => {},
+    send: (raw) => {
+      const message = JSON.parse(raw);
+      sent.push(message);
+      if (message.op !== 6) return;
+      const responses = {
+        GetSceneList: { scenes: [] },
+        GetInputList: { inputs: [] },
+        GetVideoSettings: { baseWidth: 1920, baseHeight: 1080 },
+        GetSceneItemId: { sceneItemId: 9 },
+      };
+      queueMicrotask(() => listeners.get('message')({
+        data: JSON.stringify({
+          op: 7,
+          d: {
+            requestType: message.d.requestType,
+            requestId: message.d.requestId,
+            requestStatus: { result: true },
+            responseData: responses[message.d.requestType] || {},
+          },
+        }),
+      }));
+    },
+  };
+  const bridge = createObsBridge({ socketFactory: () => socket, timeoutMs: 2000 });
+  const connected = bridge.connect();
+  listeners.get('message')({ data: JSON.stringify({ op: 0, d: { rpcVersion: 1 } }) });
+  await Promise.resolve();
+  listeners.get('message')({ data: JSON.stringify({ op: 2, d: {} }) });
+  await connected;
+  assert.equal(bridge.identified, true);
+
+  const applied = await bridge.applyPlan(plan, 'Minamo - Just chatting');
+  assert.equal(applied.positioned, 1);
+  const requestTypes = sent.filter((message) => message.op === 6).map((message) => message.d.requestType);
+  assert.deepEqual(requestTypes, [
+    'GetSceneList', 'GetInputList', 'CreateScene', 'CreateInput',
+    'GetSceneItemId', 'SetSceneItemTransform', 'SetCurrentProgramScene',
+  ]);
+  // Only scene names, source names and the viewer URL cross this socket.
+  assert.equal(JSON.stringify(sent).includes('supersecretpassword'), false);
+  bridge.close();
+}
+
+{
+  // The default avatar fetch is pinned the same way the MediaPipe assets are:
+  // a moved branch must not silently change what ships (#41, #260).
+  const script = fs.readFileSync(new URL('../scripts/fetch-avatar.sh', import.meta.url), 'utf8');
+  assert.match(script, /MODEL_COMMIT="[0-9a-f]{40}"/, 'the model must be pinned to a commit, not a branch');
+  assert.match(script, /^MODEL_URL=.*\/\$MODEL_COMMIT\//m, 'the download URL must interpolate the pinned commit');
+  assert.match(script, /sha256sum -c/, 'the download must be verified against the committed pin');
+  assert.match(script, /rm -f "\$OUT"/, 'a hash mismatch must delete the file rather than leave it for the viewer');
+
+  const pins = fs.readFileSync(new URL('../scripts/avatar-pins.sha256', import.meta.url), 'utf8');
+  assert.match(pins, /^[0-9a-f]{64} {2}default\.vrm$/m, 'avatar-pins.sha256 must pin default.vrm');
+
+  // Redistribution and modification are the two hard gates in
+  // docs/compression/asset-license-checklist.md; CC0 clears both.
+  assert.match(script, /CC0/);
+  assert.ok(script.includes('Redistribution: permitted.'));
+  assert.ok(script.includes('Modification / compression: permitted.'));
 }
 
 {
@@ -2986,4 +3359,4 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   // covered by extracting its pure logic instead — see #263.
 }
 
-console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, avatar pack planner, phone pairing, i18n, and shortcut tests passed.`);
+console.log(`OK: ${issues.length} issue files found; KGM1/KGM2 codec, filters, sequencing, calibration, mirror, quality, recording, GLB inspection, compressed avatar loaders, compression checklist, motion quantization, drum overlay, situation presets, obs-websocket handoff, default avatar pinning, avatar pack planner, phone pairing, i18n, and shortcut tests passed.`);

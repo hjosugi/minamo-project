@@ -37,6 +37,15 @@ Windows、macOS、Linux向けのネイティブアプリをインストールで
   レイヤーPNG/PSDに対応。アバターが無くても内蔵ボットで即動作
 - Tauriデスクトップ版はOS標準のファイル選択から
   `.inp`/`.inx`/`.vrm`/`.glb` を選ぶだけでビューアへ即読み込み
+- シチュエーションプリセット5種(雑談 / ゲーム配信 / 歌枠 / コラボ / ドラム演奏)。
+  トラッキングとビューアをまとめて設定し直します
+  ([ドキュメント](docs/product/situation-presets.ja.md))
+- obs-websocket による OBS 連携。Minamo は自分のブラウザソース用のシーンを作成・
+  切り替えし、背景・キャプチャ・音声・コメント欄・通知は OBS に任せます
+  ([ドキュメント](docs/product/obs-integration.ja.md))
+- 任意のCC0デフォルトアバター(`scripts/fetch-avatar.sh`)。内蔵ボットではなく
+  実物のヒューマノイドVRMでビューアが起動します
+  ([ドキュメント](docs/product/default-avatar.ja.md))
 - [landing/](landing/) にランディングページハブとモックトラッキングデモ
 
 詳細: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)(実装済み)/

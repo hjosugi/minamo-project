@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Minamoの顔・手・ドラム信号を、カメラなしでも試せるブラウザUIデモです。" />
+    <meta name="description" content="Minamoの顔・手・打楽器信号を、カメラなしでも試せるブラウザUIデモです。" />
     <title>Minamo Browser Demo</title>
     <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
@@ -21,9 +21,9 @@
       <section class="hero-grid">
         <div>
           <p class="eyebrow" data-i18n="landing.hero.eyebrow">Camera optional · mock signal demo</p>
-          <h1><span data-i18n="landing.hero.title1">顔、指、ドラム。</span><br /><span data-i18n="landing.hero.title2">まずは動くところを30秒で。</span></h1>
+          <h1><span data-i18n="landing.hero.title1">配信のかたちに合わせて。</span><br /><span data-i18n="landing.hero.title2">まずは動くところを30秒で。</span></h1>
           <p class="lead" data-i18n="landing.hero.lead">
-            Minamoが扱う顔・手・ドラム信号を可視化するUIデモです。
+            Minamoが扱う顔・手・打楽器信号を可視化するUIデモです。
             カメラを許可すると映像の上に重なり、許可しなくてもモックアニメーションだけで動きます。
           </p>
           <p class="disclosure">
@@ -39,7 +39,7 @@
           <div class="metrics">
             <div><strong id="fps">0</strong><span data-i18n="landing.metrics.fps">demo fps</span></div>
             <div><strong id="confidence">0.00</strong><span data-i18n="landing.metrics.confidence">mock confidence</span></div>
-            <div><strong id="hits">0</strong><span data-i18n="landing.metrics.hits">mock drum hits</span></div>
+            <div><strong id="hits">0</strong><span data-i18n="landing.metrics.hits">モック打撃数</span></div>
           </div>
         </div>
         <div class="demo-card">
@@ -75,8 +75,12 @@
           <p data-i18n="landing.cards.face.body">頭部姿勢、blink、gaze、口の開き・幅・丸め、smileなどを安定化します。</p>
         </article>
         <article>
-          <h3 data-i18n="landing.cards.drums.title">ドラム</h3>
-          <p data-i18n="landing.cards.drums.body">スティック軌道、打面、hit velocity、音声onset、ペダルの統合を目指します。</p>
+          <h3 data-i18n="landing.cards.percussion.title">パーカッション</h3>
+          <p data-i18n="landing.cards.percussion.body">ドラムキット、カホン、コンガ、ボンゴ、ハイブリッド。スティックでも素手でも、手ごとに判定します。</p>
+        </article>
+        <article>
+          <h3 data-i18n="landing.cards.situations.title">シチュエーション</h3>
+          <p data-i18n="landing.cards.situations.body">雑談・ゲーム配信・歌枠・コラボ・パーカッション。ひとつ選ぶとトラッキング・ビューア・OBSシーンがまとめて切り替わります。</p>
         </article>
         <article>
           <h3 data-i18n="landing.cards.stability.title">破綻防止</h3>

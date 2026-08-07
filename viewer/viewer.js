@@ -40,6 +40,11 @@ import {
 import { computeLossPercent } from '../shared/hud-metrics.js';
 import { MinamoTransport } from '../shared/transport.js';
 import {
+  DEFAULT_SITUATION_ID,
+  applySituationToViewerSettings,
+  isSituationId,
+} from '../shared/situation-presets.js';
+import {
   DEFAULT_VIEWER_SETTINGS,
   VIEWER_STORAGE_KEY,
   FrameOrderGate,
@@ -49,8 +54,6 @@ import {
   parseMotionJsonl,
   saveJson,
 } from '../shared/runtime.js';
-import { invoke, isTauri } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { setupPageI18n } from '../shared/i18n.js';
 import { roomLayout, slotOffsetX } from '../shared/room-layout.js';
 
@@ -95,13 +98,30 @@ function setStatusFromDescriptor(descriptor) {
   setStatus(descriptor.key, descriptor.params, 'error');
 }
 
-// Imported from @tauri-apps/api rather than read off the global IPC bridge, so
+// Resolved from @tauri-apps/api rather than read off the global IPC bridge, so
 // the desktop build ships with withGlobalTauri disabled (#251). In a browser
-// isTauri() is false and both handles stay null, which every call site already
-// guards for.
-const runningInTauri = isTauri();
-const tauriInvoke = runningInTauri ? invoke : null;
-const tauriListen = runningInTauri ? listen : null;
+// both handles stay null, which every call site already guards for.
+//
+// Imported dynamically, and only inside Tauri, because a static import makes
+// `@tauri-apps/api/core` a hard dependency of loading this module at all. A
+// bundler resolves that bare specifier; the plain static server in
+// scripts/dev.sh does not, and the unresolved specifier aborted the whole
+// viewer before a single line ran. `isTauri` here is the same global marker the
+// official `isTauri()` helper reads — a boolean, not the withGlobalTauri API
+// bridge — so #251 still holds.
+const runningInTauri = Boolean(globalThis.isTauri);
+let tauriInvoke = null;
+let tauriListen = null;
+
+async function resolveTauriApi() {
+  if (!runningInTauri || tauriInvoke) return;
+  const [core, event] = await Promise.all([
+    import('@tauri-apps/api/core'),
+    import('@tauri-apps/api/event'),
+  ]);
+  tauriInvoke = core.invoke;
+  tauriListen = event.listen;
+}
 const chip = $('statusChip');
 const C = CHANNEL_INDEX;
 const params = new URLSearchParams(location.search);
@@ -113,6 +133,22 @@ const drumOverlayKit = $('drumOverlayKit');
 const drumOverlayHands = $('drumOverlayHands');
 const viewerDrumKit = createDefaultDrumKitConfig('viewer overlay');
 viewerDrumKit.zones = viewerDrumKit.zones.map((zone) => ({ ...zone, calibrated: true }));
+
+// The drum overlay's nodes are built once and then mutated in place.
+//
+// updateDrumOverlay() runs inside the render loop, so rebuilding the subtree
+// with replaceChildren(...map(createElement)) cost ~360 element creations and
+// destructions per second at 60fps, each forcing a style recalculation and
+// layout — on the same thread that eases the avatar toward its target, which is
+// where a hitch shows most. The content changes far more slowly than 60Hz, so
+// every write is additionally guarded on the value actually differing.
+//
+// Declared here, beside the other overlay handles, rather than next to the
+// functions that use them: render() is invoked at module scope further down, so
+// a `const` declared after it is still in the temporal dead zone on the first
+// frame and throws — the same hazard `bootDone` is placed early to avoid.
+const drumOverlayZoneNodes = new Map();
+const drumOverlayHandNodes = [];
 
 const SCENE_PRESETS = Object.freeze({
   soft: Object.freeze({
@@ -148,6 +184,7 @@ const SCENE_PRESETS = Object.freeze({
 });
 
 const settings = loadJson(localStorage, VIEWER_STORAGE_KEY, DEFAULT_VIEWER_SETTINGS);
+if (!isSituationId(settings.situation)) settings.situation = DEFAULT_SITUATION_ID;
 applyQuerySettings(settings, params);
 redactTokenFromAddress(params);
 document.body.classList.toggle('hud-hidden', params.get('hud') === '0' || params.get('preset') === 'obs');
@@ -1145,36 +1182,79 @@ function updateDrumOverlayVisibility() {
   if (settings.drumOverlay) updateDrumOverlay();
 }
 
+function drumOverlayZoneNode(zone) {
+  let node = drumOverlayZoneNodes.get(zone.id);
+  if (!node) {
+    node = document.createElement('div');
+    node.className = 'zone';
+    drumOverlayZoneNodes.set(zone.id, node);
+    drumOverlayKit.appendChild(node);
+  }
+  // Re-read rather than cache: the label is translated, so it changes on a
+  // language toggle even though the kit does not.
+  if (node.textContent !== zone.label) node.textContent = zone.label;
+  return node;
+}
+
+// Hand nodes are pooled because the count varies with what is in frame (0, 1 or
+// 2), and a hand entering or leaving the shot must not churn the whole row.
+function drumOverlayHandNode(index) {
+  let node = drumOverlayHandNodes[index];
+  if (!node) {
+    node = document.createElement('span');
+    node.className = 'hand';
+    drumOverlayHandNodes[index] = node;
+    drumOverlayHands.appendChild(node);
+  }
+  return node;
+}
+
+function setDrumOverlayNode(node, text, state) {
+  if (node.textContent !== text) node.textContent = text;
+  if (state === null) {
+    if (node.dataset.state !== undefined) delete node.dataset.state;
+  } else if (node.dataset.state !== state) {
+    node.dataset.state = state;
+  }
+  if (node.hidden) node.hidden = false;
+}
+
 function updateDrumOverlay() {
   drumOverlayRoot.hidden = false;
   const overlayState = deriveDrumOverlayState(target.hands || [], viewerDrumKit);
-  const active = new Set(overlayState.activeZoneIds);
-  drumOverlayKit.replaceChildren(...overlayState.zones.map((zone) => {
-    const node = document.createElement('div');
-    node.className = 'zone';
-    node.dataset.state = active.has(zone.id) ? 'active' : 'idle';
-    node.textContent = zone.label;
-    return node;
-  }));
-  const handNodes = overlayState.hands.map((hand) => {
-    const node = document.createElement('span');
-    node.className = 'hand';
-    node.dataset.state = hand.active ? 'active' : 'idle';
-    node.textContent = `${hand.handedness} ${hand.gesture.label}${hand.zoneId ? ` ${hand.zoneId}` : ''}`;
-    return node;
-  });
-  if (!handNodes.length) {
-    const empty = document.createElement('span');
-    empty.className = 'hand';
-    empty.textContent = tr('viewer.ui.drum.handsWaiting');
-    handNodes.push(empty);
+  const activeIds = overlayState.activeZoneIds;
+  for (const zone of overlayState.zones) {
+    const node = drumOverlayZoneNode(zone);
+    // A 6-entry array: indexOf beats building a Set every frame.
+    const state = activeIds.indexOf(zone.id) === -1 ? 'idle' : 'active';
+    if (node.dataset.state !== state) node.dataset.state = state;
   }
-  drumOverlayHands.replaceChildren(...handNodes);
+
+  const hands = overlayState.hands;
+  if (hands.length) {
+    for (let i = 0; i < hands.length; i++) {
+      const hand = hands[i];
+      const zoneSuffix = hand.zoneId ? ` ${hand.zoneId}` : '';
+      setDrumOverlayNode(
+        drumOverlayHandNode(i),
+        `${hand.handedness} ${hand.gesture.label}${zoneSuffix}`,
+        hand.active ? 'active' : 'idle',
+      );
+    }
+  } else {
+    setDrumOverlayNode(drumOverlayHandNode(0), tr('viewer.ui.drum.handsWaiting'), null);
+  }
+  // Surplus nodes are hidden rather than removed, so a hand that comes back into
+  // frame reuses its node instead of forcing another layout.
+  for (let i = Math.max(hands.length, 1); i < drumOverlayHandNodes.length; i++) {
+    if (!drumOverlayHandNodes[i].hidden) drumOverlayHandNodes[i].hidden = true;
+  }
 }
 
 // ---------------------------------------------------------------- ui
 
 function applySettingsToUi() {
+  $('selSituation').value = settings.situation;
   $('selMode').value = settings.mode;
   $('inpRoom').value = settings.room;
   $('inpToken').value = settings.token;
@@ -1194,6 +1274,7 @@ function applySettingsToUi() {
 }
 
 function readSettingsFromUi() {
+  settings.situation = isSituationId($('selSituation').value) ? $('selSituation').value : DEFAULT_SITUATION_ID;
   settings.mode = $('selMode').value;
   settings.room = $('inpRoom').value || 'demo';
   settings.token = $('inpToken').value;
@@ -1289,6 +1370,7 @@ function serializeViewerSceneUrl() {
   else url.searchParams.delete('wsUrl');
   if (settings.wtUrl) url.searchParams.set('wtUrl', settings.wtUrl);
   if (settings.wtHash) url.searchParams.set('wtHash', settings.wtHash);
+  url.searchParams.set('situation', settings.situation);
   url.searchParams.set('scene', settings.scenePreset);
   url.searchParams.set('bg', settings.transparent ? 'transparent' : 'solid');
   url.searchParams.set('bgColor', settings.backgroundColor);
@@ -1322,6 +1404,11 @@ $('inpToken').addEventListener('input', () => {
 $('inpWsUrl').addEventListener('input', persistSettings);
 $('inpWtUrl').addEventListener('input', persistSettings);
 $('inpWtHash').addEventListener('input', persistSettings);
+$('selSituation').addEventListener('change', () => {
+  Object.assign(settings, applySituationToViewerSettings(settings, $('selSituation').value));
+  applySettingsToUi();
+  persistSettings();
+});
 $('selScenePreset').addEventListener('change', () => {
   applyScenePresetDefaults(settings, $('selScenePreset').value);
   applySettingsToUi();
@@ -1471,6 +1558,13 @@ async function loadNativeAvatar(value) {
 }
 
 async function initializeNativeAvatarBridge() {
+  if (!runningInTauri) return;
+  try {
+    await resolveTauriApi();
+  } catch (error) {
+    setStatus('viewer.error.nativeBridge', { detail: error instanceof Error ? error.message : String(error) }, 'error');
+    return;
+  }
   if (!tauriInvoke || !tauriListen) return;
   try {
     nativeAvatarUnlisten = await tauriListen('native-avatar-selected', (event) => {
@@ -1573,11 +1667,33 @@ document.addEventListener('drop', async (e) => {
   else if (isMotionJsonlFile(file) || isKgmRecordingFile(file)) await loadReplayFile(file);
 });
 
+// Optional local default avatar, fetched by scripts/fetch-avatar.sh (#41).
+//
+// The built-in bot is a stack of capsules and spheres — fine as a "something is
+// moving" signal, wrong as the first impression of an avatar tracker. When a
+// real model is present the viewer opens on it instead.
+//
+// Absent by design in a fresh checkout and on GitHub Pages: the file is not
+// redistributed with the repository, so the load simply fails and the bot stays.
+// Nothing is reported, because "no default avatar" is the expected state, not an
+// error the reader has to act on.
+const DEFAULT_AVATAR_URL = '../assets/avatars/default.vrm';
+
+async function loadDefaultAvatarIfPresent() {
+  try {
+    await loadVrmFromUrl(DEFAULT_AVATAR_URL, tr('viewer.ui.avatar.default'));
+  } catch {
+    // Keep the built-in bot.
+  }
+}
+
 // ?vrm=<url> loads a model directly (must be CORS-accessible)
 if (params.get('vrm')) {
   loadVrmFromUrl(params.get('vrm'), params.get('vrm').split('/').pop()).catch((e) => {
     setStatusFromDescriptor(describeAvatarLoadError(e));
   });
+} else if (!params.get('inochi')) {
+  loadDefaultAvatarIfPresent();
 }
 
 // ?inochi=<url> loads a CORS-accessible .inp/.inx through the same file path.
@@ -1616,6 +1732,11 @@ if (params.get('room')) {
 }
 
 function applyQuerySettings(targetSettings, query) {
+  // First, so the explicit scene/bloom/vignette/drum parameters below can still
+  // override any single choice the situation made.
+  if (isSituationId(query.get('situation'))) {
+    Object.assign(targetSettings, applySituationToViewerSettings(targetSettings, query.get('situation')));
+  }
   if (query.get('preset') === 'obs') {
     targetSettings.transparent = true;
   }

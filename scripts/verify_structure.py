@@ -67,6 +67,17 @@ REQUIRED = [
     'shared/compression-checklist.js',
     'shared/motion-quant.js',
     'shared/drum-overlay.js',
+    'shared/situation-presets.js',
+    'shared/obs-bridge.js',
+    'shared/percussion.js',
+    'docs/product/situation-presets.md',
+    'docs/product/situation-presets.ja.md',
+    'docs/product/obs-integration.md',
+    'docs/product/obs-integration.ja.md',
+    'docs/product/default-avatar.md',
+    'docs/product/default-avatar.ja.md',
+    'scripts/fetch-avatar.sh',
+    'scripts/avatar-pins.sha256',
     'shared/pairing.js',
     'docs/compression/avatar-compression.md',
     'docs/compression/glb-inspection.md',
@@ -1747,6 +1758,14 @@ def validate_desktop_contracts() -> None:
             add_error(path, 'renderer must import Tauri invoke from @tauri-apps/api/core')
         if 'window.__TAURI__' in source:
             add_error(path, 'renderer must not read the IPC bridge off window.__TAURI__')
+    # The viewer is also served by the bundler-free static server in
+    # scripts/dev.sh, where a bare specifier does not resolve and a static import
+    # aborts the module before any of it runs. desktop/desktop.js is exempt: it
+    # only ever loads inside Tauri, from the built bundle.
+    if re.search(r"^import .* from '@tauri-apps/", viewer_js, re.MULTILINE):
+        add_error('viewer/viewer.js', 'the Tauri API must be imported dynamically; a static import breaks the viewer under scripts/dev.sh')
+    if "import('@tauri-apps/api/core')" not in viewer_js:
+        add_error('viewer/viewer.js', 'the viewer must load the Tauri API through a dynamic import')
     if 'viewer' not in tauri_capability.get('windows', []):
         add_error('src-tauri/capabilities/default.json', 'viewer must have IPC access for the native avatar bridge')
     windows = app_config.get('windows', [])
@@ -2124,6 +2143,132 @@ def validate_drum_docs() -> None:
         add_error('tests/fixtures/drum-benchmark-runner.manifest.json', 'runner fixture manifest is invalid')
 
 
+def validate_percussion_contracts() -> None:
+    percussion = read('shared/percussion.js')
+    runtime = read('shared/runtime.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    tests = read('tests/run-tests.mjs')
+
+    # Sticks are one technique, not the only one. Hand percussion is played with
+    # an open palm, and openPalm/drumGrip are mutually exclusive by finger curl,
+    # so a hardcoded drumGrip check made cajons and congas untrackable.
+    if re.search(r'active:\s*Boolean\(inZone && gesture\.drumGrip\)', runtime):
+        add_error(
+            'shared/runtime.js',
+            'zone activation must use the kit strike style, not a hardcoded drumGrip — that makes hand percussion untrackable',
+        )
+    if 'strikeMatches(kit.kit, gesture)' not in runtime:
+        add_error('shared/runtime.js', 'zone activation must resolve the strike style from the configured kit')
+    for kit_id in ['drum-kit', 'cajon', 'congas', 'bongos', 'hand-percussion', 'hybrid']:
+        if f"id: '{kit_id}'" not in percussion:
+            add_error('shared/percussion.js', f'missing percussion kit: {kit_id}')
+    for style in ['stick', 'hand', 'mixed']:
+        if f"id: '{style}'" not in percussion:
+            add_error('shared/percussion.js', f'missing strike style: {style}')
+    # A hybrid rig is one player with a stick in one hand and a bare hand on the
+    # other, so the styles have to be evaluated per hand.
+    if 'gesture?.drumGrip || gesture?.openPalm || gesture?.fist' not in percussion:
+        add_error('shared/percussion.js', 'the mixed strike style must accept a stick hand and a bare hand at once')
+    if 'selPercussionKit' not in tracker_html or 'selPercussionKit' not in tracker:
+        add_error('tracker/index.html', 'tracker must expose a percussion kit selector')
+    # Zone options differ per kit, so they cannot be written into the markup.
+    if re.search(r'<option value="hihat"', tracker_html):
+        add_error('tracker/index.html', 'drum zone options must be built from the selected kit, not hardcoded')
+    if 'an open-palm slap must register on a cajon' not in tests:
+        add_error('tests/run-tests.mjs', 'missing hand-percussion regression coverage')
+
+
+def validate_situation_contracts() -> None:
+    presets = read('shared/situation-presets.js')
+    bridge = read('shared/obs-bridge.js')
+    tracker = read('tracker/tracker.js')
+    tracker_html = read('tracker/index.html')
+    viewer = read('viewer/viewer.js')
+    viewer_html = read('viewer/index.html')
+    fetch_avatar = read('scripts/fetch-avatar.sh')
+    privacy = read('scripts/check-privacy-invariants.mjs')
+    tests = read('tests/run-tests.mjs')
+
+    # The app must offer more than the drum situation it grew up around.
+    for situation in ['talk', 'game', 'sing', 'collab', 'drum']:
+        if f"id: '{situation}'" not in presets:
+            add_error('shared/situation-presets.js', f'missing situation preset: {situation}')
+        for page in ('tracker/index.html', 'viewer/index.html'):
+            if f'value="{situation}"' not in read(page):
+                add_error(page, f'situation selector is missing option: {situation}')
+    for needle in [
+        'applySituationToTrackerSettings',
+        'applySituationToViewerSettings',
+        'situationObsPlan',
+        'situationViewerUrl',
+        'minamo.situation-preset.v1',
+    ]:
+        if needle not in presets:
+            add_error('shared/situation-presets.js', f'missing situation preset export: {needle}')
+    # The Minamo/OBS split is data, not a convention: every source declares who
+    # creates it, and the delegated ones must stay delegated.
+    if "owner: 'obs'" not in presets or "owner: 'minamo'" not in presets:
+        add_error('shared/situation-presets.js', 'OBS sources must declare owner: minamo or obs')
+
+    for needle in ['buildIdentifyPayload', 'buildObsAuthResponse', 'buildObsSourceRequests', 'buildObsTransformRequests', 'createObsBridge']:
+        if needle not in bridge:
+            add_error('shared/obs-bridge.js', f'missing obs-websocket export: {needle}')
+    if 'SetCurrentProgramScene' not in bridge or 'GetVideoSettings' not in bridge:
+        add_error('shared/obs-bridge.js', 'OBS bridge must switch scenes and read the real canvas size')
+    if "'shared/obs-bridge.js'" not in privacy:
+        add_error('scripts/check-privacy-invariants.mjs', 'the OBS control socket must be in the reviewed sink inventory')
+
+    for needle in ['selSituation', 'obsHandoffList', 'drummerSetup', 'inpObsUrl', 'chkObsAutoScene']:
+        if needle not in tracker_html:
+            add_error('tracker/index.html', f'missing situation UI element: {needle}')
+    if 'selSituation' not in viewer_html:
+        add_error('viewer/index.html', 'viewer must expose a situation selector')
+    for needle in ['async function applySituation', 'ensurePoseLandmarkerIfRunning', 'pushSituationToObs', 'updateSituationUi']:
+        if needle not in tracker:
+            add_error('tracker/tracker.js', f'missing situation tracker contract: {needle}')
+    # A situation switch must not silently leave the drum panel on screen.
+    if "$('drummerSetup').hidden = preset.id !== 'drum'" not in tracker:
+        add_error('tracker/tracker.js', 'the drummer panel must be scoped to the drum situation')
+    for needle in ["query.get('situation')", 'DEFAULT_AVATAR_URL', 'loadDefaultAvatarIfPresent']:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'missing viewer situation/default-avatar contract: {needle}')
+
+    # updateDrumOverlay runs inside the render loop. Rebuilding its subtree there
+    # cost ~480 element allocations a second and 3.6x the DOM time, on the thread
+    # that eases the avatar. The nodes are pooled and mutated in place instead;
+    # the pools must stay, and the per-frame path must not rebuild.
+    for needle in ['const drumOverlayZoneNodes = new Map()', 'const drumOverlayHandNodes = []']:
+        if needle not in viewer:
+            add_error('viewer/viewer.js', f'drum overlay must pool its nodes: {needle}')
+    overlay_body = re.search(r'\nfunction updateDrumOverlay\(\) \{(.*?)\n\}\n', viewer, re.DOTALL)
+    if not overlay_body:
+        add_error('viewer/viewer.js', 'updateDrumOverlay must stay a top-level function so its per-frame cost is reviewable')
+    elif 'replaceChildren' in overlay_body.group(1):
+        add_error('viewer/viewer.js', 'updateDrumOverlay runs every frame and must not rebuild its subtree')
+    # The pools are read on the first render(), which runs at module scope; a
+    # declaration placed after it is still in the temporal dead zone and throws.
+    if viewer.index('const drumOverlayZoneNodes') > viewer.index('\nrender();'):
+        add_error('viewer/viewer.js', 'drum overlay node pools must be declared before the module-scope render() call')
+
+    # A moved branch must not change what a fetch ships (same rule as #260).
+    if not re.search(r'MODEL_COMMIT="[0-9a-f]{40}"', fetch_avatar):
+        add_error('scripts/fetch-avatar.sh', 'default avatar must be pinned to a full commit SHA, not a branch')
+    if 'avatar-pins.sha256' not in fetch_avatar or 'sha256sum -c' not in fetch_avatar:
+        add_error('scripts/fetch-avatar.sh', 'default avatar download must be verified against the committed pin')
+    if 'CC0' not in fetch_avatar or 'LICENSE.txt' not in fetch_avatar:
+        add_error('scripts/fetch-avatar.sh', 'default avatar must record a redistributable license beside the asset')
+    if (ROOT / 'assets' / 'avatars' / 'default.vrm').exists() and 'assets/avatars/' not in read('.gitignore'):
+        add_error('.gitignore', 'the fetched default avatar must not be committed')
+
+    for needle in [
+        'Situation presets reconfigure the tracker and viewer together',
+        'obs-websocket',
+    ]:
+        if needle not in tests:
+            add_error('tests/run-tests.mjs', f'missing situation regression coverage: {needle}')
+
+
 def validate_secure_phone_transport() -> None:
     transport = read('shared/transport.js')
     pairing = read('shared/pairing.js')
@@ -2269,6 +2414,8 @@ validate_audio_lipsync_contracts()
 validate_runtime_warning_taxonomy()
 validate_compression_docs()
 validate_drum_docs()
+validate_percussion_contracts()
+validate_situation_contracts()
 validate_secure_phone_transport()
 validate_research_docs()
 validate_onnx_backend_registry()

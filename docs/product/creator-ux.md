@@ -37,10 +37,17 @@ Good:
 
 ## 4. Presets
 
+Shipped as situation presets — see
+[situation-presets.md](situation-presets.md) for what each one changes:
+
+- just chatting
+- game stream
+- karaoke
+- collab
+- drum performance
+
+Still hardware shaped rather than situation shaped, and not yet implemented:
+
 - low-end laptop
 - normal webcam
 - high-FPS webcam
-- face-focused streamer
-- hand-focused streamer
-- drummer
-- remote collaboration
