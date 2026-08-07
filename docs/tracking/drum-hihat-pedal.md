@@ -21,10 +21,27 @@ fusion of:
 - pose-based ankle/knee vertical motion when the lower body is visible
 - manual pedal-zone calibration as a fallback anchor
 
-The reference helper is `inferHiHatPedalState(onsets, timeMs, windowMs)` in
-[`src/core/drum.ts`](../../src/core/drum.ts). It selects the strongest onset
+The reference helper is `inferHiHatPedalState(onsets, timeMs, windowMs, options)`
+in [`src/core/drum.ts`](../../src/core/drum.ts). It selects the strongest onset
 above ~1.8 kHz inside the window and returns a clamped strength, so a closed
 "chick" reads as a short openness dip followed by an onset spike.
+
+`options` supplies the pose-based half of the design:
+
+- `foot` + `calibration` convert foot height to openness through
+  `footHiHatOpenness`, using a two-point calibration (pedal up, pedal down).
+  Positions outside that span are clamped rather than extrapolated, and a
+  degenerate calibration returns `null` instead of dividing by ~0.
+- `previousOpenness` is what implements the hold rule below. Without it the
+  helper still collapses to 0 with no onset, which is the original behaviour.
+
+With both signals present the result is weighted toward audio (0.7 / 0.3),
+because the onset says how hard the pedal closed while the foot only says where
+it is.
+
+Foot landmarks do not cross the wire — the KGM1 POSE block carries seven
+upper-body points and no feet, so a caller reads them from the pose model's
+local landmark array.
 
 ## False-positive mitigation
 
@@ -32,7 +49,10 @@ above ~1.8 kHz inside the window and returns a clamped strength, so a closed
   frequency predicate.
 - Ignore onsets outside the time window around the visual/pedal event.
 - When no audio onset exists, hold the last calibrated openness rather than
-  inventing a transition.
+  inventing a transition. A hi-hat that stayed closed between chicks did not
+  spring open, and the earlier audio-only helper reported exactly that.
+- Treat a foot the model cannot see as unknown rather than as open. Below
+  `FOOT_PEDAL_MIN_VISIBILITY` the openness is `null` and the held value stands.
 
 ## Audio-sync design
 

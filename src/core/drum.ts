@@ -11,8 +11,8 @@
 //     for thresholds, so behaviour is frame-rate independent.
 // The shared thresholds below are the single source of truth for "is this a
 // downstroke" and "is the stick moving fast enough to count as a hit".
-import { clamp, distance, length } from './math';
-import type { DrumHitEvent, HandState, Vec3 } from './types';
+import { clamp, distance, finiteVec3, length } from './math';
+import type { DrumHitEvent, Handedness, HandState, Vec3 } from './types';
 
 // Minimum downward velocity (m/s, +Y points down) for a motion to count as a
 // downstroke.
@@ -291,14 +291,151 @@ export function fuseVisualHitWithAudio(hit: DrumHitEvent, onsets: AudioOnset[], 
   };
 }
 
-export function inferHiHatPedalState(onsets: readonly AudioOnset[], timeMs: number, windowMs = 80): number {
-  const nearby = strongestOnset(onsets, timeMs, windowMs, (onset) => onset.frequencyHz === undefined || onset.frequencyHz > 1800);
-  return nearby ? clamp(nearby.strength, 0, 1) : 0;
+/**
+ * Ankle or foot landmark, in the same metric, +Y-down space as the rest of this
+ * file. `visibility` is the pose model's own confidence for the landmark.
+ *
+ * This never crosses the wire. The KGM1 POSE block carries seven upper-body
+ * points and no feet, so a caller feeds this straight from the pose model's
+ * local landmark array — adding feet to the protocol is a separate question
+ * from inferring a pedal from them.
+ */
+export interface FootPedalSample {
+  side: Handedness;
+  timeMs: number;
+  previousTimeMs: number;
+  position: Vec3;
+  previousPosition: Vec3;
+  /** Pose-model visibility for the landmark, 0..1. */
+  visibility: number;
 }
 
-export function inferKickPedalHit(onsets: readonly AudioOnset[], timeMs: number, windowMs = 55): DrumHitEvent | null {
+/**
+ * Below this the pose model is guessing where the foot is, so the sample is
+ * evidence of nothing — neither for a press nor against one. Feet spend most of
+ * a drum take behind the kit, which is exactly why the pedal docs make audio the
+ * timing source and vision only a confidence adjustment.
+ */
+export const FOOT_PEDAL_MIN_VISIBILITY = 0.5;
+/**
+ * Minimum downward foot speed (m/s, +Y down) that counts as a pedal press. Feet
+ * travel far less than sticks — a beater stroke moves the toe a few centimetres
+ * in under a tenth of a second — so this sits well below
+ * `DRUM_MIN_HIT_SPEED_MPS` rather than reusing it.
+ */
+export const FOOT_PEDAL_MIN_PRESS_SPEED_MPS = 0.25;
+
+export interface FootPedalPress {
+  /** True when the foot is visibly moving down fast enough to be a press. */
+  pressing: boolean;
+  speedMps: number;
+  /** True when the foot is visible enough for its stillness to mean anything. */
+  observed: boolean;
+}
+
+/**
+ * Score a foot sample as pedal evidence.
+ *
+ * `observed` is the field that matters and it is deliberately separate from
+ * `pressing`: a foot the model cannot see is not the same as a foot that is
+ * visibly still, and only the second is evidence *against* a press.
+ */
+export function scoreFootPedalPress(sample: FootPedalSample): FootPedalPress {
+  const dtSec = Math.max(0, (sample.timeMs - sample.previousTimeMs) / 1000);
+  const observed = Number.isFinite(sample.visibility) && sample.visibility >= FOOT_PEDAL_MIN_VISIBILITY;
+  if (!observed || dtSec <= 0 || !finiteVec3(sample.position) || !finiteVec3(sample.previousPosition)) {
+    return { pressing: false, speedMps: 0, observed: false };
+  }
+  const velocity = estimateHitVelocity(sample.position, sample.previousPosition, dtSec);
+  // +Y is down, so a press has a POSITIVE velocity.y, same as a downstroke.
+  const downward = velocity.y;
+  const speedMps = length(velocity);
+  return {
+    pressing: downward >= FOOT_PEDAL_MIN_PRESS_SPEED_MPS,
+    speedMps,
+    observed: true,
+  };
+}
+
+export interface HiHatFootCalibration {
+  /** Foot y with the pedal fully up (hi-hat open). +Y down, so this is smaller. */
+  openY: number;
+  /** Foot y with the pedal fully down (hi-hat closed). */
+  closedY: number;
+}
+
+/**
+ * Continuous 0..1 openness from foot height, or null when the foot is not
+ * visible enough to say. 1 is fully open.
+ */
+export function footHiHatOpenness(sample: FootPedalSample, calibration: HiHatFootCalibration): number | null {
+  if (!Number.isFinite(sample.visibility) || sample.visibility < FOOT_PEDAL_MIN_VISIBILITY) return null;
+  if (!finiteVec3(sample.position)) return null;
+  const span = calibration.closedY - calibration.openY;
+  // A degenerate calibration cannot be normalized; refuse rather than divide.
+  if (!Number.isFinite(span) || Math.abs(span) < 1e-4) return null;
+  return clamp(1 - (sample.position.y - calibration.openY) / span, 0, 1);
+}
+
+/**
+ * Hi-hat openness. Audio remains the timing source; the foot supplies
+ * continuity between onsets.
+ *
+ * Per the design in docs/tracking/drum-hihat-pedal.md, with no onset the state
+ * is *held* rather than reset to 0 — a hi-hat that stays closed between chicks
+ * is not a hi-hat that sprang open. `previousOpenness` is what makes that hold
+ * possible; passing nothing keeps the original behaviour.
+ */
+export function inferHiHatPedalState(
+  onsets: readonly AudioOnset[],
+  timeMs: number,
+  windowMs = 80,
+  options: { foot?: FootPedalSample; calibration?: HiHatFootCalibration; previousOpenness?: number } = {},
+): number {
+  const nearby = strongestOnset(onsets, timeMs, windowMs, (onset) => onset.frequencyHz === undefined || onset.frequencyHz > 1800);
+  const visual = options.foot && options.calibration ? footHiHatOpenness(options.foot, options.calibration) : null;
+  if (nearby) {
+    const audio = clamp(nearby.strength, 0, 1);
+    // Both present: the onset says how hard, the foot says where the pedal is.
+    // Weighted toward audio because the doc makes it the primary signal.
+    return visual === null ? audio : clamp(audio * 0.7 + visual * 0.3, 0, 1);
+  }
+  if (visual !== null) return visual;
+  return clamp(options.previousOpenness ?? 0, 0, 1);
+}
+
+/**
+ * Kick hit from a low-frequency onset, with the foot adjusting confidence only.
+ *
+ * The foot never sets `timeNs`: the beater is usually behind the kit, so a
+ * visually-derived kick time would be worse than the onset it replaced. What the
+ * foot can do is disagree — a clearly visible, clearly still foot at the moment
+ * of a low-frequency onset is evidence the onset came from a floor tom rather
+ * than the kick, which is the false-positive case
+ * docs/tracking/drum-kick-pedal.md asks to mitigate.
+ */
+export function inferKickPedalHit(
+  onsets: readonly AudioOnset[],
+  timeMs: number,
+  windowMs = 55,
+  foot?: FootPedalSample,
+): DrumHitEvent | null {
   const onset = strongestOnset(onsets, timeMs, windowMs, (candidate) => candidate.frequencyHz === undefined || candidate.frequencyHz < 160);
   if (!onset) return null;
+  let confidence = 0.55 + onset.strength * 0.4;
+  let speed = 0;
+  if (foot) {
+    const press = scoreFootPedalPress(foot);
+    if (press.pressing) {
+      confidence += 0.15;
+      speed = press.speedMps;
+    } else if (press.observed) {
+      // Visible and still. Not enough to discard the onset — the beater can
+      // move with very little ankle travel — but enough to stop a tom being
+      // reported as a kick with full confidence.
+      confidence -= 0.2;
+    }
+  }
   return {
     eventId: `pedal:kick:${Math.round(onset.timeMs)}`,
     timeNs: Math.round(onset.timeMs * 1_000_000),
@@ -306,8 +443,8 @@ export function inferKickPedalHit(onsets: readonly AudioOnset[], timeMs: number,
     zoneType: 'kick',
     position: { x: 0, y: 0, z: 0 },
     velocity: { x: 0, y: 0, z: 0 },
-    speed: 0,
-    confidence: clamp(0.55 + onset.strength * 0.4, 0, 1),
+    speed,
+    confidence: clamp(confidence, 0, 1),
     audioAligned: true,
   };
 }

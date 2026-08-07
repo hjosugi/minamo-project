@@ -43,6 +43,10 @@ import {
   DRUM_MIN_HIT_SPEED_MPS,
   DRUM_REARM_MIN_LIFT_M,
   fetchAndVerifyModel,
+  footHiHatOpenness,
+  scoreFootPedalPress,
+  FOOT_PEDAL_MIN_PRESS_SPEED_MPS,
+  FOOT_PEDAL_MIN_VISIBILITY,
   BleMidiPacketDecoder,
   BleMidiStickSession,
   BLE_MIDI_CHARACTERISTIC_UUID,
@@ -105,6 +109,7 @@ import {
   voiceActivityMouthAccent,
   wrapKGM1FrameForRoom,
 } from '../src/core';
+import type { FootPedalSample } from '../src/core';
 
 describe('hand solver', () => {
   it('distinguishes handedness and builds a stable palm basis', () => {
@@ -588,6 +593,109 @@ describe('audio and drum helpers', () => {
     // a dropped rebound degrades to the old time-based behaviour rather than
     // silencing the zone.
     expect(jitterer.detect(stroke(60)).length).toBe(1);
+  });
+
+  it('reads the foot as pedal evidence without letting it set timing (#118, #119)', () => {
+    expect(FOOT_PEDAL_MIN_VISIBILITY).toBe(0.5);
+    expect(FOOT_PEDAL_MIN_PRESS_SPEED_MPS).toBe(0.25);
+
+    // +Y is down, so a press moves the foot toward larger y.
+    const foot = (dy: number, visibility: number): FootPedalSample => ({
+      side: 'Right',
+      timeMs: 100,
+      previousTimeMs: 80,
+      position: { x: 0, y: 0.30 + dy, z: 0 },
+      previousPosition: { x: 0, y: 0.30, z: 0 },
+      visibility,
+    });
+
+    // 0.02 m in 20 ms is 1 m/s downward: a press.
+    const pressing = scoreFootPedalPress(foot(0.02, 0.9));
+    expect(pressing.pressing).toBe(true);
+    expect(pressing.observed).toBe(true);
+    expect(pressing.speedMps).toBeCloseTo(1, 6);
+
+    // Visible and still: evidence AGAINST a press.
+    const still = scoreFootPedalPress(foot(0, 0.9));
+    expect(still.pressing).toBe(false);
+    expect(still.observed).toBe(true);
+
+    // Behind the kit: the model is guessing, so this is evidence of nothing.
+    // `observed` false is what keeps a hidden foot from arguing either way.
+    const hidden = scoreFootPedalPress(foot(0.02, 0.2));
+    expect(hidden.observed).toBe(false);
+    expect(hidden.pressing).toBe(false);
+
+    // A lifting foot is not a press.
+    expect(scoreFootPedalPress(foot(-0.02, 0.9)).pressing).toBe(false);
+  });
+
+  it('keeps audio as the kick timing source and lets the foot only move confidence (#119)', () => {
+    const onsets = [{ timeMs: 54, strength: 0.7, frequencyHz: 80 }];
+    const base = inferKickPedalHit(onsets, 50);
+    expect(base?.zoneType).toBe('kick');
+    expect(base?.audioAligned).toBe(true);
+
+    const press: FootPedalSample = {
+      side: 'Right', timeMs: 54, previousTimeMs: 34,
+      position: { x: 0, y: 0.32, z: 0 }, previousPosition: { x: 0, y: 0.30, z: 0 }, visibility: 0.9,
+    };
+    const withPress = inferKickPedalHit(onsets, 50, 55, press);
+    // The onset still sets the time — a beater behind the kit is not a timing
+    // source, and a visually-derived kick time would be worse than the onset.
+    expect(withPress?.timeNs).toBe(base?.timeNs);
+    expect(withPress!.confidence).toBeGreaterThan(base!.confidence);
+    expect(withPress!.speed).toBeGreaterThan(0);
+
+    // Visible, still foot under a low-frequency onset: more likely a floor tom.
+    const stillFoot: FootPedalSample = { ...press, position: { x: 0, y: 0.30, z: 0 } };
+    const doubted = inferKickPedalHit(onsets, 50, 55, stillFoot);
+    expect(doubted!.confidence).toBeLessThan(base!.confidence);
+    // Still emitted, though: a beater can move with very little ankle travel.
+    expect(doubted?.zoneType).toBe('kick');
+
+    // A hidden foot must not change anything either way.
+    const hiddenFoot: FootPedalSample = { ...press, visibility: 0.1 };
+    expect(inferKickPedalHit(onsets, 50, 55, hiddenFoot)!.confidence).toBe(base!.confidence);
+
+    // No qualifying onset means no event, foot or not.
+    expect(inferKickPedalHit([{ timeMs: 54, strength: 0.9, frequencyHz: 4000 }], 50, 55, press)).toBeNull();
+  });
+
+  it('holds hi-hat openness between onsets instead of springing open (#118)', () => {
+    const calibration = { openY: 0.20, closedY: 0.34 };
+    const at = (y: number, visibility = 0.9): FootPedalSample => ({
+      side: 'Left', timeMs: 100, previousTimeMs: 80,
+      position: { x: 0, y, z: 0 }, previousPosition: { x: 0, y, z: 0 }, visibility,
+    });
+
+    expect(footHiHatOpenness(at(0.20), calibration)).toBeCloseTo(1, 6);
+    expect(footHiHatOpenness(at(0.34), calibration)).toBeCloseTo(0, 6);
+    expect(footHiHatOpenness(at(0.27), calibration)).toBeCloseTo(0.5, 6);
+    // Past the calibrated ends, clamped rather than extrapolated.
+    expect(footHiHatOpenness(at(0.40), calibration)).toBe(0);
+    expect(footHiHatOpenness(at(0.10), calibration)).toBe(1);
+    // Not visible, and a degenerate calibration, both decline to answer.
+    expect(footHiHatOpenness(at(0.27, 0.2), calibration)).toBeNull();
+    expect(footHiHatOpenness(at(0.27), { openY: 0.3, closedY: 0.3 })).toBeNull();
+
+    // The rule the doc states: with no onset, hold — a hi-hat that stayed
+    // closed between chicks did not spring open.
+    expect(inferHiHatPedalState([], 500, 80, { previousOpenness: 0.15 })).toBeCloseTo(0.15, 6);
+    // Backwards compatible: no options still collapses to 0.
+    expect(inferHiHatPedalState([], 500)).toBe(0);
+
+    // Foot alone carries openness between onsets.
+    expect(inferHiHatPedalState([], 500, 80, { foot: at(0.34), calibration, previousOpenness: 0.9 }))
+      .toBeCloseTo(0, 6);
+
+    // With both, audio dominates but the foot pulls it toward the pedal.
+    const onsets = [{ timeMs: 502, strength: 0.8, frequencyHz: 3000 }];
+    const audioOnly = inferHiHatPedalState(onsets, 500);
+    const blended = inferHiHatPedalState(onsets, 500, 80, { foot: at(0.34), calibration });
+    expect(audioOnly).toBeCloseTo(0.8, 6);
+    expect(blended).toBeLessThan(audioOnly);
+    expect(blended).toBeCloseTo(0.56, 6);
   });
 
   it('matches simultaneous limbs to their own zone before falling back to time (#241)', () => {
