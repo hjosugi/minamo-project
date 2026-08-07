@@ -47,7 +47,7 @@ jobs:
       # restore-keys makes each run start from the newest corpus available, and
       # the run number in the key means the grown corpus is saved under a new one.
       - name: Restore the corpus
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: crates/kgm1-codec/fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_number }}
