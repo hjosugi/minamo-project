@@ -322,7 +322,8 @@ interface DrumHitEvent {
   hand?: "Left" | "Right";
   stickId?: string;
   zoneId: string;
-  zoneType: "snare" | "hihat" | "ride" | "crash" | "tom" | "floorTom" | "kick" | "pedal" | "unknown";
+  zoneType: "snare" | "hihat" | "ride" | "crash" | "tom" | "floorTom" | "kick" | "pedal"
+          | "bass" | "slap" | "tap" | "head" | "edge" | "percussion" | "unknown";
   position: Vec3;
   velocity: Vec3;
   speed: number;

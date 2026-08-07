@@ -844,6 +844,39 @@ describe('BLE-MIDI drum stick (issue #240)', () => {
     expect(session.ingest([header(900), stamp(900), NOTE_ON_CH10, CLOSED_HIHAT, 90])).toHaveLength(1);
   });
 
+  it('maps the whole GM percussion range, not only the drum kit', () => {
+    // An unmapped note makes stickStrikeToDrumHit return null, so before GM
+    // 60-81 was in the table an e-kit or pad controller playing congas or
+    // bongos produced strikes that vanished instead of arriving.
+    const strike = (note: number) => ({ note, velocity: 100, channel: 9, deviceTimeMs: 1000 });
+
+    // Congas and bongos land on the head/edge zones the conga and bongo kits use.
+    expect(stickStrikeToDrumHit(strike(60))?.zoneType).toBe('head'); // Hi Bongo
+    expect(stickStrikeToDrumHit(strike(61))?.zoneType).toBe('head'); // Low Bongo
+    expect(stickStrikeToDrumHit(strike(63))?.zoneType).toBe('head'); // Open Hi Conga
+    expect(stickStrikeToDrumHit(strike(64))?.zoneType).toBe('head'); // Low Conga
+    expect(stickStrikeToDrumHit(strike(62))?.zoneType).toBe('edge'); // Mute Hi Conga
+
+    // Shakers, blocks, scrapers and bells share the generic zone.
+    for (const note of [67, 69, 70, 75, 76, 80]) {
+      expect(stickStrikeToDrumHit(strike(note))?.zoneType).toBe('percussion');
+    }
+
+    // Nothing in the GM percussion range is silently dropped any more.
+    for (let note = 35; note <= 81; note++) {
+      expect(stickStrikeToDrumHit(strike(note)), `GM note ${note} produced no hit`).not.toBeNull();
+    }
+    // Outside the range there is still nothing honest to say, so it stays null
+    // rather than being invented as 'unknown'.
+    expect(stickStrikeToDrumHit(strike(34))).toBeNull();
+    expect(stickStrikeToDrumHit(strike(82))).toBeNull();
+
+    // The drum-kit mappings are untouched.
+    expect(stickStrikeToDrumHit(strike(38))?.zoneType).toBe('snare');
+    expect(stickStrikeToDrumHit(strike(42))?.zoneType).toBe('hihat');
+    expect(stickStrikeToDrumHit(strike(36))?.zoneType).toBe('kick');
+  });
+
   it('chooses a transport from capabilities, never from the user agent', () => {
     // Web MIDI wins when present: an OS-paired BLE-MIDI stick is an ordinary
     // MIDI port, so the OS owns pairing, reconnect and the BLE-MIDI decode.
