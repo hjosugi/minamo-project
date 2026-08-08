@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as runtimeModule from '../shared/runtime.js';
 import { takeLateFailures, withStubbedDom } from './helpers/dom-stub.mjs';
 import { localizeDesktopStatus } from '../desktop/status-i18n.js';
 import { applyPitchOffset, mat4ToQuat, mat4ToQuatInto } from '../shared/pose-math.js';
@@ -2263,6 +2264,104 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(decayed.zones.find((zone) => zone.zoneId === 'snare').flash, 0);
   assert.equal(decayed.activeZoneIds.length, 0);
   assert.equal(decayed.hitCount, 2);
+}
+
+{
+  // shared/runtime.js is a barrel now: the tracking helpers live in ./math.js,
+  // ./settings.js, ./hand-gestures.js, ./stabilizers.js and ./drum-kit.js, and
+  // this module re-exports them so every existing import path keeps working.
+  //
+  // Locking the surface is the point. Splitting a module is exactly when an
+  // export gets silently dropped, and a missing re-export only shows up as a
+  // page failing to boot. This list is the contract; changing it should be a
+  // deliberate edit, not a side effect.
+  const runtimeSurface = Object.keys(runtimeModule).sort();
+  assert.deepEqual(runtimeSurface, [
+    'BlinkWinkStabilizer',
+    'CALIBRATION_GUIDE_STEPS',
+    'CALIBRATION_GUIDE_TOTAL_MS',
+    'DEFAULT_SMOOTHING_SETTINGS',
+    'DEFAULT_TRACKER_SETTINGS',
+    'DEFAULT_VIEWER_SETTINGS',
+    'DRUM_KIT_SCHEMA',
+    'DRUM_KIT_STORAGE_KEY',
+    'DRUM_ZONE_DEFS',
+    'DroppedFrameDetector',
+    'FILTER_PRESETS',
+    'FrameOrderGate',
+    'GAZE_CALIBRATION_STEPS',
+    'GAZE_CALIBRATION_TOTAL_MS',
+    'HAND_CALIBRATION_STEPS',
+    'HAND_CALIBRATION_TOTAL_MS',
+    'HAND_FINGER_NAMES',
+    'HAND_INFERENCE_INTERVAL_MS',
+    'HAND_PROFILE_STORAGE_KEY',
+    'HandTargetStabilizer',
+    'HeadPositionStabilizer',
+    'LandmarkConfidenceTracker',
+    'MAX_MOTION_JSONL_FRAMES',
+    'MOTION_JSONL_SCHEMA',
+    'PROFILE_STORAGE_KEY',
+    'RESOLUTION_CONSTRAINTS',
+    'SMOOTHING_GROUPS',
+    'TRACKER_STORAGE_KEY',
+    'TrackingLossSmoother',
+    'VIEWER_STORAGE_KEY',
+    'WARNING_TAXONOMY',
+    'applyCalibrationProfile',
+    'applyGazeToWeights',
+    'applyHandCalibrationProfile',
+    'blendshapeGaze',
+    'buildCalibrationProfileFromSamples',
+    'buildGazeCalibrationProfile',
+    'buildHandCalibrationProfile',
+    'calibrationGuideProgress',
+    'clamp',
+    'classifyHandGesture',
+    'collectGazeCalibrationSample',
+    'collectGuidedCalibrationSample',
+    'collectHandCalibrationSample',
+    'computeQualityScore',
+    'createCalibrationProfile',
+    'createDefaultDrumKitConfig',
+    'createGazeCalibrationProfile',
+    'createGazeCalibrationSession',
+    'createGuidedCalibrationSession',
+    'createHandCalibrationProfile',
+    'createHandCalibrationSession',
+    'defaultFaceLockRegion',
+    'deriveDrumOverlayState',
+    'drumKitCalibrationSummary',
+    'estimateIrisGaze',
+    'estimateLandmarkConfidence',
+    'estimateOneEuroLagMs',
+    'gazeAngularErrorDegrees',
+    'handCalibrationProgress',
+    'handTargetDebugRows',
+    'handWristToDrumStage',
+    'inferVowel',
+    'isEditableTarget',
+    'isSeqNewer',
+    'loadJson',
+    'mergeWarningsInto',
+    'mirrorFacePayload',
+    'mirrorFacePayloadInPlace',
+    'mirrorWeights',
+    'normalizeDrumKitConfig',
+    'normalizeHandCalibrationProfile',
+    'normalizeHeadLeanRangeCm',
+    'normalizeProfile',
+    'parseMotionJsonl',
+    'resolveGaze',
+    'sanitizeWeights',
+    'saveJson',
+    'selectTrackedFace',
+    'semanticFaceControls',
+    'setMirrorPreviewClass',
+    'syntheticBlendshapeFrame',
+    'syntheticFaceFixture',
+    'validateCalibrationProfile',
+  ], 'shared/runtime.js public surface changed');
 }
 
 {
