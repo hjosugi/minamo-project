@@ -421,6 +421,10 @@ def validate_glossary_examples() -> None:
 
 def validate_dependency_guardrails() -> None:
     package = json.loads(read('package.json'))
+    ci = read('.github/workflows/ci.yml')
+    release_smoke = read('scripts/release-smoke.mjs')
+    mediapipe_canary = read('scripts/mediapipe-canary-smoke.mjs')
+    mediapipe_privacy_guard = read('scripts/mediapipe-privacy-guard.mjs')
     tracker_version = re.search(r"MEDIAPIPE_VERSION = '([^']+)'", read('tracker/tracker.js'))
     fetch_version = re.search(r'^VERSION="([^"]+)"', read('scripts/fetch-models.sh'), re.MULTILINE)
     package_version = package.get('dependencies', {}).get('@mediapipe/tasks-vision', '').lstrip('^~')
@@ -451,6 +455,22 @@ def validate_dependency_guardrails() -> None:
         add_error('tests/run-tests.mjs', 'missing MediaPipe asset fallback regression coverage')
     if not re.search(r"CDN_TASKS_VISION_INTEGRITY = 'sha256-[A-Za-z0-9+/=]+'", tracker):
         add_error('tracker/tracker.js', 'CDN MediaPipe bundle SRI hash must be pinned')
+    if package.get('scripts', {}).get('check:mediapipe') != 'node scripts/mediapipe-canary-smoke.mjs':
+        add_error('package.json', 'MediaPipe package/API/privacy check script must remain wired')
+    if 'pnpm check:mediapipe' not in ci:
+        add_error('.github/workflows/ci.yml', 'CI must inspect the installed MediaPipe bundle on dependency PRs')
+    if "['pnpm', ['check:mediapipe']]" not in release_smoke:
+        add_error('scripts/release-smoke.mjs', 'release smoke must inspect the installed MediaPipe bundle')
+    if "from './mediapipe-privacy-guard.mjs'" not in mediapipe_canary:
+        add_error('scripts/mediapipe-canary-smoke.mjs', 'MediaPipe canary must run the dependency privacy guard')
+    for marker in [
+        'odml.pa.googleapis.com/v1/log',
+        'x-goog-api-key',
+        '_mediapipeLoggerGetEncodedApiKey',
+        'Logging failed with HTTP error',
+    ]:
+        if marker not in mediapipe_privacy_guard:
+            add_error('scripts/mediapipe-privacy-guard.mjs', f'missing blocked MediaPipe telemetry marker: {marker}')
 
 
 def validate_foundation_contracts() -> None:

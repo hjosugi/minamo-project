@@ -3,68 +3,81 @@
 
 # MediaPipe tasks-vision 1.0 移行ウォッチリスト
 
-`@mediapipe/tasks-vision` は安定版 `0.10.35` と並行して、毎日 `1.0.0-rc.*` の
-ナイトリーを公開しています。パッケージング/API 変更を含む 1.0 リリースが目前で
-あり、トラッカーの中核機能は Face Landmarker のブレンドシェイプと顔の変換行列に
-依存しています。本ページは 1.0 で壊れ得る点と、それを早期に検知する仕組みを
-まとめます。
+`@mediapipe/tasks-vision@1.0.1` は公開済みですが、Minamoは引き続き
+`0.10.35` に完全固定します。PR #358 の調査では、1.0のpackage／tracking APIには
+互換性がある一方、公開ブラウザーバンドルに移行を止める新しいプライバシー変更が
+あることを確認しました。
 
-## 現在の防御策
+## 1.0.1で維持されているもの
 
-- **完全固定 (exact pin)。** `package.json` は `@mediapipe/tasks-vision` を
-  キャレットなしの `0.10.35` に固定しており、想定外の `0.11`/`1.0` が自動的に
-  入ることはありません。
-- **週次カナリア。** `.github/workflows/mediapipe-canary.yml` が定期的に
-  `@mediapipe/tasks-vision@nightly`（`1.0.0-rc.*` ビルドを配信する dist-tag）を
-  導入し、`scripts/mediapipe-canary-smoke.mjs` を実行します。トラッカーが依存する
-  パッケージング面を検査し、破壊的変更が
-  あれば固定ビルドに触れずにカナリアだけが失敗し、本ページを指し示します。
+1.0.1 packageには次が残っています。
 
-## ウォッチリスト — 1.0 で変わり得る箇所
+- `vision_bundle.mjs` ESM entrypoint
+- `scripts/fetch-models.sh` がmirrorするSIMD／非SIMD WASM loaderとbinaryの組
+- `FilesetResolver`、`FaceLandmarker`、`HandLandmarker`、`PoseLandmarker`
+- Minamoが使うsignatureの `detectForVideo`、`faceBlendshapes`、
+  `facialTransformationMatrixes`
 
-### 1. エントリポイント
+package／API canaryはこれらをすべて通過します。主なpublic type変更は、従来の
+`InteractiveSegmenter` が新しいsplit-mode APIに置き換わり、旧APIが
+`InteractiveSegmenterLegacy` に改名されたことです。Minamoはいずれも使用しません。
 
-- トラッカーはパッケージの `exports["."]` / `module` フィールド（現在は
-  `vision_bundle.mjs`）経由で ESM バンドルを import します。1.0 でバンドル名や
-  構成、条件付き/サブパス exports が変わる可能性があります。
-- トラッカーが生成する 4 つのタスククラスは export され続ける必要があります:
-  `FilesetResolver`、`FaceLandmarker`、`HandLandmarker`、`PoseLandmarker`。
+## 1.0.1を止める理由
 
-### 2. WASM アセットのパス
+1.0.1のESM／CJSブラウザーバンドルは各task用のmetrics loggerを生成し、性能／
+利用状況のprotobuf eventを次へPOSTできます。
 
-- `scripts/fetch-models.sh` は SIMD / 非 SIMD のランタイム対
-  (`wasm/vision_wasm_internal.{js,wasm}`、
-  `wasm/vision_wasm_nosimd_internal.{js,wasm}`) をローカル配信用にミラーします。
-- 1.0 でこれらのファイル名や `wasm/` 配置が変わる、あるいはスレッド版が
-  増減する可能性があります。ファイル名が変わったら `scripts/fetch-models.sh`
-  とカナリアのアセット一覧の両方を更新してください。
+```text
+https://odml.pa.googleapis.com/v1/log
+```
 
-### 3. ブレンドシェイプ / 結果フィールド名
+バンドルには埋め込みAPI key bridgeと`x-goog-api-key`送信headerがあります。
+0.10.35の対応バンドルにはODML senderがありません。MediaPipe公式privacy noticeは、
+入力画像はon-deviceに残る一方、性能／利用状況metricsをGoogleへ送り、必要な
+informed consentはapplication developerの責任だと説明しています。upstream maintainer
+は、opt-outを予定していない一方、宛先hostをblockしてもSDKを使えると回答しています。
 
-- トラッカーは結果フィールドを直接読み取ります (`tracker/tracker.js`):
-  `detectForVideo(...)`、
-  `result.faceBlendshapes[i].categories[].categoryName` と `.score`、
-  `result.facialTransformationMatrixes`。
-- Face Landmarker のブレンドシェイプは 1.0 系でも非推奨ではありませんが、
-  これらの結果フィールドが改名されると表情が無音で 0 になります。カナリアは
-  同梱の `vision.d.ts` を各名称で grep します。
+この挙動は、Minamoのデフォルト「ローカル限定プライバシー」「送信されるのは
+トラッキング値だけ」という契約と両立しません。senderはインストール済み依存package
+内にあるため、first-party raw-frame data-flow検査では見つかりません。したがって、
+build、type、unit test、従来のpackage／API canaryが通っても、PR #358を承認するには
+不十分です。
+
+## 自動ガード
+
+- `package.json` は `0.10.35` に完全固定します。
+- `pnpm check:mediapipe` は、インストール済みpackageのentrypoint／WASM／API面を
+  検査した後、root browser bundleを既知のODML endpoint／sender markerで走査します。
+- 通常のpull-request CIと`scripts/release-smoke.mjs`がこのcommandを実行します。
+  `scripts/verify_structure.py`はcommandの配線とblocked markerの維持も検査します。
+- 週次nightly canaryも同じguardを使うため、version bumpの前にprivacy regressionを
+  報告します。
+
+依存関係更新をgreenにするためにprivacy markerを削除、改名、弱化してはいけません。
+Minamoのtelemetry policy変更には、別のproduct/privacy判断とuser-consent設計が必要です。
+
+## 将来の更新に必要な受け入れチェック
+
+1. 自動third-party metrics senderを含まないupstream browser artifactを入手し、
+   `pnpm check:mediapipe`を変更せずに通します。
+2. bundle、WASM、modelをlocal vendorしたtrackerとpackaged desktopの通信をcaptureし、
+   Face／Hand／Pose taskの開始、利用、停止で未宣言の外向きrequestがないことを確認します。
+3. 実ブラウザーでface blendshape、facial matrix、pose、hands、CPU／非SIMD fallback、
+   GPU／SIMD modeのcamera inferenceを再検証します。
+4. `package.json`、`pnpm-lock.yaml`、`tracker/tracker.js`、
+   `scripts/fetch-models.sh`、`types/browser-js.d.ts`の完全固定versionを同時に更新し、
+   CDN bundle SRIと`scripts/model-pins.sha256`を再生成します。
+5. `pnpm check:mediapipe`、`pnpm test`、`pnpm verify`、
+   `pnpm typecheck:js`、`pnpm build`、full release smokeを実行します。
 
 ## アーキテクチャ上の注意
 
-Holistic Landmarker はweb上ではまだ成熟しておらず、Face / Hand / Pose を
-**分離した**タスクとして扱う構成が 1.0 移行後も引き続き正解です。1.0 バンプの
-一環として Holistic に統合しないでください。
-
-## カナリアが失敗したら
-
-1. ワークフローログの失敗チェック名を読みます。上記ウォッチリストの節に 1:1 で
-   対応します。
-2. ローカルで再現します:
-   `pnpm add -w @mediapipe/tasks-vision@nightly && node scripts/mediapipe-canary-smoke.mjs`。
-3. 必要に応じてトラッカーのアダプタ、`scripts/fetch-models.sh`、カナリアの
-   アセット一覧を調整し、`package.json` の完全固定バージョンを更新します
-   （固定モデルハッシュも再生成 — `scripts/model-pins.sha256` を参照）。
+Face／Hand／Poseは分離taskのままにします。1.0依存関係reviewとHolistic Landmarkerへの
+移行を同じ変更に含めないでください。
 
 ## 参考
 
-- https://www.npmjs.com/package/@mediapipe/tasks-vision
+- [MediaPipe v1.0.0 release notes](https://github.com/google-ai-edge/mediapipe/releases/tag/v1.0.0)
+- [MediaPipe privacy notice](https://github.com/google-ai-edge/mediapipe#privacy-notice)
+- [upstream Web telemetry clarification](https://github.com/google-ai-edge/mediapipe/issues/6306#issuecomment-4673728357)
+- [@mediapipe/tasks-vision package](https://www.npmjs.com/package/@mediapipe/tasks-vision)

@@ -1,10 +1,9 @@
 name: mediapipe-canary
 
-# Early-warning canary for upcoming @mediapipe/tasks-vision releases (#272).
-# The tracker's core feature depends on Face Landmarker blendshapes + the facial
-# transformation matrix; a surprise breaking 1.0 release would take it down. This
-# scheduled job installs the release candidate and checks the packaging surface
-# the tracker relies on, without touching the exact version pinned for builds.
+# Early-warning canary for upcoming @mediapipe/tasks-vision releases (#272,
+# PR #358). The tracker depends on both the Face / Hand / Pose API surface and a
+# telemetry-free local-only runtime. This scheduled job installs the nightly
+# release and checks both contracts without changing the exact production pin.
 
 on:
   schedule:
@@ -14,8 +13,10 @@ on:
   push:
     paths:
       - 'scripts/mediapipe-canary-smoke.mjs'
+      - 'scripts/mediapipe-privacy-guard.mjs'
       - '.github/workflows/mediapipe-canary.yml'
       - 'docs/mediapipe-1.0-migration.md'
+      - 'docs/mediapipe-1.0-migration.ja.md'
 
 permissions:
   contents: read
@@ -36,9 +37,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Canary smoke on the pinned version (sanity)
         run: node scripts/mediapipe-canary-smoke.mjs
-      - name: Install the tasks-vision release candidate
-        # The 1.0.0-rc.* nightlies ship under the `nightly` dist-tag (there is no
-        # `rc` tag). -w targets the pnpm workspace root explicitly.
+      - name: Install the tasks-vision nightly release
+        # Pre-release builds ship under the `nightly` dist-tag. -w targets the
+        # pnpm workspace root explicitly.
         run: pnpm add -w "@mediapipe/tasks-vision@nightly"
-      - name: Canary smoke on the release candidate
+      - name: Canary smoke on the nightly release
         run: node scripts/mediapipe-canary-smoke.mjs

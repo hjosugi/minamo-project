@@ -19,13 +19,19 @@ JavaScriptの依存関係:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm check:mediapipe
 pnpm lint
 pnpm test
 pnpm verify
 pnpm build
 ```
 
-`pnpm verify`は、MediaPipe Tasks Visionのバージョンが`package.json`、`tracker/tracker.js`、および`scripts/fetch-models.sh`の間で一貫していることを確認します。また、固定されたモデルバージョンセグメントを含まないMediaPipeモデルのURLを拒否します。
+`pnpm check:mediapipe` は、依存関係PRを進める前に、インストール済みのブラウザー
+バンドル、WASM配置、API宣言を検査します。既知のODMLテレメトリーendpoint／sender
+マーカーがあれば失敗します。`pnpm verify`は、MediaPipe Tasks Visionのバージョンが
+`package.json`、`tracker/tracker.js`、および`scripts/fetch-models.sh`の間で一貫して
+いることを確認します。また、固定されたモデルバージョンセグメントを含まない
+MediaPipeモデルのURLを拒否します。
 
 Rustの依存関係:
 
@@ -75,6 +81,22 @@ pnpm test
 
 - `three` と `@pixiv/three-vrm` は **常に同時に** 更新し、片方だけを更新しない。three-vrm のノードマテリアルは three の NodeMaterial/TSL API 上に構築されており、これらは three のリリース間で変動するため、片側だけの更新は型エラーもビルドエラーも出さずに MToon 描画を壊しうる (#276)。
 - 現在の固定バージョンは既に WebGPU 経路に対応している: `three@0.185.1` は `build/three.webgpu.js` を同梱し、`@pixiv/three-vrm@3.5.5` は `MToonNodeMaterial` を `./nodes` サブエクスポート (メインエントリではない) から公開している。`WebGPURenderer` のプロトタイプにバージョン更新は不要である。[research/webgpu-renderer-migration.md](research/webgpu-renderer-migration.md) を参照。
+
+### MediaPipeブラウザーのプライバシー境界
+
+- `@mediapipe/tasks-vision` は `0.10.35` に完全固定します。公開済みの `1.0.1` は
+  Minamoが使うFace / Hand / Pose API面を保っていますが、性能／利用状況メトリクスを
+  `https://odml.pa.googleapis.com/v1/log` へ自動送信するsenderを追加しています。
+- `scripts/mediapipe-privacy-guard.mjs` は、そのリリースで確認したODML endpoint、
+  API-key header／bridge、network loggerのマーカーを拒否します。通常CIとrelease smoke
+  の両方がlockfileで実際に解決されたpackageを検査するため、packageだけを更新する
+  Dependabot PRでも回避できません。
+- 依存関係更新と同じ変更でマーカーを削除・弱化してはいけません。将来の更新には、
+  upstreamのテレメトリーなしartifactと、未宣言の外向き通信がないことを示すブラウザー
+  network captureが必要です。同意を伴うメトリクス追加は、依存関係保守ではなく、
+  別のproduct/privacy設計変更として扱います。
+- 根拠と受け入れチェックリストは
+  [mediapipe-1.0-migration.ja.md](mediapipe-1.0-migration.ja.md) を参照してください。
 
 ### ファズハーネス
 

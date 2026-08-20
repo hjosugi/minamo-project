@@ -16,6 +16,7 @@
     "preview": "vite preview",
     "test": "node tests/run-tests.mjs && node scripts/check-tree-duplication.mjs && node scripts/check-privacy-invariants.mjs && vitest run",
     "verify": "python3 scripts/verify_structure.py",
+    "check:mediapipe": "node scripts/mediapipe-canary-smoke.mjs",
     "release:smoke": "node scripts/release-smoke.mjs",
     "typecheck:js": "tsc --noEmit -p tsconfig.browser-js.json",
     "inspect:glb": "node scripts/inspect-glb.mjs",

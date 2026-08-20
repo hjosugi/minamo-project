@@ -2,20 +2,21 @@
 // Canary smoke check for upcoming @mediapipe/tasks-vision releases (#272).
 //
 // tasks-vision is a browser/WASM module that cannot run headlessly, so instead
-// of executing it this asserts the *packaging surface* the tracker depends on
-// still exists after a version bump:
+// of executing it this asserts the packaging and privacy surface the tracker
+// depends on still exists after a version bump:
 //   1. the ESM entrypoint the tracker imports,
 //   2. the WASM asset subpaths / files fetch-models.sh mirrors, and
 //   3. the Face Landmarker API names the tracker reads (blendshapes +
-//      facial transformation matrix) plus the four task classes.
+//      facial transformation matrix) plus the four task classes, and
+//   4. the browser bundles contain no known ODML telemetry endpoint/sender.
 //
-// A breaking 1.0 change to any of these fails the scheduled canary early,
-// pointing at docs/mediapipe-1.0-migration.md. Run against an installed
-// @mediapipe/tasks-vision (the canary CI job installs the @nightly dist-tag,
-// which carries the 1.0.0-rc.* builds).
+// A change to any of these fails the scheduled canary early, pointing at
+// docs/mediapipe-1.0-migration.md. Run against an installed
+// @mediapipe/tasks-vision (the canary CI job installs the @nightly dist-tag).
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { findForbiddenMediaPipeTelemetry } from './mediapipe-privacy-guard.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -59,13 +60,44 @@ for (const symbol of [
   check(types.includes(symbol), `api symbol: ${symbol}`);
 }
 
+// 4) Privacy surface. Starting in the published 1.0 line, MediaPipe browser
+// bundles can automatically POST performance/utilization metrics to Google's
+// ODML logging service. This is incompatible with Minamo's local-only mode.
+// Scan every root vision bundle as well as all conditional root entrypoints so
+// a package.json export reshuffle cannot hide the sender from the check.
+const entryCandidates = new Set();
+const collectEntries = (value) => {
+  if (typeof value === 'string') entryCandidates.add(value.replace(/^\.\//, ''));
+  else if (value && typeof value === 'object') Object.values(value).forEach(collectEntries);
+};
+collectEntries(pkg.main);
+collectEntries(pkg.browser);
+collectEntries(pkg.module);
+collectEntries(pkg.exports?.['.']);
+for (const file of readdirSync(pkgDir)) {
+  if (/^vision_bundle\.(?:mjs|cjs|js)$/.test(file)) entryCandidates.add(file);
+}
+const browserBundles = [...entryCandidates]
+  .filter((file) => /\.(?:mjs|cjs|js)$/.test(file) && existsSync(join(pkgDir, file)))
+  .sort()
+  .map((file) => ({ file, source: readFileSync(join(pkgDir, file), 'utf8') }));
+check(browserBundles.length > 0, 'privacy bundles: resolved browser entry files');
+const telemetryFindings = findForbiddenMediaPipeTelemetry(browserBundles);
+const telemetrySummary = telemetryFindings
+  .map(({ file, marker }) => `${file}:${marker}`)
+  .join(', ');
+check(
+  telemetryFindings.length === 0,
+  `privacy: no ODML telemetry endpoint/sender${telemetrySummary ? ` (${telemetrySummary})` : ''}`,
+);
+
 console.log(`@mediapipe/tasks-vision@${pkg.version} canary smoke:`);
 for (const line of ok) console.log(`  ok    ${line}`);
 for (const line of problems) console.log(`  FAIL  ${line}`);
 
 if (problems.length > 0) {
   console.error(`\n${problems.length} canary check(s) failed for @mediapipe/tasks-vision@${pkg.version}.`);
-  console.error('This likely signals a breaking packaging/API change. Review docs/mediapipe-1.0-migration.md before bumping the pin in package.json.');
+  console.error('This signals a packaging, API, or privacy regression. Review docs/mediapipe-1.0-migration.md before bumping the pin in package.json.');
   process.exit(1);
 }
 

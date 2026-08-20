@@ -25,6 +25,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify MediaPipe packaging, API, and privacy surface
+        run: pnpm check:mediapipe
       - name: Lint source and docs
         run: pnpm lint
       - name: Run unit and structure smoke tests

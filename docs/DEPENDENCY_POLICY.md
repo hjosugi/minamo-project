@@ -23,13 +23,17 @@ JavaScript dependencies:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm check:mediapipe
 pnpm lint
 pnpm test
 pnpm verify
 pnpm build
 ```
 
-`pnpm verify` checks that the MediaPipe Tasks Vision version is consistent
+`pnpm check:mediapipe` inspects the installed browser bundles, WASM layout, and
+API declarations before any dependency PR can proceed. It rejects known ODML
+telemetry endpoint/sender markers. `pnpm verify` checks that the MediaPipe Tasks
+Vision version is consistent
 between `package.json`, `tracker/tracker.js`, and `scripts/fetch-models.sh`.
 It also rejects MediaPipe model URLs that do not include a pinned model version
 segment.
@@ -104,6 +108,23 @@ pnpm test
   `MToonNodeMaterial` from its `./nodes` subexport (not from the main entry).
   No bump is needed to prototype `WebGPURenderer`; see
   [research/webgpu-renderer-migration.md](research/webgpu-renderer-migration.md).
+
+### MediaPipe browser privacy boundary
+
+- `@mediapipe/tasks-vision` stays exactly pinned at `0.10.35`. The published
+  `1.0.1` bundle preserves Minamo's Face / Hand / Pose API surface, but adds an
+  automatic performance/utilization metrics sender to
+  `https://odml.pa.googleapis.com/v1/log`.
+- `scripts/mediapipe-privacy-guard.mjs` blocks the ODML endpoint, API-key
+  header/bridge, and network-logger markers found in that release. The normal
+  CI and release smoke both run the guard against the package actually resolved
+  by the lockfile, so a package-only Dependabot PR cannot bypass it.
+- Do not remove or weaken a marker in the same change as a dependency bump.
+  A future update needs a telemetry-free upstream artifact plus browser network
+  capture showing no undeclared egress. Adding consent-based metrics would be a
+  separate product/privacy design change, not dependency maintenance.
+- See [mediapipe-1.0-migration.md](mediapipe-1.0-migration.md) for the evidence
+  and full acceptance checklist.
 
 ### Fuzz harness
 

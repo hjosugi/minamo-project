@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const checks = [
   ['pnpm', ['install', '--frozen-lockfile', '--prefer-offline']],
+  ['pnpm', ['check:mediapipe']],
   ['pnpm', ['lint']],
   ['pnpm', ['test']],
   ['pnpm', ['verify']],
