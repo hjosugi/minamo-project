@@ -69,6 +69,8 @@ REQUIRED = [
     'shared/drum-overlay.js',
     'shared/situation-presets.js',
     'shared/obs-bridge.js',
+    'shared/math.js',
+    'shared/hand-gestures.js',
     'shared/percussion.js',
     'docs/product/situation-presets.md',
     'docs/product/situation-presets.ja.md',
@@ -628,16 +630,23 @@ def validate_quality_contracts() -> None:
     tracker = read('tracker/tracker.js')
     tracker_html = read('tracker/index.html')
     tests = read('tests/run-tests.mjs')
+    stabilizers = read('shared/stabilizers.js')
 
     for needle in [
-        'export class LandmarkConfidenceTracker',
         'export function estimateLandmarkConfidence',
         'meanLuma',
         'low light',
-        "state: score >= 0.72 ? 'good' : score >= 0.45 ? 'degraded' : 'poor'",
+        'good',
+        'degraded',
+        'poor',
     ]:
         if needle not in runtime:
             add_error('shared/runtime.js', f'missing quality scoring contract: {needle}')
+    for needle in [
+        'export class LandmarkConfidenceTracker',
+    ]:
+        if needle not in stabilizers:
+            add_error('shared/stabilizers.js', f'missing quality scoring contract: {needle}')
     for needle in [
         'qualityChip',
         'sampleLuma()',
@@ -707,15 +716,25 @@ def validate_head_position_contracts() -> None:
     tracker_html = read('tracker/index.html')
     viewer = read('viewer/viewer.js')
     tests = read('tests/run-tests.mjs')
+    stabilizers = read('shared/stabilizers.js')
+    settings = read('shared/settings.js')
 
     for needle in [
-        'headLeanRangeCm: 8',
-        'export class HeadPositionStabilizer',
         'normalizeHeadLeanRangeCm',
-        'recenterHalfLifeMs = 20_000',
     ]:
         if needle not in runtime:
             add_error('shared/runtime.js', f'missing head position runtime contract: {needle}')
+    for needle in [
+        'headLeanRangeCm: 8',
+    ]:
+        if needle not in settings:
+            add_error('shared/settings.js', f'missing head position runtime contract: {needle}')
+    for needle in [
+        'export class HeadPositionStabilizer',
+        'recenterHalfLifeMs = 20_000',
+    ]:
+        if needle not in stabilizers:
+            add_error('shared/stabilizers.js', f'missing head position runtime contract: {needle}')
     for needle in [
         'rngHeadLean',
         'state.headPositionStabilizer.stabilize(pos',
@@ -748,16 +767,21 @@ def validate_blink_wink_contracts() -> None:
     runtime = read('shared/runtime.js')
     tracker = read('tracker/tracker.js')
     tests = read('tests/run-tests.mjs')
+    stabilizers = read('shared/stabilizers.js')
 
+    for needle in [
+        'hysteresisClosed',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing blink/wink runtime contract: {needle}')
     for needle in [
         'export class BlinkWinkStabilizer',
         'openThreshold = 0.38',
         'closeThreshold = 0.62',
         'winkFrames = 3',
-        'hysteresisClosed',
     ]:
-        if needle not in runtime:
-            add_error('shared/runtime.js', f'missing blink/wink runtime contract: {needle}')
+        if needle not in stabilizers:
+            add_error('shared/stabilizers.js', f'missing blink/wink runtime contract: {needle}')
     for needle in [
         'blinkWinkStabilizer: new BlinkWinkStabilizer()',
         'state.blinkWinkStabilizer.filter(state.raw)',
@@ -776,13 +800,18 @@ def validate_blink_wink_contracts() -> None:
 
 def validate_filter_tuning_contracts() -> None:
     runtime = read('shared/runtime.js')
+    # Filter presets moved to shared/settings.js; the jitter metric they are
+    # tuned against is still computed in shared/runtime.js.
+    settings = read('shared/settings.js')
     tracker = read('tracker/tracker.js')
     tracker_html = read('tracker/index.html')
     tests = read('tests/run-tests.mjs')
 
-    for needle in ['responsive', 'balanced', 'smooth', 'estimateOneEuroLagMs', 'rollingJitterMs']:
-        if needle not in runtime:
-            add_error('shared/runtime.js', f'missing filter tuning runtime contract: {needle}')
+    for needle in ['responsive', 'balanced', 'smooth', 'estimateOneEuroLagMs']:
+        if needle not in settings:
+            add_error('shared/settings.js', f'missing filter tuning contract: {needle}')
+    if 'rollingJitterMs' not in runtime:
+        add_error('shared/runtime.js', 'missing filter tuning runtime contract: rollingJitterMs')
     for needle in [
         'selFilterPreset',
         'rngMinCutoff',
@@ -806,15 +835,20 @@ def validate_tracking_loss_contracts() -> None:
     runtime = read('shared/runtime.js')
     tracker = read('tracker/tracker.js')
     tests = read('tests/run-tests.mjs')
+    stabilizers = read('shared/stabilizers.js')
 
+    for needle in [
+        'lost',
+    ]:
+        if needle not in runtime:
+            add_error('shared/runtime.js', f'missing tracking loss runtime contract: {needle}')
     for needle in [
         'export class TrackingLossSmoother',
         'fadeMs = 400',
         'reacquireMs = 250',
-        "phase: 'lost'",
     ]:
-        if needle not in runtime:
-            add_error('shared/runtime.js', f'missing tracking loss runtime contract: {needle}')
+        if needle not in stabilizers:
+            add_error('shared/stabilizers.js', f'missing tracking loss runtime contract: {needle}')
     for needle in [
         'trackingLossSmoother: new TrackingLossSmoother()',
         'state.trackingLossSmoother.update(false',
@@ -878,6 +912,7 @@ def validate_body_hand_contracts() -> None:
     core_tests = read('tests/core.test.ts')
     adapter_tests = read('tests/adapters.test.ts')
     vrm_mapper = read('src/adapters/vrm_mapper.ts')
+    stabilizers = read('shared/stabilizers.js')
 
     for needle in [
         'HAND_INFERENCE_INTERVAL_MS',
@@ -887,10 +922,14 @@ def validate_body_hand_contracts() -> None:
         'buildHandCalibrationProfile',
         'applyHandCalibrationProfile',
         'classifyHandGesture',
-        'export class HandTargetStabilizer',
     ]:
         if needle not in runtime:
             add_error('shared/runtime.js', f'missing hand runtime contract: {needle}')
+    for needle in [
+        'export class HandTargetStabilizer',
+    ]:
+        if needle not in stabilizers:
+            add_error('shared/stabilizers.js', f'missing hand runtime contract: {needle}')
     for needle in [
         'export const HAND_TARGET_BYTES = 16',
         'flags + handedness + confidence + curls + spreads + wrist xyz',
@@ -1211,13 +1250,14 @@ def validate_obs_viewer_contracts() -> None:
 def validate_scene_preset_contracts() -> None:
     viewer = read('viewer/viewer.js')
     viewer_html = read('viewer/index.html')
-    runtime = read('shared/runtime.js')
+    # Viewer defaults live in shared/settings.js since the runtime split.
+    settings = read('shared/settings.js')
     obs_doc = read('docs/product/obs-setup.md')
     readme = read('README.md')
 
     for needle in ['scenePreset', 'backgroundColor', 'bloom', 'vignette']:
-        if needle not in runtime:
-            add_error('shared/runtime.js', f'missing persisted viewer scene setting: {needle}')
+        if needle not in settings:
+            add_error('shared/settings.js', f'missing persisted viewer scene setting: {needle}')
     for needle in [
         'SCENE_PRESETS',
         'soft key',
@@ -1966,7 +2006,7 @@ def validate_latency_quality_hud_contracts() -> None:
 
 def validate_voice_activity_accent_contracts() -> None:
     voice = read('shared/voice-activity.js')
-    runtime = read('shared/runtime.js')
+    settings = read('shared/settings.js')
     tracker = read('tracker/tracker.js')
     tracker_html = read('tracker/index.html')
     tests = read('tests/run-tests.mjs')
@@ -1975,8 +2015,8 @@ def validate_voice_activity_accent_contracts() -> None:
     for needle in ['voiceActivityLevelFromRms', 'applyVoiceActivityAccents', 'headNodAmount = 0.008', 'level <= 0']:
         if needle not in voice:
             add_error('shared/voice-activity.js', f'missing voice activity helper contract: {needle}')
-    if 'voiceAccents: false' not in runtime:
-        add_error('shared/runtime.js', 'voice accents must default off')
+    if 'voiceAccents: false' not in settings:
+        add_error('shared/settings.js', 'voice accents must default off')
     for needle in ['startVoiceAccents', 'stopVoiceAccents', 'sampleVoiceRms', 'applyVoiceActivityAccents(lipsync.weights', 'voiceAccent.headNod', 'getUserMedia({\n      audio:']:
         if needle not in tracker:
             add_error('tracker/tracker.js', f'missing tracker voice accent contract: {needle}')
@@ -1994,7 +2034,7 @@ def validate_voice_activity_accent_contracts() -> None:
 def validate_audio_lipsync_contracts() -> None:
     lipsync = read('shared/audio-lipsync.js')
     worklet = read('tracker/audio-lipsync-worklet.js')
-    runtime = read('shared/runtime.js')
+    settings = read('shared/settings.js')
     tracker = read('tracker/tracker.js')
     tracker_html = read('tracker/index.html')
     tests = read('tests/run-tests.mjs')
@@ -2006,8 +2046,8 @@ def validate_audio_lipsync_contracts() -> None:
     for needle in ['class MinamoAudioLipsyncProcessor extends AudioWorkletProcessor', "registerProcessor('minamo-audio-lipsync'", 'TARGET_POST_INTERVAL_MS = 20', 'this.port.postMessage']:
         if needle not in worklet:
             add_error('tracker/audio-lipsync-worklet.js', f'missing AudioWorklet contract: {needle}')
-    if 'audioLipsync: false' not in runtime:
-        add_error('shared/runtime.js', 'audio lipsync must default off until the mic is opted in')
+    if 'audioLipsync: false' not in settings:
+        add_error('shared/settings.js', 'audio lipsync must default off until the mic is opted in')
     for needle in ['startAudioLipsync', 'attachAudioLipsyncWorklet', "new URL('./audio-lipsync-worklet.js', import.meta.url)", 'fuseAudioLipsyncWeights(state.weights', 'currentAudioLipsyncLatencyMs', 'AUDIO_LIPSYNC_TARGET_LATENCY_MS']:
         if needle not in tracker:
             add_error('tracker/tracker.js', f'missing tracker audio lipsync contract: {needle}')
@@ -2023,7 +2063,9 @@ def validate_audio_lipsync_contracts() -> None:
 
 
 def validate_runtime_warning_taxonomy() -> None:
-    runtime = read('shared/runtime.js')
+    # WARNING_TAXONOMY moved to shared/settings.js with the rest of the settings
+    # vocabulary; shared/runtime.js re-exports it, so importers are unaffected.
+    runtime = read('shared/settings.js')
     required_codes = [
         'INSECURE_CONTEXT',
         'NO_CAMERA_API',
@@ -2041,7 +2083,7 @@ def validate_runtime_warning_taxonomy() -> None:
     ]
     for code in required_codes:
         if f"'{code}'" not in runtime and f'"{code}"' not in runtime:
-            add_error('shared/runtime.js', f'WARNING_TAXONOMY missing public code {code}')
+            add_error('shared/settings.js', f'WARNING_TAXONOMY missing public code {code}')
 
 
 def validate_compression_docs() -> None:
@@ -2143,9 +2185,30 @@ def validate_drum_docs() -> None:
         add_error('tests/fixtures/drum-benchmark-runner.manifest.json', 'runner fixture manifest is invalid')
 
 
+def validate_runtime_module_split() -> None:
+    """shared/runtime.js is a barrel; the helpers live in focused modules (#255)."""
+    runtime = read('shared/runtime.js')
+    for module in ['math.js', 'settings.js', 'hand-gestures.js', 'stabilizers.js', 'drum-kit.js']:
+        if f"from './{module}'" not in runtime:
+            add_error('shared/runtime.js', f'runtime barrel must re-export ./{module}')
+    # The layering is what keeps the split honest: a module below runtime.js
+    # must not import it back, or the barrel and its parts form a cycle.
+    for module in ['math.js', 'settings.js', 'hand-gestures.js', 'stabilizers.js', 'drum-kit.js']:
+        source = read(f'shared/{module}')
+        if "from './runtime.js'" in source:
+            add_error(f'shared/{module}', 'must not import shared/runtime.js — that closes a cycle through the barrel')
+    # math.js is the foundation and imports nothing, so everything else can use it.
+    if 'import ' in read('shared/math.js'):
+        add_error('shared/math.js', 'the foundation module must not import anything')
+    if 'shared/runtime.js public surface changed' not in read('tests/run-tests.mjs'):
+        add_error('tests/run-tests.mjs', 'the runtime barrel surface must stay locked by a test')
+
+
 def validate_percussion_contracts() -> None:
     percussion = read('shared/percussion.js')
-    runtime = read('shared/runtime.js')
+    # Zone activation moved to shared/drum-kit.js with the rest of the kit
+    # calibration; shared/runtime.js re-exports it.
+    runtime = read('shared/drum-kit.js')
     tracker = read('tracker/tracker.js')
     tracker_html = read('tracker/index.html')
     tests = read('tests/run-tests.mjs')
@@ -2155,11 +2218,11 @@ def validate_percussion_contracts() -> None:
     # so a hardcoded drumGrip check made cajons and congas untrackable.
     if re.search(r'active:\s*Boolean\(inZone && gesture\.drumGrip\)', runtime):
         add_error(
-            'shared/runtime.js',
+            'shared/drum-kit.js',
             'zone activation must use the kit strike style, not a hardcoded drumGrip — that makes hand percussion untrackable',
         )
     if 'strikeMatches(kit.kit, gesture)' not in runtime:
-        add_error('shared/runtime.js', 'zone activation must resolve the strike style from the configured kit')
+        add_error('shared/drum-kit.js', 'zone activation must resolve the strike style from the configured kit')
     for kit_id in ['drum-kit', 'cajon', 'congas', 'bongos', 'hand-percussion', 'hybrid']:
         if f"id: '{kit_id}'" not in percussion:
             add_error('shared/percussion.js', f'missing percussion kit: {kit_id}')
@@ -2414,6 +2477,7 @@ validate_audio_lipsync_contracts()
 validate_runtime_warning_taxonomy()
 validate_compression_docs()
 validate_drum_docs()
+validate_runtime_module_split()
 validate_percussion_contracts()
 validate_situation_contracts()
 validate_secure_phone_transport()

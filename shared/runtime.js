@@ -4,53 +4,81 @@
 
 import { ARKIT_52, CHANNEL_INDEX, MIRROR_INDEX, NUM_CHANNELS, NUM_POSE_POINTS } from './blendshapes.js';
 import {
+  average,
+  averagePoint,
+  clamp,
+  clampOptionalNumber,
+  distance2d,
+  finitePoint,
+  hysteresisClosed,
+  percentile,
+  performanceNow,
+} from './math.js';
+import {
   DEFAULT_PERCUSSION_KIT_ID,
   getPercussionKit,
   isPercussionKitId,
   strikeMatches,
 } from './percussion.js';
+import { HAND_FINGER_NAMES, classifyHandGesture } from './hand-gestures.js';
+import {
+  DEFAULT_TRACKER_SETTINGS,
+  MAX_MOTION_JSONL_FRAMES,
+  MOTION_JSONL_SCHEMA,
+  WARNING_TAXONOMY,
+  normalizeHeadLeanRangeCm,
+} from './settings.js';
 
-export const WARNING_TAXONOMY = Object.freeze({
-  insecureContext: 'INSECURE_CONTEXT',
-  noCameraApi: 'NO_CAMERA_API',
-  cameraDenied: 'CAMERA_PERMISSION_DENIED',
-  noCamera: 'NO_CAMERA_DEVICE',
-  noWebgl2: 'NO_WEBGL2',
-  noWebtransport: 'NO_WEBTRANSPORT',
-  lowLight: 'LOW_LIGHT',
-  motionBlur: 'MOTION_BLUR',
-  droppedFrames: 'DROPPED_FRAMES',
-  occlusion: 'OCCLUSION',
-  outlier: 'TEMPORAL_OUTLIER',
-  nonFinite: 'NON_FINITE_SIGNAL',
-  clamped: 'SIGNAL_CLAMPED',
-});
+// clamp stays on this module's surface: it was exported from here long before
+// the split, and the tracker, viewer, tests and the typed core all import it
+// from this path.
+export { clamp } from './math.js';
+// Hand gestures live in their own module now, below both the hand calibration
+// helpers and the drum kit, which each need to ask what a hand is doing.
+// Re-exported because the tracker, viewer and tests import them from this path.
+export { HAND_FINGER_NAMES, classifyHandGesture, handTargetDebugRows } from './hand-gestures.js';
+// Settings, defaults and storage keys moved together into ./settings.js.
+export {
+  WARNING_TAXONOMY,
+  FILTER_PRESETS,
+  SMOOTHING_GROUPS,
+  DEFAULT_SMOOTHING_SETTINGS,
+  DEFAULT_TRACKER_SETTINGS,
+  DEFAULT_VIEWER_SETTINGS,
+  RESOLUTION_CONSTRAINTS,
+  TRACKER_STORAGE_KEY,
+  VIEWER_STORAGE_KEY,
+  PROFILE_STORAGE_KEY,
+  HAND_PROFILE_STORAGE_KEY,
+  MOTION_JSONL_SCHEMA,
+  MAX_MOTION_JSONL_FRAMES,
+  normalizeHeadLeanRangeCm,
+  estimateOneEuroLagMs,
+  loadJson,
+  saveJson,
+} from './settings.js';
+// Stabilizers moved to ./stabilizers.js. Re-exported: the tracker, the viewer
+// and the tests have always constructed them from this path.
+export {
+  BlinkWinkStabilizer,
+  HandTargetStabilizer,
+  HeadPositionStabilizer,
+  LandmarkConfidenceTracker,
+  TrackingLossSmoother,
+} from './stabilizers.js';
+// Drum kit calibration moved to ./drum-kit.js, beside the percussion catalogue.
+export {
+  DRUM_KIT_STORAGE_KEY,
+  DRUM_KIT_SCHEMA,
+  DRUM_ZONE_DEFS,
+  createDefaultDrumKitConfig,
+  normalizeDrumKitConfig,
+  drumKitCalibrationSummary,
+  handWristToDrumStage,
+  deriveDrumOverlayState,
+} from './drum-kit.js';
 
-export const FILTER_PRESETS = Object.freeze({
-  responsive: Object.freeze({ minCutoff: 2.4, beta: 0.75, dCutoff: 1.0 }),
-  balanced: Object.freeze({ minCutoff: 1.6, beta: 0.4, dCutoff: 1.0 }),
-  smooth: Object.freeze({ minCutoff: 0.9, beta: 0.18, dCutoff: 1.0 }),
-});
-
-export const SMOOTHING_GROUPS = Object.freeze({
-  face: 'Face weights',
-  headRotation: 'Head rotation',
-  headPosition: 'Head position',
-  pose: 'Upper-body pose',
-  hands: 'Hands',
-});
-
-export const DEFAULT_SMOOTHING_SETTINGS = Object.freeze({
-  face: Object.freeze({ filterPreset: 'balanced', minCutoff: FILTER_PRESETS.balanced.minCutoff, beta: FILTER_PRESETS.balanced.beta }),
-  headRotation: Object.freeze({ filterPreset: 'balanced', minCutoff: 1.2, beta: 0.8 }),
-  headPosition: Object.freeze({ filterPreset: 'smooth', minCutoff: 1.0, beta: 0.3 }),
-  pose: Object.freeze({ filterPreset: 'smooth', minCutoff: 0.8, beta: 0.2 }),
-  hands: Object.freeze({ filterPreset: 'balanced', minCutoff: 1.8, beta: 0.5 }),
-});
-
-export const HAND_FINGER_NAMES = Object.freeze(['thumb', 'index', 'middle', 'ring', 'pinky']);
 export const HAND_INFERENCE_INTERVAL_MS = 1000 / 30;
-export const HAND_PROFILE_STORAGE_KEY = 'minamo.hand.profile.v1';
 export const HAND_CALIBRATION_STEPS = Object.freeze([
   Object.freeze({ id: 'open', label: 'Open palm', kind: 'open', durationMs: 2500 }),
   Object.freeze({ id: 'fist', label: 'Make a fist', kind: 'fist', durationMs: 2500 }),
@@ -58,76 +86,6 @@ export const HAND_CALIBRATION_STEPS = Object.freeze([
   Object.freeze({ id: 'drum-grip', label: 'Drum grip', kind: 'range', durationMs: 2500 }),
 ]);
 export const HAND_CALIBRATION_TOTAL_MS = HAND_CALIBRATION_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
-export const DRUM_KIT_STORAGE_KEY = 'minamo.drum-kit.calibration.v1';
-export const DRUM_KIT_SCHEMA = 'minamo.drum-kit-calibration.v1';
-// The five-piece stick kit, kept as its own export because it is the default and
-// several call sites name it directly. The full catalogue — cajon, congas,
-// bongos, hand percussion, hybrid — lives in shared/percussion.js.
-export const DRUM_ZONE_DEFS = getPercussionKit(DEFAULT_PERCUSSION_KIT_ID).zones;
-
-export const DEFAULT_TRACKER_SETTINGS = Object.freeze({
-  situation: 'talk',
-  mode: 'local',
-  room: 'demo',
-  participantId: '',
-  token: '',
-  wsUrl: '',
-  wtUrl: 'https://localhost:4433',
-  wtHash: '',
-  mirror: true,
-  pose: false,
-  hands: false,
-  voiceAccents: false,
-  audioLipsync: false,
-  faceLock: false,
-  drummerMode: false,
-  cameraId: '',
-  cameraFacing: 'user',
-  resolution: '720p',
-  fps: '60',
-  headLeanRangeCm: 8,
-  bodyMode: 'seated',
-  filterPreset: 'balanced',
-  minCutoff: FILTER_PRESETS.balanced.minCutoff,
-  beta: FILTER_PRESETS.balanced.beta,
-  smoothingGroup: 'face',
-  smoothing: DEFAULT_SMOOTHING_SETTINGS,
-  privacyLocalOnly: true,
-  // OBS control endpoint. The password is deliberately absent: it is read from
-  // the field when connecting and never persisted, the same rule the relay room
-  // token follows.
-  obsUrl: 'ws://127.0.0.1:4455',
-  obsAutoScene: false,
-});
-
-export const DEFAULT_VIEWER_SETTINGS = Object.freeze({
-  situation: 'talk',
-  mode: 'local',
-  room: 'demo',
-  token: '',
-  wsUrl: '',
-  wtUrl: 'https://localhost:4433',
-  wtHash: '',
-  transparent: false,
-  armSolver: true,
-  drumOverlay: false,
-  scenePreset: 'soft',
-  backgroundColor: '#0f1220',
-  bloom: false,
-  vignette: false,
-});
-
-export const RESOLUTION_CONSTRAINTS = Object.freeze({
-  '480p': Object.freeze({ width: 854, height: 480 }),
-  '720p': Object.freeze({ width: 1280, height: 720 }),
-  '1080p': Object.freeze({ width: 1920, height: 1080 }),
-});
-
-export const TRACKER_STORAGE_KEY = 'minamo.tracker.settings.v2';
-export const VIEWER_STORAGE_KEY = 'minamo.viewer.settings.v2';
-export const PROFILE_STORAGE_KEY = 'minamo.calibration.profile.v1';
-export const MOTION_JSONL_SCHEMA = 'minamo.kgm1.motion-jsonl.v1';
-export const MAX_MOTION_JSONL_FRAMES = 36_000;
 export const CALIBRATION_GUIDE_STEPS = Object.freeze([
   Object.freeze({ id: 'neutral', label: 'Neutral hold', kind: 'neutral', durationMs: 3000 }),
   Object.freeze({ id: 'jaw-open', label: 'Mouth open', kind: 'range', durationMs: 4500 }),
@@ -146,11 +104,6 @@ export const GAZE_CALIBRATION_STEPS = Object.freeze([
   Object.freeze({ id: 'down', label: 'Look down', target: Object.freeze({ x: 0, y: -0.8 }), durationMs: 2000 }),
 ]);
 export const GAZE_CALIBRATION_TOTAL_MS = GAZE_CALIBRATION_STEPS.reduce((sum, step) => sum + step.durationMs, 0);
-
-export function clamp(value, min = 0, max = 1) {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, value));
-}
 
 export function isSeqNewer(seq, current) {
   if (current === null || current === undefined) return true;
@@ -246,232 +199,6 @@ export class DroppedFrameDetector {
   }
 }
 
-export function estimateOneEuroLagMs(minCutoff = FILTER_PRESETS.balanced.minCutoff) {
-  const cutoff = Math.max(0.001, Number(minCutoff) || FILTER_PRESETS.balanced.minCutoff);
-  return 1000 / (2 * Math.PI * cutoff);
-}
-
-export class LandmarkConfidenceTracker {
-  constructor(windowMs = 2500) {
-    this.windowMs = windowMs;
-    this.samples = [];
-  }
-
-  sample(confidence, nowMs = performanceNow()) {
-    this.samples.push({ confidence: clamp(confidence), timeMs: nowMs });
-    this.prune(nowMs);
-    return this.quality();
-  }
-
-  prune(nowMs = performanceNow()) {
-    const cutoff = nowMs - this.windowMs;
-    while (this.samples.length && this.samples[0].timeMs < cutoff) this.samples.shift();
-  }
-
-  quality() {
-    if (!this.samples.length) return 0;
-    const values = this.samples.map((sample) => sample.confidence);
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
-    const stability = 1 - clamp(Math.sqrt(variance) / 0.75);
-    return clamp(mean * (0.65 + stability * 0.35));
-  }
-}
-
-export class HeadPositionStabilizer {
-  constructor({ recenterHalfLifeMs = 20_000, maxPlanarDriftM = 0.12 } = {}) {
-    this.recenterHalfLifeMs = recenterHalfLifeMs;
-    this.maxPlanarDriftM = maxPlanarDriftM;
-    this.center = null;
-    this.lastTimeMs = null;
-  }
-
-  reset() {
-    this.center = null;
-    this.lastTimeMs = null;
-  }
-
-  stabilize(pos = [0, 0, 0.4], nowMs = performanceNow(), { leanRangeCm = DEFAULT_TRACKER_SETTINGS.headLeanRangeCm } = {}) {
-    const raw = [
-      Number(pos[0] || 0),
-      Number(pos[1] || 0),
-      Number(pos[2] ?? 0.4),
-    ];
-    if (!this.center) {
-      this.center = raw.slice();
-      this.lastTimeMs = nowMs;
-    }
-    const dt = Math.max(0, nowMs - (this.lastTimeMs ?? nowMs));
-    this.lastTimeMs = nowMs;
-    const alpha = 1 - Math.exp(-dt / (this.recenterHalfLifeMs / Math.LN2));
-    for (let i = 0; i < 3; i++) this.center[i] += (raw[i] - this.center[i]) * alpha;
-
-    const leanRangeM = normalizeHeadLeanRangeCm(leanRangeCm) / 100;
-    return [
-      clamp(raw[0] - this.center[0], -this.maxPlanarDriftM, this.maxPlanarDriftM),
-      clamp(raw[1] - this.center[1], -this.maxPlanarDriftM, this.maxPlanarDriftM),
-      0.4 + clamp(raw[2] - this.center[2], -leanRangeM, leanRangeM),
-    ];
-  }
-}
-
-export class BlinkWinkStabilizer {
-  constructor({ openThreshold = 0.38, closeThreshold = 0.62, winkMargin = 0.22, winkFrames = 3 } = {}) {
-    this.openThreshold = openThreshold;
-    this.closeThreshold = closeThreshold;
-    this.winkMargin = winkMargin;
-    this.winkFrames = winkFrames;
-    this.leftClosed = false;
-    this.rightClosed = false;
-    this.winkSide = null;
-    this.winkCount = 0;
-  }
-
-  reset() {
-    this.leftClosed = false;
-    this.rightClosed = false;
-    this.winkSide = null;
-    this.winkCount = 0;
-  }
-
-  filter(weights) {
-    const out = new Float32Array(weights);
-    const left = clamp(out[CHANNEL_INDEX.eyeBlinkLeft]);
-    const right = clamp(out[CHANNEL_INDEX.eyeBlinkRight]);
-    this.leftClosed = hysteresisClosed(left, this.leftClosed, this.openThreshold, this.closeThreshold);
-    this.rightClosed = hysteresisClosed(right, this.rightClosed, this.openThreshold, this.closeThreshold);
-
-    const candidate = left - right > this.winkMargin && left >= this.closeThreshold && right < this.closeThreshold
-      ? 'left'
-      : right - left > this.winkMargin && right >= this.closeThreshold && left < this.closeThreshold
-        ? 'right'
-        : null;
-    if (candidate && candidate === this.winkSide) this.winkCount++;
-    else {
-      this.winkSide = candidate;
-      this.winkCount = candidate ? 1 : 0;
-    }
-
-    if (this.winkSide === 'left' && this.winkCount >= this.winkFrames) {
-      out[CHANNEL_INDEX.eyeBlinkLeft] = 1;
-      out[CHANNEL_INDEX.eyeBlinkRight] = 0;
-      return out;
-    }
-    if (this.winkSide === 'right' && this.winkCount >= this.winkFrames) {
-      out[CHANNEL_INDEX.eyeBlinkLeft] = 0;
-      out[CHANNEL_INDEX.eyeBlinkRight] = 1;
-      return out;
-    }
-
-    if (this.leftClosed && this.rightClosed) {
-      const symmetric = Math.max(left, right, this.closeThreshold);
-      out[CHANNEL_INDEX.eyeBlinkLeft] = symmetric;
-      out[CHANNEL_INDEX.eyeBlinkRight] = symmetric;
-      return out;
-    }
-
-    out[CHANNEL_INDEX.eyeBlinkLeft] = this.leftClosed ? Math.max(left, this.closeThreshold) : Math.min(left, this.openThreshold);
-    out[CHANNEL_INDEX.eyeBlinkRight] = this.rightClosed ? Math.max(right, this.closeThreshold) : Math.min(right, this.openThreshold);
-    return out;
-  }
-}
-
-export class TrackingLossSmoother {
-  constructor({ fadeMs = 400, reacquireMs = 250, channels = NUM_CHANNELS } = {}) {
-    this.fadeMs = fadeMs;
-    this.reacquireMs = reacquireMs;
-    this.channels = channels;
-    this.lastWeights = new Float32Array(channels);
-    this.lossFrom = new Float32Array(channels);
-    this.lostAt = null;
-    this.reacquireAt = null;
-  }
-
-  reset() {
-    this.lastWeights.fill(0);
-    this.lossFrom.fill(0);
-    this.lostAt = null;
-    this.reacquireAt = null;
-  }
-
-  update(hasFace, weights = this.lastWeights, nowMs = performanceNow()) {
-    const input = new Float32Array(weights);
-    const out = new Float32Array(this.channels);
-    let reacquired = false;
-    if (hasFace) {
-      if (this.lostAt !== null) {
-        this.reacquireAt = nowMs;
-        this.lostAt = null;
-        reacquired = true;
-      }
-      const t = this.reacquireAt === null ? 1 : clamp((nowMs - this.reacquireAt) / this.reacquireMs);
-      for (let i = 0; i < this.channels; i++) out[i] = this.lastWeights[i] * (1 - t) + input[i] * t;
-      if (t >= 1) this.reacquireAt = null;
-      this.lastWeights.set(out);
-      return { weights: out, active: true, reacquired, phase: reacquired ? 'reacquire' : 'tracking' };
-    }
-
-    if (this.lostAt === null) {
-      this.lostAt = nowMs;
-      this.lossFrom.set(this.lastWeights);
-    }
-    const t = clamp((nowMs - this.lostAt) / this.fadeMs);
-    for (let i = 0; i < this.channels; i++) out[i] = this.lossFrom[i] * (1 - t);
-    this.lastWeights.set(out);
-    return { weights: out, active: t < 1, reacquired: false, phase: 'lost' };
-  }
-}
-
-export class HandTargetStabilizer {
-  constructor({ holdMs = 250, maxCurlDelta = 0.24, maxSpreadDelta = 0.36 } = {}) {
-    this.holdMs = holdMs;
-    this.maxCurlDelta = maxCurlDelta;
-    this.maxSpreadDelta = maxSpreadDelta;
-    this.previous = new Map();
-    this.lastSeenMs = null;
-  }
-
-  reset() {
-    this.previous.clear();
-    this.lastSeenMs = null;
-  }
-
-  update(targets = [], nowMs = performanceNow()) {
-    const warnings = [];
-    if (targets.length) {
-      this.lastSeenMs = nowMs;
-      const next = targets.slice(0, 2).map((target) => {
-        const previous = this.previous.get(target.handedness);
-        const stabilized = stabilizeHandTarget(target, previous, this.maxCurlDelta, this.maxSpreadDelta, warnings);
-        this.previous.set(stabilized.handedness, stabilized);
-        return stabilized;
-      });
-      for (const key of Array.from(this.previous.keys())) {
-        if (!next.some((target) => target.handedness === key)) this.previous.delete(key);
-      }
-      return { targets: next, active: true, warnings };
-    }
-
-    if (this.lastSeenMs !== null && nowMs - this.lastSeenMs <= this.holdMs && this.previous.size) {
-      const age = nowMs - this.lastSeenMs;
-      const confidenceScale = clamp(1 - age / this.holdMs);
-      warnings.push('HAND_RECOVERY_HOLD');
-      return {
-        targets: Array.from(this.previous.values()).map((target) => ({
-          ...target,
-          confidence: clamp((target.confidence ?? 1) * confidenceScale),
-          flags: (target.flags || 0) | 0x02,
-        })),
-        active: true,
-        warnings,
-      };
-    }
-
-    this.previous.clear();
-    return { targets: [], active: false, warnings };
-  }
-}
-
 export function createHandCalibrationProfile(name = 'default') {
   return {
     schema: 'minamo.hand-calibration.v1',
@@ -561,150 +288,6 @@ export function applyHandCalibrationProfile(targets = [], profile = createHandCa
     next.gesture = classifyHandGesture(next);
     return next;
   });
-}
-
-export function classifyHandGesture(target = {}) {
-  const curls = HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.curls?.[i] || 0)));
-  const extended = curls.map((curl) => curl < 0.35);
-  const curled = curls.map((curl) => curl > 0.65);
-  const fingerCount = extended.filter(Boolean).length;
-  const point = extended[1] && curled[2] && curled[3] && curled[4];
-  const peace = extended[1] && extended[2] && curled[3] && curled[4];
-  const openPalm = fingerCount >= 4;
-  const fist = curled.filter(Boolean).length >= 4;
-  const drumGrip = curls[1] > 0.35 && curls[1] < 0.82
-    && curls[2] > 0.42 && curls[2] < 0.92
-    && curls[3] > 0.42 && curls[3] < 0.95
-    && curls[0] < 0.75;
-  return {
-    fingerCount,
-    openPalm,
-    fist,
-    point,
-    peace,
-    drumGrip,
-    label: point ? 'point' : peace ? 'peace' : drumGrip ? 'drum grip' : openPalm ? 'open' : fist ? 'fist' : `${fingerCount}`,
-  };
-}
-
-export function handTargetDebugRows(targets = []) {
-  return targets.flatMap((target) => {
-    const gesture = target.gesture || classifyHandGesture(target);
-    return HAND_FINGER_NAMES.map((name, i) => ({
-      handedness: target.handedness,
-      finger: name,
-      curl: clamp(Number(target.curls?.[i] || 0)),
-      spread: clamp(Number(target.spreads?.[i] || 0), -1.5, 1.5),
-      confidence: clamp(Number(target.confidence ?? 1)),
-      gesture: gesture.label,
-      recovered: Boolean((target.flags || 0) & 0x02),
-    }));
-  });
-}
-
-/**
- * @param {string} [name]
- * @param {string} [kitId] percussion kit id; defaults to the five-piece stick kit
- */
-export function createDefaultDrumKitConfig(name = 'default', kitId = DEFAULT_PERCUSSION_KIT_ID) {
-  const kit = getPercussionKit(kitId);
-  return {
-    schema: DRUM_KIT_SCHEMA,
-    name,
-    kit: kit.id,
-    createdAt: new Date().toISOString(),
-    zones: kit.zones.map((zone) => ({
-      id: zone.id,
-      label: zone.label,
-      type: zone.type,
-      x: zone.x,
-      y: zone.y,
-      radius: zone.radius,
-      calibrated: false,
-    })),
-  };
-}
-
-export function normalizeDrumKitConfig(config) {
-  // The kit decides the zone set, so it has to be resolved before the base is
-  // built — otherwise a stored cajon config comes back with drum-kit zones.
-  const kitId = isPercussionKitId(config?.kit) ? config.kit : DEFAULT_PERCUSSION_KIT_ID;
-  const base = /** @type {any} */ (createDefaultDrumKitConfig(config?.name || 'default', kitId));
-  if (!config || typeof config !== 'object' || (config.schema && config.schema !== DRUM_KIT_SCHEMA)) return base;
-  base.createdAt = typeof config.createdAt === 'string' ? config.createdAt : base.createdAt;
-  const incoming = new Map(Array.isArray(config.zones) ? config.zones.map((zone) => [String(zone.id || ''), zone]) : []);
-  base.zones = base.zones.map((zone) => {
-    const raw = incoming.get(zone.id) || {};
-    return {
-      ...zone,
-      x: clamp(Number(raw.x ?? zone.x), 0, 1),
-      y: clamp(Number(raw.y ?? zone.y), 0, 1),
-      radius: clamp(Number(raw.radius ?? zone.radius), 0.03, 0.18),
-      calibrated: Boolean(raw.calibrated),
-    };
-  });
-  return base;
-}
-
-export function drumKitCalibrationSummary(config) {
-  const kit = normalizeDrumKitConfig(config);
-  const missing = kit.zones.filter((zone) => !zone.calibrated).map((zone) => zone.id);
-  return {
-    total: kit.zones.length,
-    calibrated: kit.zones.length - missing.length,
-    ready: missing.length === 0,
-    missing,
-  };
-}
-
-export function handWristToDrumStage(hand = {}) {
-  const wrist = hand.wrist || [0, 0, 0];
-  return {
-    x: clamp(0.5 + Number(wrist[0] || 0), 0, 1),
-    y: clamp(0.5 - Number(wrist[1] || 0), 0, 1),
-  };
-}
-
-export function deriveDrumOverlayState(hands = [], config = createDefaultDrumKitConfig()) {
-  const kit = normalizeDrumKitConfig(config);
-  const zones = kit.zones.filter((zone) => zone.calibrated);
-  const handStates = hands.map((hand) => {
-    const point = handWristToDrumStage(hand);
-    const gesture = hand.gesture || classifyHandGesture(hand);
-    const nearest = zones
-      .map((zone) => ({
-        zone,
-        distance: Math.hypot(point.x - zone.x, point.y - zone.y),
-      }))
-      .sort((a, b) => a.distance - b.distance)[0];
-    const inZone = nearest && nearest.distance <= nearest.zone.radius * 1.35;
-    return {
-      handedness: hand.handedness || 'Right',
-      confidence: clamp(Number(hand.confidence ?? 1)),
-      point,
-      gesture,
-      zoneId: inZone ? nearest.zone.id : null,
-      zoneType: inZone ? nearest.zone.type : null,
-      // Per hand, and per kit. This used to be a bare `gesture.drumGrip`, which
-      // silently made hand percussion untrackable: a slap is an open palm, and
-      // open palm and stick grip are mutually exclusive by finger curl, so a
-      // cajon player's hand could sit in a calibrated zone and never register.
-      // Evaluating per hand is also what lets a stick and a bare hand work at
-      // once on a hybrid rig.
-      active: Boolean(inZone && strikeMatches(kit.kit, gesture)),
-    };
-  });
-  return {
-    kit: kit.kit,
-    zones: kit.zones,
-    hands: handStates,
-    activeZoneIds: [...new Set(handStates.filter((hand) => hand.active && hand.zoneId).map((hand) => hand.zoneId))],
-    summary: drumKitCalibrationSummary(kit),
-  };
-}
-
-export function normalizeHeadLeanRangeCm(value) {
-  return Math.round(clamp(Number(value ?? DEFAULT_TRACKER_SETTINGS.headLeanRangeCm), 0, 20) * 10) / 10;
 }
 
 export function selectTrackedFace(landmarkSets = [], { previousBox = null, lock = null } = {}) {
@@ -1337,11 +920,6 @@ function normalizeHand(hand) {
   };
 }
 
-function clampOptionalNumber(value, fallback, min = 0, max = 1) {
-  const n = Number(value);
-  return Number.isFinite(n) ? clamp(n, min, max) : fallback;
-}
-
 function normalizeHandArray(values, fallback, min, max) {
   const out = Array(HAND_FINGER_NAMES.length).fill(fallback);
   if (!Array.isArray(values)) return out;
@@ -1357,47 +935,6 @@ function handTargetSample(target) {
   };
 }
 
-function stabilizeHandTarget(target, previous, maxCurlDelta, maxSpreadDelta, warnings) {
-  const next = {
-    ...target,
-    curls: HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.curls?.[i] || 0))),
-    spreads: HAND_FINGER_NAMES.map((_, i) => clamp(Number(target.spreads?.[i] || 0), -1.5, 1.5)),
-    wrist: Array.isArray(target.wrist) ? target.wrist.slice(0, 3).map((v) => clampOptionalNumber(v, 0, -1, 1)) : [0, 0, 0],
-  };
-  if (previous) {
-    for (let i = 0; i < HAND_FINGER_NAMES.length; i++) {
-      const curl = limitDelta(next.curls[i], previous.curls?.[i] ?? next.curls[i], maxCurlDelta);
-      const spread = limitDelta(next.spreads[i], previous.spreads?.[i] ?? next.spreads[i], maxSpreadDelta);
-      if (curl !== next.curls[i]) warnings.push(`HAND_CURL_CLAMPED:${next.handedness}:${HAND_FINGER_NAMES[i]}`);
-      if (spread !== next.spreads[i]) warnings.push(`HAND_SPREAD_CLAMPED:${next.handedness}:${HAND_FINGER_NAMES[i]}`);
-      next.curls[i] = curl;
-      next.spreads[i] = spread;
-    }
-  }
-  next.gesture = classifyHandGesture(next);
-  return next;
-}
-
-function limitDelta(value, previous, maxDelta) {
-  return previous + clamp(value - previous, -maxDelta, maxDelta);
-}
-
-export function loadJson(storage, key, fallback) {
-  try {
-    return { ...fallback, ...JSON.parse(storage.getItem(key) || '{}') };
-  } catch {
-    return { ...fallback };
-  }
-}
-
-export function saveJson(storage, key, value) {
-  storage.setItem(key, JSON.stringify(value));
-}
-
-function performanceNow() {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now();
-}
-
 function defaultProfileValue(key) {
   if (key === 'gains') return 1;
   if (key === 'muted') return false;
@@ -1408,17 +945,6 @@ function channelValues(samples, channel) {
   return samples
     .map((sample) => clamp(Number(sample?.[channel] || 0)))
     .filter((value) => Number.isFinite(value));
-}
-
-function percentile(values, q) {
-  if (!values.length) return 0;
-  const sorted = values.slice().sort((a, b) => a - b);
-  const pos = (sorted.length - 1) * q;
-  const lower = Math.floor(pos);
-  const upper = Math.ceil(pos);
-  if (lower === upper) return sorted[lower];
-  const weight = pos - lower;
-  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
 function estimateEyeIrisGaze(landmarks, { iris, outer, inner, top, bottom }) {
@@ -1468,32 +994,6 @@ function calibrationScale(samples, center, axis) {
     .filter((value) => Number.isFinite(value));
   if (!ratios.length) return 1;
   return clamp(percentile(ratios, 0.5), 0.25, 4);
-}
-
-function average(values) {
-  if (!values.length) return 0;
-  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
-}
-
-function averagePoint(points) {
-  return {
-    x: average(points.map((point) => point.x)),
-    y: average(points.map((point) => point.y)),
-  };
-}
-
-function finitePoint(point) {
-  return Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y));
-}
-
-function distance2d(a, b) {
-  return Math.hypot(Number(a.x) - Number(b.x), Number(a.y) - Number(b.y));
-}
-
-function hysteresisClosed(value, previous, openThreshold, closeThreshold) {
-  if (value >= closeThreshold) return true;
-  if (value <= openThreshold) return false;
-  return previous;
 }
 
 function landmarkBounds(landmarks = []) {
