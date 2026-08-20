@@ -45,6 +45,16 @@ Tracker exports use `minamo.dataset.tracker-sample.v1` NDJSON. Each line contain
 
 The export is designed for browser-side model research and can be consumed by scripts that build YOLO or classifier training sets. Raw-frame datasets must live in a separate opt-in pipeline with explicit review.
 
+This capture envelope is not the geometric YOLO annotation schema. A value such
+as `label: "drum-hit"` records why the sample was captured, but it does not
+identify a reviewed contact point, hand, zone type, or hit timestamp. After
+explicit labeling, use
+`createDrumDatasetAnnotationFromTrackerSample(sample, labels)` from
+`shared/drum-dataset.js` to produce a validated `minamo.drum-dataset.v1`
+annotation while preserving frame identity, license, and local-only consent.
+The bridge never infers geometry from the coarse tracker label. See
+[drum-dataset-schema.md](drum-dataset-schema.md).
+
 ## Baseline evaluation
 
 The first stick detector should be evaluated, not adopted by default, until it beats the current MediaPipe-plus-heuristic path on:

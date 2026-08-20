@@ -13,6 +13,13 @@
 // downstroke" and "is the stick moving fast enough to count as a hit".
 import { clamp, distance, finiteVec3, length } from './math';
 import type { DrumHitEvent, Handedness, HandState, Vec3 } from './types';
+export { createDrumDatasetAnnotation } from '../../shared/drum-dataset.js';
+export type {
+  DrumDatasetAnnotation,
+  DrumDatasetLabel,
+  DrumDatasetPoint,
+  DrumDatasetZoneType,
+} from '../../shared/drum-dataset.js';
 
 // Minimum downward velocity (m/s, +Y points down) for a motion to count as a
 // downstroke.
@@ -121,23 +128,6 @@ export interface DrumBenchmarkExpectedHit {
   timeMs: number;
   zoneId?: string;
   hand?: 'Left' | 'Right';
-}
-
-export interface DrumDatasetAnnotation {
-  schema: 'minamo.drum-dataset.v1';
-  frameId: string;
-  labels: Array<{
-    kind: 'stick' | 'drumZone' | 'hit';
-    id: string;
-    points: Vec3[];
-    zoneType?: DrumHitEvent['zoneType'];
-    hand?: 'Left' | 'Right';
-    timeMs?: number;
-  }>;
-  consent: {
-    localOnly: boolean;
-    license: string;
-  };
 }
 
 interface ZoneHitState {
@@ -546,22 +536,6 @@ export function scoreDrumBenchmarkEvents(
       ? handMatches.filter((match) => match.detected.hand === match.expected.hand).length / handMatches.length
       : null,
     minDetectedSeparationMs,
-  };
-}
-
-export function createDrumDatasetAnnotation(
-  frameId: string,
-  labels: DrumDatasetAnnotation['labels'],
-  license = '0BSD',
-): DrumDatasetAnnotation {
-  return {
-    schema: 'minamo.drum-dataset.v1',
-    frameId,
-    labels,
-    consent: {
-      localOnly: true,
-      license,
-    },
   };
 }
 

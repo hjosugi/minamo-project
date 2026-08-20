@@ -217,10 +217,17 @@ import {
 } from '../shared/recording.js';
 import {
   DATASET_RECORD_SCHEMA,
+  createDrumDatasetAnnotationFromTrackerSample,
   createDatasetRecord,
   serializeDatasetRecords,
   validateDatasetRecord,
 } from '../shared/dataset.js';
+import {
+  DRUM_DATASET_SCHEMA,
+  createDrumDatasetAnnotation,
+  parseDrumDatasetAnnotation,
+  validateDrumDatasetAnnotation,
+} from '../shared/drum-dataset.js';
 import {
   ASSET_COMPRESSION_CHECKLIST,
   REQUIRED_REGRESSION_POSES,
@@ -2243,6 +2250,90 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   const staleDecoded = decodeMotionStream(stale);
   assert.equal(staleDecoded.frames.length, 2);
   assert.equal(staleDecoded.dropped, 1);
+}
+
+{
+  // Stick/drum training annotations are strict per-kind records (#122).
+  const point = (x, y, z = 0) => ({ x, y, z });
+  const labels = [
+    {
+      kind: 'stick',
+      id: 'stick-r',
+      points: [point(0.42, 0.3), point(0.38, 0.22)],
+      hand: 'Right',
+    },
+    {
+      kind: 'drumZone',
+      id: 'snare',
+      points: [point(0.4, 0.55), point(0.6, 0.55), point(0.5, 0.7)],
+      zoneType: 'snare',
+    },
+    {
+      kind: 'hit',
+      id: 'hit-1',
+      points: [point(0.5, 0.58)],
+      zoneType: 'snare',
+      hand: 'Right',
+      timeMs: 123.5,
+    },
+  ];
+  const annotation = createDrumDatasetAnnotation({ frameId: 'frame-1', labels, license: '0BSD' });
+  assert.equal(annotation.schema, DRUM_DATASET_SCHEMA);
+  assert.equal(annotation.consent.localOnly, true);
+  assert.equal(validateDrumDatasetAnnotation(annotation).ok, true);
+  assert.equal(parseDrumDatasetAnnotation(JSON.stringify(annotation)).frameId, 'frame-1');
+
+  // Reviewed negative frames are valid; partially described positive labels
+  // are not. `oneOf` in the JSON Schema enforces the same distinctions.
+  assert.equal(validateDrumDatasetAnnotation(createDrumDatasetAnnotation({ frameId: 'negative', labels: [] })).ok, true);
+  const missingStickHand = validateDrumDatasetAnnotation({
+    ...annotation,
+    labels: [{ kind: 'stick', id: 'stick', points: [point(0.2, 0.3)] }],
+  });
+  assert.equal(missingStickHand.ok, false);
+  assert.ok(missingStickHand.errors.some((error) => error.includes('.hand')));
+  const shortZone = validateDrumDatasetAnnotation({
+    ...annotation,
+    labels: [{ kind: 'drumZone', id: 'snare', points: [point(0.4, 0.5), point(0.6, 0.5)], zoneType: 'snare' }],
+  });
+  assert.equal(shortZone.ok, false);
+  assert.ok(shortZone.errors.some((error) => error.includes('at least 3')));
+  const missingHitTime = validateDrumDatasetAnnotation({
+    ...annotation,
+    labels: [{ kind: 'hit', id: 'hit', points: [point(0.5, 0.6)], zoneType: 'snare' }],
+  });
+  assert.equal(missingHitTime.ok, false);
+  assert.ok(missingHitTime.errors.some((error) => error.includes('timeMs')));
+  const mixedKindFields = validateDrumDatasetAnnotation({
+    ...annotation,
+    labels: [{ kind: 'stick', id: 'stick', points: [point(0.2, 0.3)], hand: 'Right', timeMs: 10 }],
+  });
+  assert.equal(mixedKindFields.ok, false);
+  assert.ok(mixedKindFields.errors.some((error) => error.includes('not allowed')));
+  assert.throws(() => parseDrumDatasetAnnotation('{'), /Invalid drum dataset JSON/);
+
+  // The tracker sample is a capture/provenance envelope. The bridge carries
+  // that provenance but only accepts explicit reviewed geometry; it never
+  // turns the coarse `label: drum-hit` selector into invented ground truth.
+  const trackerSample = createDatasetRecord({
+    seq: 7,
+    label: 'drum-hit',
+    license: 'private-consented',
+    createdAt: '2026-08-21T00:00:00.000Z',
+  });
+  const bridged = createDrumDatasetAnnotationFromTrackerSample(trackerSample, labels);
+  assert.equal(bridged.frameId, '2026-08-21T00:00:00.000Z#7');
+  assert.equal(bridged.consent.license, 'private-consented');
+  assert.equal(bridged.labels.length, 3);
+  assert.throws(
+    () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, consent: { ...trackerSample.consent, rawMedia: true } }, labels),
+    /rawMedia: false/,
+  );
+  assert.throws(
+    () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, consent: { ...trackerSample.consent, localOnly: false } }, labels),
+    /localOnly: true/,
+  );
+  assert.throws(() => createDrumDatasetAnnotationFromTrackerSample(trackerSample, null), /Explicit reviewed drum labels/);
 }
 
 {

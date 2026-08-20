@@ -67,6 +67,8 @@ REQUIRED = [
     'shared/compression-checklist.js',
     'shared/motion-quant.js',
     'shared/drum-overlay.js',
+    'shared/drum-dataset.js',
+    'shared/drum-dataset.d.ts',
     'shared/situation-presets.js',
     'shared/obs-bridge.js',
     'shared/math.js',
@@ -2126,6 +2128,54 @@ def validate_drum_docs() -> None:
     schema_doc = read('docs/ml/drum-dataset-schema.md')
     if 'minamo.drum-dataset.v1' not in schema_doc:
         add_error('docs/ml/drum-dataset-schema.md', 'drum dataset schema doc must document minamo.drum-dataset.v1')
+    drum_dataset_runtime = read('shared/drum-dataset.js')
+    for needle in [
+        'validateDrumDatasetAnnotation',
+        'parseDrumDatasetAnnotation',
+        'createDrumDatasetAnnotationFromTrackerSample',
+        'Explicit reviewed drum labels are required.',
+    ]:
+        if needle not in drum_dataset_runtime:
+            add_error('shared/drum-dataset.js', f'drum dataset runtime contract missing: {needle}')
+    try:
+        dataset_schema = json.loads(read('docs/product/drum-dataset.schema.json'))
+        definitions = dataset_schema['definitions']
+        label_choices = dataset_schema['properties']['labels']['items']['oneOf']
+        expected_refs = {
+            '#/definitions/stickLabel',
+            '#/definitions/drumZoneLabel',
+            '#/definitions/hitLabel',
+        }
+        actual_refs = {choice.get('$ref') for choice in label_choices}
+        if actual_refs != expected_refs:
+            add_error('docs/product/drum-dataset.schema.json', 'labels must be a oneOf over stick, drumZone, and hit definitions')
+        required_by_kind = {
+            'stickLabel': {'kind', 'id', 'points', 'hand'},
+            'drumZoneLabel': {'kind', 'id', 'points', 'zoneType'},
+            'hitLabel': {'kind', 'id', 'points', 'zoneType', 'timeMs'},
+        }
+        point_counts = {
+            'stickLabel': (1, 2),
+            'drumZoneLabel': (3, None),
+            'hitLabel': (1, 1),
+        }
+        for name, required in required_by_kind.items():
+            if set(definitions[name].get('required', [])) != required:
+                add_error('docs/product/drum-dataset.schema.json', f'{name} required fields do not match the runtime contract')
+            if definitions[name].get('additionalProperties') is not False:
+                add_error('docs/product/drum-dataset.schema.json', f'{name} must reject unexpected fields')
+            points = definitions[name]['properties']['points']
+            minimum, maximum = point_counts[name]
+            if points.get('minItems') != minimum or points.get('maxItems') != maximum:
+                add_error('docs/product/drum-dataset.schema.json', f'{name} point count does not match the runtime contract')
+        point = definitions['point']
+        if point.get('additionalProperties') is not False or set(point.get('required', [])) != {'x', 'y', 'z'}:
+            add_error('docs/product/drum-dataset.schema.json', 'points must require only x, y, and z')
+        for axis in ('x', 'y'):
+            if point['properties'][axis].get('minimum') != 0 or point['properties'][axis].get('maximum') != 1:
+                add_error('docs/product/drum-dataset.schema.json', f'point {axis} must use normalized frame coordinates')
+    except (json.JSONDecodeError, KeyError, TypeError, SystemExit):
+        add_error('docs/product/drum-dataset.schema.json', 'drum dataset JSON Schema is invalid or incomplete')
     try:
         clips = json.loads(read('tests/fixtures/drum-benchmark-clips.json'))
     except (json.JSONDecodeError, SystemExit):

@@ -12,28 +12,93 @@
     "labels": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["kind", "id", "points"],
-        "additionalProperties": false,
-        "properties": {
-          "kind": { "enum": ["stick", "drumZone", "hit"] },
-          "id": { "type": "string", "minLength": 1 },
-          "points": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["x", "y", "z"],
-              "properties": {
-                "x": { "type": "number" },
-                "y": { "type": "number" },
-                "z": { "type": "number" }
-              }
-            }
-          },
-          "zoneType": { "enum": ["snare", "hihat", "ride", "crash", "tom", "kick", "bass", "slap", "tap", "head", "edge", "percussion"] },
-          "hand": { "enum": ["Left", "Right"] },
-          "timeMs": { "type": "number" }
-        }
+        "oneOf": [
+          { "$ref": "#/definitions/stickLabel" },
+          { "$ref": "#/definitions/drumZoneLabel" },
+          { "$ref": "#/definitions/hitLabel" }
+        ]
+      }
+    },
+    "consent": { "$ref": "#/definitions/consent" }
+  },
+  "definitions": {
+    "point": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "z": { "type": "number" }
+      }
+    },
+    "hand": {
+      "enum": ["Left", "Right"]
+    },
+    "zoneType": {
+      "enum": [
+        "snare",
+        "hihat",
+        "ride",
+        "crash",
+        "tom",
+        "floorTom",
+        "kick",
+        "bass",
+        "slap",
+        "tap",
+        "head",
+        "edge",
+        "percussion"
+      ]
+    },
+    "stickLabel": {
+      "type": "object",
+      "required": ["kind", "id", "points", "hand"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "stick" },
+        "id": { "type": "string", "minLength": 1 },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": { "$ref": "#/definitions/point" }
+        },
+        "hand": { "$ref": "#/definitions/hand" }
+      }
+    },
+    "drumZoneLabel": {
+      "type": "object",
+      "required": ["kind", "id", "points", "zoneType"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "drumZone" },
+        "id": { "type": "string", "minLength": 1 },
+        "points": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/definitions/point" }
+        },
+        "zoneType": { "$ref": "#/definitions/zoneType" }
+      }
+    },
+    "hitLabel": {
+      "type": "object",
+      "required": ["kind", "id", "points", "zoneType", "timeMs"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "hit" },
+        "id": { "type": "string", "minLength": 1 },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/definitions/point" }
+        },
+        "zoneType": { "$ref": "#/definitions/zoneType" },
+        "hand": { "$ref": "#/definitions/hand" },
+        "timeMs": { "type": "number", "minimum": 0 }
       }
     },
     "consent": {

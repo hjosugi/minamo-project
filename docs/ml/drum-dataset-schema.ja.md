@@ -1,40 +1,86 @@
 <!-- i18n: language-switcher -->
 [English](drum-dataset-schema.md) | [日本語](drum-dataset-schema.ja.md)
 
-# YOLO スティック/ドラム トレーニングデータスキーマ
+# YOLO スティック/ドラムトレーニングデータスキーマ
 
-ステータス: イシュー #122 のためにスキーマが実装されました。関連: フルボディ/スティック ML ロードマップ
-([model-roadmap-yolo-edge.md](model-roadmap-yolo-edge.md),
-[dataset-labeling-guide.md](dataset-labeling-guide.md))。
+ステータス: issue #122 向けに実装され、実行時検証にも対応済み。関連:
+[model-roadmap-yolo-edge.ja.md](model-roadmap-yolo-edge.ja.md) と
+[dataset-labeling-guide.ja.md](dataset-labeling-guide.ja.md)。
 
-スティック/ドラム検出器（YOLOファミリー、ONNX Runtime Webを通じて実行）は、スティックの先端、尾、およびドラム/シンバルゾーンのラベル付きフレームを必要とします。このスキーマは、ラベルを一貫性を持たせ、プライバシーを保護します。
+スティック/ドラム検出器には、スティックの先端と末端、ドラム/シンバルの輪郭、
+打点についてレビュー済みの幾何ラベルが必要です。`minamo.drum-dataset.v1` は
+それらを表すフレーム単位の厳密なアノテーション契約です。機械可読な JSON Schema は
+[../product/drum-dataset.schema.json](../product/drum-dataset.schema.json) にあります。
 
-## アノテーションスキーマ
+## アノテーション種別
 
-フレームごとのアノテーションは、`createDrumDatasetAnnotation(frameId, labels, license)`によって生成された`minamo.drum-dataset.v1`スキーマを使用します。
-[`src/core/drum.ts`](../../src/core/drum.ts)にあります。機械可読のJSONスキーマは
-[../product/drum-dataset.schema.json](../product/drum-dataset.schema.json)です。
+各ラベルは次のいずれか1種類だけです。別種別のフィールドは無視せず拒否します。
 
-各ラベルは次のいずれかです：
+| `kind` | 必須フィールド | 点の数 |
+|---|---|---:|
+| `stick` | `id`, `points`, `hand` | 先端1点と任意の末端1点 (1–2) |
+| `drumZone` | `id`, `points`, `zoneType` | 輪郭ポリゴン (3点以上) |
+| `hit` | `id`, `points`, `zoneType`, `timeMs`; `hand` は任意 | 打点1点 |
 
-- `stick`: `points`（先端とオプションの尾）および`hand`を持つスティック
-- `drumZone`: `zoneType`およびポリゴン/楕円の`points`を持つキット/シンバル領域
-- `hit`: `zoneType`、`hand`、および`timeMs`を持つラベル付きヒット
+キックなど足で発生するイベントには左右の手がないため、ヒットの `hand` は任意です。
+スティックラベルでは必須です。`timeMs` は元クリップまたは収録セッションからの相対時刻で、
+0以上でなければなりません。
 
-## YOLO エクスポートマッピング
+点は元フレームの正規化座標を使用します。`x` と `y` は `[0, 1]`、`z` は有限値で
+負でも構いません。YOLO のボックス出力は `z` を無視しますが、保持しておくことで
+姿勢形式の出力時に先端/末端の深度推定を利用できます。レビュー済みネガティブフレームでは
+空の `labels` 配列が有効です。
 
-- クラスID: `stick-tip`、`stick`、および各`zoneType`ごとの1つのクラス（スネア、ハイハット、ライド、クラッシュ、トム、キック）。
-- バウンディングボックスは、ラベルの`points`から導出されます（`stick-tip`の先端の周りのタイトなボックス、ゾーンのハル）。
-- キーポイント（オプション）: ポーズスタイルのヘッド用のスティックの先端と尾。
+学習可能な `zoneType` はドラムキットと対応済みハンドパーカッションを含みます。
+通信上の `unknown` と、打撃ではないペダル状態は検出クラスから除外します。
+
+## 実行時 API
+
+[`shared/drum-dataset.js`](../../shared/drum-dataset.js) がブラウザおよび Node ツールの
+プロダクション用コンシューマーです。
+
+- `validateDrumDatasetAnnotation(value)` はすべての検証エラーを返します。
+- `parseDrumDatasetAnnotation(jsonOrValue)` は壊れた入力や無効な入力を拒否します。
+- `createDrumDatasetAnnotation(...)` は返却前にデータを検証します。
+- `createDrumDatasetAnnotationFromTrackerSample(sample, labels)` はトラッカーサンプルの
+  フレーム識別子、ライセンス、ローカル限定同意をレビュー済みアノテーションへ引き継ぎます。
+
+[`src/core/drum.ts`](../../src/core/drum.ts) は、同じ実行時実装から型付きの位置引数 API
+`createDrumDatasetAnnotation(frameId, labels, license)` を再エクスポートします。
+並行する検証実装が分岐することはありません。
+
+## トラッカー出力との境界
+
+トラッカーがダウンロードするのは `minamo.dataset.tracker-sample.v1` NDJSON です。
+これはランドマーク、キャリブレーション済みゾーン、品質、`label: "drum-hit"` のような
+粗い選択値を含む、プライバシー保護された **収録エンベロープ** です。レビュー済みの
+スティック先端/末端、打点、ヒット時刻、各幾何オブジェクトの手は含まれないため、
+自動的に YOLO の正解データにはなりません。
+
+人またはラベリングツールが明示的な幾何ラベルを追加した後で
+`createDrumDatasetAnnotationFromTrackerSample` を呼びます。この橋渡しは粗い選択値から
+ラベルを推測しません。これにより、2つのスキーマは矛盾した出力形式ではなく相補的になります。
+
+## YOLO 出力への対応
+
+- クラスID: `stick-tip`、`stick`、および学習可能な `zoneType` ごとのクラス。
+- バウンディングボックスはラベルの点から作成します。スティックは先端/末端を囲む最小矩形、
+  ドラムゾーンはポリゴンの外接矩形です。
+- 任意の姿勢キーポイントはスティックの先端と末端です。
+- `hit` ラベルは時刻/ゾーン評価用であり、物体ボックスではありません。
 
 ## プライバシーとライセンス
 
-- `consent.localOnly`はデフォルトで`true`です。生のビデオ/オーディオはデフォルトでデバイスから出ません。
-- `consent.license`は、共有クリップの再配布条件を記録します。デフォルトは`0BSD`です。
-- 貢献者は、フレームが共有される前に明示的にオプトインし、プライバシーを保護するデータセット記録と一致します。
-  [../design/DD-002-fullbody-onnx.md](../design/DD-002-fullbody-onnx.md)。
+- `consent.localOnly` はアノテーションをローカルに限定すべきかを記録します。
+- `consent.license` は必須で、橋渡し時はトラッカーサンプルからコピーされます。
+  新しいローカルアノテーションの作成時は既定で `0BSD` です。
+- 生の映像/音声はアノテーション JSON と既定のトラッカー出力のどちらにも含めません。
+  メディアの共有には引き続き参加者の明示的同意とライセンスレビューが必要です。
 
 ## テスト
 
-- `pnpm test`は、ローカル専用の同意を持つ`minamo.drum-dataset.v1`スキーマを生成する`createDrumDatasetAnnotation`をカバーします。
-- JSONスキーマファイルは、構造チェックの一部として検証されます。
+- `pnpm test` は有効な各種ラベル、レビュー済みネガティブフレーム、種別ごとの拒否、
+  余分なフィールド、不正 JSON、トラッカーサンプルの橋渡しをカバーします。
+- `pnpm typecheck` は TypeScript の判別共用体を固定します。
+- `pnpm verify` は JSON Schema の `oneOf` 定義、必須フィールド、座標範囲、
+  実行時エクスポートを確認します。

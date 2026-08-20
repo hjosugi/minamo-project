@@ -1,5 +1,10 @@
 export const DATASET_RECORD_SCHEMA = 'minamo.dataset.tracker-sample.v1';
 
+// The tracker record is a capture envelope. Geometric drum labels are a
+// deliberate second-stage export, re-exported here so dataset tooling has one
+// entry point without teaching the tracker to invent annotation geometry.
+export { createDrumDatasetAnnotationFromTrackerSample } from './drum-dataset.js';
+
 const RAW_MEDIA_FIELD_RE = /^(?:raw(?:camera|video|audio|media|frame)|camera(?:frame|image|pixels|blob|data)|video(?:frame|data|blob|url)?|audio(?:data|blob|buffer|url)?|image(?:data|blob|url)?|media(?:stream|blob|data|url)?|canvas|pixelData|thumbnail)$/i;
 
 export function createDatasetRecord({
