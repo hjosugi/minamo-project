@@ -422,6 +422,7 @@ def validate_glossary_examples() -> None:
 def validate_dependency_guardrails() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
+    release_workflow = read('.github/workflows/release.yml')
     release_smoke = read('scripts/release-smoke.mjs')
     mediapipe_canary = read('scripts/mediapipe-canary-smoke.mjs')
     mediapipe_privacy_guard = read('scripts/mediapipe-privacy-guard.mjs')
@@ -459,6 +460,48 @@ def validate_dependency_guardrails() -> None:
         add_error('package.json', 'MediaPipe package/API/privacy check script must remain wired')
     if 'pnpm check:mediapipe' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must inspect the installed MediaPipe bundle on dependency PRs')
+    if release_workflow.count('Resolve immutable release tag') != 1:
+        add_error('.github/workflows/release.yml', 'release tag must be resolved exactly once')
+    release_preflight = re.search(
+        r'^  preflight:\n(?P<body>.*?)(?=^  prepare:\n)',
+        release_workflow,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not release_preflight:
+        add_error('.github/workflows/release.yml', 'release workflow must have a preflight job before draft creation')
+    else:
+        preflight_body = release_preflight.group('body')
+        for needle, message in [
+            ('tag: ${{ steps.release_tag.outputs.tag }}', 'preflight must expose its single resolved release tag'),
+            ('ref: ${{ steps.release_tag.outputs.tag }}', 'preflight must check out the resolved release tag'),
+            ('pnpm/action-setup@', 'preflight must install pnpm'),
+            ('actions/setup-node@', 'preflight must install Node.js'),
+            ('pnpm install --frozen-lockfile', 'preflight must install the resolved release dependencies'),
+            ('scripts/validate-release-metadata.mjs "$TAG"', 'preflight must validate release metadata'),
+            ('pnpm check:mediapipe', 'preflight must inspect MediaPipe before release creation'),
+        ]:
+            if needle not in preflight_body:
+                add_error('.github/workflows/release.yml', message)
+    release_prepare = re.search(
+        r'^  prepare:\n(?P<body>.*?)(?=^  desktop:\n)',
+        release_workflow,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not release_prepare:
+        add_error('.github/workflows/release.yml', 'release workflow must keep a prepare job')
+    else:
+        prepare_body = release_prepare.group('body')
+        if not re.search(r'^    needs: preflight$', prepare_body, re.MULTILINE):
+            add_error('.github/workflows/release.yml', 'draft creation must depend on a successful release preflight')
+        for needle, message in [
+            ('tag: ${{ needs.preflight.outputs.tag }}', 'prepare must expose the tag resolved by preflight'),
+            ('ref: ${{ needs.preflight.outputs.tag }}', 'prepare must check out the tag resolved by preflight'),
+            ('TAG: ${{ needs.preflight.outputs.tag }}', 'draft creation must use the tag resolved by preflight'),
+        ]:
+            if needle not in prepare_body:
+                add_error('.github/workflows/release.yml', message)
+        if 'Resolve immutable release tag' in prepare_body:
+            add_error('.github/workflows/release.yml', 'release tag must be resolved only once in preflight')
     if "['pnpm', ['check:mediapipe']]" not in release_smoke:
         add_error('scripts/release-smoke.mjs', 'release smoke must inspect the installed MediaPipe bundle')
     if "from './mediapipe-privacy-guard.mjs'" not in mediapipe_canary:

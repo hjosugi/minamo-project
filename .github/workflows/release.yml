@@ -21,7 +21,7 @@ permissions:
 # `refs/tags/v0.1.19` while `inputs.tag` is `v0.1.19`, so the two never compared
 # equal and v0.1.19 built its full installer matrix twice, with two draft
 # releases open at once. `github.ref_name` is the bare tag on a tag push, which
-# is the same value `prepare` resolves.
+# is the same value `preflight` resolves.
 #
 # `cancel-in-progress` stays false on purpose: cancelling a release mid-upload
 # leaves a partial set of assets on the draft. The group key is therefore the
@@ -31,11 +31,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  prepare:
+  preflight:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.deleted == false }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
-      release_id: ${{ steps.release.outputs.id }}
       tag: ${{ steps.release_tag.outputs.tag }}
     steps:
       - name: Resolve immutable release tag
@@ -65,16 +66,42 @@ jobs:
         with:
           ref: ${{ steps.release_tag.outputs.tag }}
 
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.0.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Validate release metadata
         env:
           TAG: ${{ steps.release_tag.outputs.tag }}
         run: node scripts/validate-release-metadata.mjs "$TAG"
 
+      - name: Verify MediaPipe packaging, API, and privacy surface
+        run: pnpm check:mediapipe
+
+  prepare:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.release.outputs.id }}
+      tag: ${{ needs.preflight.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+
       - name: Prepare draft GitHub Release
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release_tag.outputs.tag }}
+          TAG: ${{ needs.preflight.outputs.tag }}
         run: |
           notes="docs/releases/$TAG.md"
           # POST /releases happily creates a SECOND release for a tag that
