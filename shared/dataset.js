@@ -1,11 +1,15 @@
-export const DATASET_RECORD_SCHEMA = 'minamo.dataset.tracker-sample.v1';
+import {
+  DATASET_RECORD_SCHEMA,
+  isRawMediaFieldName,
+  validateDatasetRecord,
+} from './dataset-contract.js';
+
+export { DATASET_RECORD_SCHEMA, validateDatasetRecord } from './dataset-contract.js';
 
 // The tracker record is a capture envelope. Geometric drum labels are a
 // deliberate second-stage export, re-exported here so dataset tooling has one
 // entry point without teaching the tracker to invent annotation geometry.
 export { createDrumDatasetAnnotationFromTrackerSample } from './drum-dataset.js';
-
-const RAW_MEDIA_FIELD_RE = /^(?:raw(?:camera|video|audio|media|frame)|camera(?:frame|image|pixels|blob|data)|video(?:frame|data|blob|url)?|audio(?:data|blob|buffer|url)?|image(?:data|blob|url)?|media(?:stream|blob|data|url)?|canvas|pixelData|thumbnail)$/i;
 
 export function createDatasetRecord({
   seq = 0,
@@ -69,19 +73,6 @@ export function serializeDatasetRecords(records = []) {
   return records.map((record) => JSON.stringify(record)).join('\n') + (records.length ? '\n' : '');
 }
 
-export function validateDatasetRecord(record) {
-  const errors = [];
-  if (!record || typeof record !== 'object' || Array.isArray(record)) {
-    return { ok: false, errors: ['record must be an object'] };
-  }
-  if (record.schema !== DATASET_RECORD_SCHEMA) errors.push(`unknown schema: ${record.schema || 'missing'}`);
-  if (typeof record.label !== 'string' || !record.label.trim()) errors.push('label must be a non-empty string');
-  if (typeof record.license !== 'string' || !record.license.trim()) errors.push('license must be a non-empty string');
-  if (record.consent?.rawMedia !== false) errors.push('consent.rawMedia must be false');
-  errors.push(...rawMediaFieldErrors(record));
-  return { ok: errors.length === 0, errors };
-}
-
 function summarizeRuntimeSettings(settings = {}) {
   return {
     mirror: Boolean(settings.mirror),
@@ -119,7 +110,7 @@ function sanitizeDatasetValue(value) {
   if (typeof value !== 'object') return null;
   const out = {};
   for (const [key, child] of Object.entries(value)) {
-    if (RAW_MEDIA_FIELD_RE.test(key)) continue;
+    if (isRawMediaFieldName(key)) continue;
     out[key] = sanitizeDatasetValue(child);
   }
   return out;
@@ -136,24 +127,4 @@ function round4(value) {
 function round(value, decimals) {
   const scale = 10 ** decimals;
   return Math.round(value * scale) / scale;
-}
-
-function rawMediaFieldErrors(record) {
-  const found = [];
-  const seen = new Set();
-  const visit = (value, path) => {
-    if (!value || typeof value !== 'object' || seen.has(value)) return;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) visit(value[i], `${path}[${i}]`);
-      return;
-    }
-    for (const [key, child] of Object.entries(value)) {
-      const nextPath = `${path}.${key}`;
-      if (RAW_MEDIA_FIELD_RE.test(key) && !(nextPath === 'record.consent.rawMedia' && child === false)) found.push(nextPath);
-      visit(child, nextPath);
-    }
-  };
-  visit(record, 'record');
-  return found.map((path) => `${path} must not contain raw media data`);
 }

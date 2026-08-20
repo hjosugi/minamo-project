@@ -18,9 +18,15 @@
 
 | `kind` | 必須フィールド | 点の数 |
 |---|---|---:|
-| `stick` | `id`, `points`, `hand` | 先端1点と任意の末端1点 (1–2) |
+| `stick` | `id`, `points`, `hand`, `representation` | `representation` に応じて厳密に1点または2点 |
 | `drumZone` | `id`, `points`, `zoneType` | 輪郭ポリゴン (3点以上) |
 | `hit` | `id`, `points`, `zoneType`, `timeMs`; `hand` は任意 | 打点1点 |
+
+スティックの `representation: "keypoint-only"` は先端1点だけを要求します。
+姿勢キーポイントには使えますが、面積ゼロの YOLO ボックスとして出力してはなりません。
+`representation: "tip-tail-padded"` は厳密に2点を要求します。そのボックスは先端/末端の
+外接範囲を上下左右それぞれ正規化フレーム単位 `0.01` だけ拡張し、`[0, 1]` にクランプします。
+`deriveStickLabelBox(label)` がこの規則を実装し、1点ラベルには `null` を返します。
 
 キックなど足で発生するイベントには左右の手がないため、ヒットの `hand` は任意です。
 スティックラベルでは必須です。`timeMs` は元クリップまたは収録セッションからの相対時刻で、
@@ -44,6 +50,7 @@
 - `createDrumDatasetAnnotation(...)` は返却前にデータを検証します。
 - `createDrumDatasetAnnotationFromTrackerSample(sample, labels)` はトラッカーサンプルの
   フレーム識別子、ライセンス、ローカル限定同意をレビュー済みアノテーションへ引き継ぎます。
+- `deriveStickLabelBox(label)` は固定の2点padding規則を適用し、1点からボックスを捏造しません。
 
 [`src/core/drum.ts`](../../src/core/drum.ts) は、同じ実行時実装から型付きの位置引数 API
 `createDrumDatasetAnnotation(frameId, labels, license)` を再エクスポートします。
@@ -59,14 +66,18 @@
 
 人またはラベリングツールが明示的な幾何ラベルを追加した後で
 `createDrumDatasetAnnotationFromTrackerSample` を呼びます。この橋渡しは粗い選択値から
-ラベルを推測しません。これにより、2つのスキーマは矛盾した出力形式ではなく相補的になります。
+ラベルを推測しません。由来情報をコピーする前に、トラッカー生成側と同じ
+`validateDatasetRecord` 契約で raw media の走査、canonical な `createdAt`、0以上の整数 `seq`
+を検証します。そのため、衝突しうる `unknown-time` / `unknown-seq` のフレームIDを出力しません。
+これにより、2つのスキーマは矛盾した出力形式ではなく相補的になります。
 
 ## YOLO 出力への対応
 
 - クラスID: `stick-tip`、`stick`、および学習可能な `zoneType` ごとのクラス。
-- バウンディングボックスはラベルの点から作成します。スティックは先端/末端を囲む最小矩形、
-  ドラムゾーンはポリゴンの外接矩形です。
-- 任意の姿勢キーポイントはスティックの先端と末端です。
+- `keypoint-only` スティックは先端キーポイントだけを提供し、物体ボックスを持ちません。
+- `tip-tail-padded` スティックは固定の `0.01` padding規則でボックスを生成します。
+- ドラムゾーンのボックスはポリゴンの外接矩形を使います。
+- 任意の姿勢キーポイントはスティックの先端と、存在する場合は末端です。
 - `hit` ラベルは時刻/ゾーン評価用であり、物体ボックスではありません。
 
 ## プライバシーとライセンス
@@ -79,8 +90,9 @@
 
 ## テスト
 
-- `pnpm test` は有効な各種ラベル、レビュー済みネガティブフレーム、種別ごとの拒否、
-  余分なフィールド、不正 JSON、トラッカーサンプルの橋渡しをカバーします。
+- `pnpm test` は同一fixture群を Ajv の draft-07 検証とruntime validatorの両方に通し、
+  空白、representation/点数、レビュー済みネガティブ、余分なフィールド、不正 JSON、
+  raw media拒否、衝突しないトラッカーidentityをカバーします。
 - `pnpm typecheck` は TypeScript の判別共用体を固定します。
 - `pnpm verify` は JSON Schema の `oneOf` 定義、必須フィールド、座標範囲、
   実行時エクスポートを確認します。

@@ -1,0 +1,224 @@
+{
+  "schema": "minamo.drum-dataset-validation-fixtures.v1",
+  "cases": [
+    {
+      "id": "valid-reviewed-negative",
+      "valid": true,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "negative-1",
+        "labels": [],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "valid-keypoint-only-stick",
+      "valid": true,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-keypoint",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "stick-r",
+            "representation": "keypoint-only",
+            "points": [{ "x": 0.42, "y": 0.3, "z": 0 }],
+            "hand": "Right"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "private-consented" }
+      }
+    },
+    {
+      "id": "valid-tip-tail-padded-stick",
+      "valid": true,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-box",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "stick-l",
+            "representation": "tip-tail-padded",
+            "points": [
+              { "x": 0.42, "y": 0.3, "z": 0 },
+              { "x": 0.38, "y": 0.22, "z": 0 }
+            ],
+            "hand": "Left"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "valid-drum-zone",
+      "valid": true,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-zone",
+        "labels": [
+          {
+            "kind": "drumZone",
+            "id": "snare",
+            "points": [
+              { "x": 0.4, "y": 0.55, "z": 0 },
+              { "x": 0.6, "y": 0.55, "z": 0 },
+              { "x": 0.5, "y": 0.7, "z": 0 }
+            ],
+            "zoneType": "snare"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "valid-handless-kick-hit",
+      "valid": true,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-kick",
+        "labels": [
+          {
+            "kind": "hit",
+            "id": "kick-1",
+            "points": [{ "x": 0.5, "y": 0.85, "z": 0 }],
+            "zoneType": "kick",
+            "timeMs": 125
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-whitespace-frame-id",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "   ",
+        "labels": [],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-whitespace-label-id",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "\t",
+            "representation": "keypoint-only",
+            "points": [{ "x": 0.5, "y": 0.5, "z": 0 }],
+            "hand": "Right"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-whitespace-license",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [],
+        "consent": { "localOnly": true, "license": " \n " }
+      }
+    },
+    {
+      "id": "invalid-keypoint-only-with-tail",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "stick",
+            "representation": "keypoint-only",
+            "points": [
+              { "x": 0.5, "y": 0.5, "z": 0 },
+              { "x": 0.4, "y": 0.4, "z": 0 }
+            ],
+            "hand": "Right"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-padded-box-without-tail",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "stick",
+            "representation": "tip-tail-padded",
+            "points": [{ "x": 0.5, "y": 0.5, "z": 0 }],
+            "hand": "Right"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-missing-stick-representation",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "stick",
+            "points": [{ "x": 0.5, "y": 0.5, "z": 0 }],
+            "hand": "Right"
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-out-of-frame-point",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [
+          {
+            "kind": "hit",
+            "id": "hit",
+            "points": [{ "x": 1.1, "y": 0.5, "z": 0 }],
+            "zoneType": "snare",
+            "timeMs": 10
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    },
+    {
+      "id": "invalid-cross-kind-field",
+      "valid": false,
+      "annotation": {
+        "schema": "minamo.drum-dataset.v1",
+        "frameId": "frame-1",
+        "labels": [
+          {
+            "kind": "stick",
+            "id": "stick",
+            "representation": "keypoint-only",
+            "points": [{ "x": 0.5, "y": 0.5, "z": 0 }],
+            "hand": "Right",
+            "timeMs": 10
+          }
+        ],
+        "consent": { "localOnly": true, "license": "0BSD" }
+      }
+    }
+  ]
+}

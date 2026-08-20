@@ -224,7 +224,9 @@ import {
 } from '../shared/dataset.js';
 import {
   DRUM_DATASET_SCHEMA,
+  DRUM_STICK_BOX_PADDING,
   createDrumDatasetAnnotation,
+  deriveStickLabelBox,
   parseDrumDatasetAnnotation,
   validateDrumDatasetAnnotation,
 } from '../shared/drum-dataset.js';
@@ -2259,6 +2261,7 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
     {
       kind: 'stick',
       id: 'stick-r',
+      representation: 'tip-tail-padded',
       points: [point(0.42, 0.3), point(0.38, 0.22)],
       hand: 'Right',
     },
@@ -2283,12 +2286,42 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(validateDrumDatasetAnnotation(annotation).ok, true);
   assert.equal(parseDrumDatasetAnnotation(JSON.stringify(annotation)).frameId, 'frame-1');
 
+  const keypointStick = {
+    kind: 'stick',
+    id: 'keypoint-r',
+    representation: 'keypoint-only',
+    points: [point(0.42, 0.3)],
+    hand: 'Right',
+  };
+  assert.equal(deriveStickLabelBox(keypointStick), null, 'one point is a keypoint, never a zero-area YOLO box');
+  assert.equal(DRUM_STICK_BOX_PADDING, 0.01);
+  const stickBox = deriveStickLabelBox(labels[0]);
+  assert.deepEqual(stickBox, { xMin: 0.37, yMin: 0.21, xMax: 0.43, yMax: 0.31 });
+
+  // The same corpus is checked by a real draft-07 implementation and the
+  // browser runtime validator. This prevents JSON-Schema/runtime drift (for
+  // example `minLength: 1` accepting whitespace that `.trim()` rejects).
+  const jsonSchema = JSON.parse(fs.readFileSync(path.join(root, 'docs/product/drum-dataset.schema.json'), 'utf8'));
+  const parity = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/drum-dataset-validation.json'), 'utf8'));
+  // Load test-only Ajv after the micro-benchmark section above; importing its
+  // compiler before that timing gate perturbs V8 warm-up enough to make the
+  // unrelated 1 us/quat assertion flaky on shared CI runners.
+  const { default: Ajv } = await import('ajv');
+  const validateSchema = new Ajv({ allErrors: true, strict: true }).compile(jsonSchema);
+  for (const fixture of parity.cases) {
+    const runtimeValid = validateDrumDatasetAnnotation(fixture.annotation).ok;
+    const schemaValid = validateSchema(fixture.annotation);
+    assert.equal(runtimeValid, fixture.valid, `${fixture.id}: runtime result`);
+    assert.equal(schemaValid, fixture.valid, `${fixture.id}: schema result ${JSON.stringify(validateSchema.errors)}`);
+    assert.equal(runtimeValid, schemaValid, `${fixture.id}: JSON Schema/runtime parity`);
+  }
+
   // Reviewed negative frames are valid; partially described positive labels
   // are not. `oneOf` in the JSON Schema enforces the same distinctions.
   assert.equal(validateDrumDatasetAnnotation(createDrumDatasetAnnotation({ frameId: 'negative', labels: [] })).ok, true);
   const missingStickHand = validateDrumDatasetAnnotation({
     ...annotation,
-    labels: [{ kind: 'stick', id: 'stick', points: [point(0.2, 0.3)] }],
+    labels: [{ kind: 'stick', id: 'stick', representation: 'keypoint-only', points: [point(0.2, 0.3)] }],
   });
   assert.equal(missingStickHand.ok, false);
   assert.ok(missingStickHand.errors.some((error) => error.includes('.hand')));
@@ -2306,7 +2339,7 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.ok(missingHitTime.errors.some((error) => error.includes('timeMs')));
   const mixedKindFields = validateDrumDatasetAnnotation({
     ...annotation,
-    labels: [{ kind: 'stick', id: 'stick', points: [point(0.2, 0.3)], hand: 'Right', timeMs: 10 }],
+    labels: [{ kind: 'stick', id: 'stick', representation: 'keypoint-only', points: [point(0.2, 0.3)], hand: 'Right', timeMs: 10 }],
   });
   assert.equal(mixedKindFields.ok, false);
   assert.ok(mixedKindFields.errors.some((error) => error.includes('not allowed')));
@@ -2327,11 +2360,23 @@ assert.equal(ARKIT_52.length, NUM_CHANNELS);
   assert.equal(bridged.labels.length, 3);
   assert.throws(
     () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, consent: { ...trackerSample.consent, rawMedia: true } }, labels),
-    /rawMedia: false/,
+    /consent.rawMedia must be false/,
   );
   assert.throws(
     () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, consent: { ...trackerSample.consent, localOnly: false } }, labels),
-    /localOnly: true/,
+    /consent.localOnly must be true/,
+  );
+  assert.throws(
+    () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, quality: { imageData: 'raw pixels' } }, labels),
+    /raw media data/,
+  );
+  assert.throws(
+    () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, createdAt: 'not-a-timestamp' }, labels),
+    /canonical ISO-8601/,
+  );
+  assert.throws(
+    () => createDrumDatasetAnnotationFromTrackerSample({ ...trackerSample, seq: -1 }, labels),
+    /non-negative integer/,
   );
   assert.throws(() => createDrumDatasetAnnotationFromTrackerSample(trackerSample, null), /Explicit reviewed drum labels/);
 }

@@ -68,6 +68,12 @@ pnpm test
 
 - `tsx`は、スコアリングロジックが重複しないようにTypeScriptコアからローカル専用のドラムベンチマークCLIを直接実行します。そのロックファイル依存関係`esbuild`は、pnpm 11の`allowBuilds`マップを通じてインストールスクリプトを実行する唯一のパッケージです; その許可リストの変更にはサプライチェーンレビューが必要です。
 
+### JSON Schema テストvalidator
+
+- `ajv` `8.17.1` (MIT) は #122 のfixture群を公開済みdraft-07ドラムアノテーション
+  スキーマに通すためだけの開発用validatorです。`tests/run-tests.mjs` からのみimportされ、
+  ブラウザ/runtime chunkには含まれず、install scriptを実行せず、カメラや音声データを受け取りません。
+
 ### Inox2Dブラウザレンダラー
 
 - `third_party/inochi2d-wasm/Cargo.toml`は、公式のInox2D gitクレートを`df8413e6b0c525dbb880b4dca2bdf0a5d4b9aaba` (BSD-2-Clause)に固定します。

@@ -7,8 +7,11 @@
 // reviewed labeling step instead of guessing geometry from the tracker's coarse
 // `label` string.
 
+import { DATASET_RECORD_SCHEMA, validateDatasetRecord } from './dataset-contract.js';
+
 export const DRUM_DATASET_SCHEMA = 'minamo.drum-dataset.v1';
-export const TRACKER_SAMPLE_SCHEMA = 'minamo.dataset.tracker-sample.v1';
+export const TRACKER_SAMPLE_SCHEMA = DATASET_RECORD_SCHEMA;
+export const DRUM_STICK_BOX_PADDING = 0.01;
 
 export const DRUM_DATASET_ZONE_TYPES = Object.freeze([
   'snare',
@@ -32,7 +35,7 @@ const ROOT_KEYS = new Set(['schema', 'frameId', 'labels', 'consent']);
 const CONSENT_KEYS = new Set(['localOnly', 'license']);
 const POINT_KEYS = new Set(['x', 'y', 'z']);
 const LABEL_KEYS = Object.freeze({
-  stick: new Set(['kind', 'id', 'points', 'hand']),
+  stick: new Set(['kind', 'id', 'points', 'hand', 'representation']),
   drumZone: new Set(['kind', 'id', 'points', 'zoneType']),
   hit: new Set(['kind', 'id', 'points', 'zoneType', 'hand', 'timeMs']),
 });
@@ -134,12 +137,11 @@ export function createDrumDatasetAnnotation(input, positionalLabels, positionalL
  * @param {{frameId?: string}} [options]
  */
 export function createDrumDatasetAnnotationFromTrackerSample(sample, labels, options = {}) {
-  if (!isRecord(sample) || sample.schema !== TRACKER_SAMPLE_SCHEMA) {
-    throw new Error(`Tracker sample must use ${TRACKER_SAMPLE_SCHEMA}.`);
-  }
-  if (!isRecord(sample.consent) || sample.consent.rawMedia !== false || sample.consent.localOnly !== true) {
-    throw new Error('Tracker sample must explicitly declare consent.rawMedia: false and consent.localOnly: true.');
-  }
+  const sampleValidation = validateDatasetRecord(sample);
+  if (!sampleValidation.ok) throw new Error(`Tracker sample rejected: ${sampleValidation.errors.join('; ')}`);
+  // `validateDatasetRecord` guarantees this at runtime; repeat the guard so
+  // checkJs can narrow the external `unknown` before provenance is copied.
+  if (!isRecord(sample)) throw new Error('Tracker sample rejected: record must be an object');
   if (!Array.isArray(labels)) throw new Error('Explicit reviewed drum labels are required.');
   const frameId = options.frameId || trackerSampleFrameId(sample);
   return createDrumDatasetAnnotation({
@@ -148,6 +150,32 @@ export function createDrumDatasetAnnotationFromTrackerSample(sample, labels, opt
     license: nonEmptyString(sample.license) ? sample.license : '',
     localOnly: true,
   });
+}
+
+/**
+ * Derive the deterministic YOLO box for a reviewed two-point stick label.
+ * One-point sticks are keypoint-only and intentionally return null.
+ *
+ * The two-point box is the tip/tail extent expanded by 0.01 normalized frame
+ * units on every side and clamped to the source frame.
+ *
+ * @param {unknown} label
+ * @returns {{xMin: number, yMin: number, xMax: number, yMax: number} | null}
+ */
+export function deriveStickLabelBox(label) {
+  const errors = [];
+  validateLabel(label, 0, errors);
+  if (errors.length || !isRecord(label) || label.kind !== 'stick') {
+    throw new Error(`Stick label rejected: ${errors.join('; ') || 'label must have kind stick'}`);
+  }
+  if (label.representation === 'keypoint-only') return null;
+  const [tip, tail] = label.points;
+  return {
+    xMin: clamp01(Math.min(tip.x, tail.x) - DRUM_STICK_BOX_PADDING),
+    yMin: clamp01(Math.min(tip.y, tail.y) - DRUM_STICK_BOX_PADDING),
+    xMax: clamp01(Math.max(tip.x, tail.x) + DRUM_STICK_BOX_PADDING),
+    yMax: clamp01(Math.max(tip.y, tail.y) + DRUM_STICK_BOX_PADDING),
+  };
 }
 
 function validateLabel(label, index, errors) {
@@ -166,6 +194,13 @@ function validateLabel(label, index, errors) {
 
   if (label.kind === 'stick') {
     if (!HANDS.has(label.hand)) errors.push(`${path}.hand must be Left or Right`);
+    if (label.representation === 'keypoint-only') {
+      if (Array.isArray(label.points) && label.points.length !== 1) errors.push(`${path}.points must contain exactly 1 point for keypoint-only`);
+    } else if (label.representation === 'tip-tail-padded') {
+      if (Array.isArray(label.points) && label.points.length !== 2) errors.push(`${path}.points must contain exactly 2 points for tip-tail-padded`);
+    } else {
+      errors.push(`${path}.representation must be keypoint-only or tip-tail-padded`);
+    }
     return;
   }
   if (!ZONE_TYPES.has(label.zoneType)) errors.push(`${path}.zoneType is not a trainable drum zone type`);
@@ -197,9 +232,11 @@ function validatePoints(points, kind, path, errors) {
 }
 
 function trackerSampleFrameId(sample) {
-  const createdAt = nonEmptyString(sample.createdAt) ? sample.createdAt : 'unknown-time';
-  const seq = Number.isInteger(sample.seq) && sample.seq >= 0 ? sample.seq : 'unknown-seq';
-  return `${createdAt}#${seq}`;
+  return `${sample.createdAt}#${sample.seq}`;
+}
+
+function clamp01(value) {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
 function rejectUnexpectedKeys(value, allowed, path, errors) {

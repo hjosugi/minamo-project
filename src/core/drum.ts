@@ -13,7 +13,11 @@
 // downstroke" and "is the stick moving fast enough to count as a hit".
 import { clamp, distance, finiteVec3, length } from './math';
 import type { DrumHitEvent, Handedness, HandState, Vec3 } from './types';
-export { createDrumDatasetAnnotation } from '../../shared/drum-dataset.js';
+export {
+  DRUM_STICK_BOX_PADDING,
+  createDrumDatasetAnnotation,
+  deriveStickLabelBox,
+} from '../../shared/drum-dataset.js';
 export type {
   DrumDatasetAnnotation,
   DrumDatasetLabel,

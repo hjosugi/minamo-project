@@ -484,6 +484,7 @@ describe('audio and drum helpers', () => {
     expect(createDrumDatasetAnnotation('frame-1', [{
       kind: 'stick',
       id: 'stick-r',
+      representation: 'keypoint-only',
       points: [{ x: 0, y: 0, z: 0 }],
       hand: 'Right',
     }]).schema).toBe('minamo.drum-dataset.v1');

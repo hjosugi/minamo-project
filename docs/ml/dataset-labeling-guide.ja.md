@@ -52,6 +52,7 @@
 `createDrumDatasetAnnotationFromTrackerSample(sample, labels)` を使うと、フレーム識別子、
 ライセンス、ローカル限定同意を保持した、検証済み `minamo.drum-dataset.v1`
 アノテーションを生成できます。この橋渡しは粗いトラッカーラベルから幾何情報を推測しません。
+`createdAt` / `seq` identityが不正なサンプルや、raw mediaを含むフィールドがあるサンプルは拒否します。
 [drum-dataset-schema.ja.md](drum-dataset-schema.ja.md) も参照してください。
 
 ## ベースライン評価

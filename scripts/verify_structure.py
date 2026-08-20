@@ -67,6 +67,7 @@ REQUIRED = [
     'shared/compression-checklist.js',
     'shared/motion-quant.js',
     'shared/drum-overlay.js',
+    'shared/dataset-contract.js',
     'shared/drum-dataset.js',
     'shared/drum-dataset.d.ts',
     'shared/situation-presets.js',
@@ -104,6 +105,7 @@ REQUIRED = [
     'docs/product/drum-obs-overlay.md',
     'docs/ml/drum-dataset-schema.md',
     'docs/product/drum-dataset.schema.json',
+    'tests/fixtures/drum-dataset-validation.json',
     'tests/fixtures/drum-benchmark-clips.json',
     'tests/fixtures/drum-benchmark-detector.mjs',
     'tests/fixtures/drum-benchmark-runner.manifest.json',
@@ -2196,6 +2198,9 @@ def validate_drum_docs() -> None:
         'validateDrumDatasetAnnotation',
         'parseDrumDatasetAnnotation',
         'createDrumDatasetAnnotationFromTrackerSample',
+        'deriveStickLabelBox',
+        'DRUM_STICK_BOX_PADDING = 0.01',
+        'validateDatasetRecord(sample)',
         'Explicit reviewed drum labels are required.',
     ]:
         if needle not in drum_dataset_runtime:
@@ -2213,7 +2218,7 @@ def validate_drum_docs() -> None:
         if actual_refs != expected_refs:
             add_error('docs/product/drum-dataset.schema.json', 'labels must be a oneOf over stick, drumZone, and hit definitions')
         required_by_kind = {
-            'stickLabel': {'kind', 'id', 'points', 'hand'},
+            'stickLabel': {'kind', 'id', 'points', 'hand', 'representation'},
             'drumZoneLabel': {'kind', 'id', 'points', 'zoneType'},
             'hitLabel': {'kind', 'id', 'points', 'zoneType', 'timeMs'},
         }
@@ -2231,6 +2236,20 @@ def validate_drum_docs() -> None:
             minimum, maximum = point_counts[name]
             if points.get('minItems') != minimum or points.get('maxItems') != maximum:
                 add_error('docs/product/drum-dataset.schema.json', f'{name} point count does not match the runtime contract')
+            identifier = definitions[name]['properties']['id']
+            if identifier.get('pattern') != r'\S':
+                add_error('docs/product/drum-dataset.schema.json', f'{name} id must reject whitespace-only strings')
+        frame_id = dataset_schema['properties']['frameId']
+        consent_license = definitions['consent']['properties']['license']
+        if frame_id.get('pattern') != r'\S' or consent_license.get('pattern') != r'\S':
+            add_error('docs/product/drum-dataset.schema.json', 'frameId and consent.license must reject whitespace-only strings')
+        stick_conditions = definitions['stickLabel'].get('allOf', [])
+        representations = {
+            condition.get('if', {}).get('properties', {}).get('representation', {}).get('const')
+            for condition in stick_conditions
+        }
+        if representations != {'keypoint-only', 'tip-tail-padded'}:
+            add_error('docs/product/drum-dataset.schema.json', 'stick representation must distinguish keypoint-only from tip-tail-padded')
         point = definitions['point']
         if point.get('additionalProperties') is not False or set(point.get('required', [])) != {'x', 'y', 'z'}:
             add_error('docs/product/drum-dataset.schema.json', 'points must require only x, y, and z')

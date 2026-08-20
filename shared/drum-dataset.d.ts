@@ -26,7 +26,15 @@ export type DrumDatasetLabel =
   | {
       kind: 'stick';
       id: string;
-      points: [DrumDatasetPoint, DrumDatasetPoint?];
+      representation: 'keypoint-only';
+      points: [DrumDatasetPoint];
+      hand: 'Left' | 'Right';
+    }
+  | {
+      kind: 'stick';
+      id: string;
+      representation: 'tip-tail-padded';
+      points: [DrumDatasetPoint, DrumDatasetPoint];
       hand: 'Left' | 'Right';
     }
   | {
@@ -55,6 +63,7 @@ export interface DrumDatasetAnnotation {
 }
 
 export const DRUM_DATASET_ZONE_TYPES: readonly DrumDatasetZoneType[];
+export const DRUM_STICK_BOX_PADDING: 0.01;
 
 export function validateDrumDatasetAnnotation(value: unknown): { ok: boolean; errors: string[] };
 export function parseDrumDatasetAnnotation(input: string | unknown): DrumDatasetAnnotation;
@@ -76,3 +85,10 @@ export function createDrumDatasetAnnotationFromTrackerSample(
   labels: DrumDatasetLabel[],
   options?: { frameId?: string },
 ): DrumDatasetAnnotation;
+
+export function deriveStickLabelBox(label: DrumDatasetLabel): {
+  xMin: number;
+  yMin: number;
+  xMax: number;
+  yMax: number;
+} | null;

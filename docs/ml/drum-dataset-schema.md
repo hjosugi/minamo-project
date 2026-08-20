@@ -20,9 +20,16 @@ are rejected rather than silently ignored.
 
 | `kind` | Required fields | Point count |
 |---|---|---:|
-| `stick` | `id`, `points`, `hand` | one tip plus an optional tail (1–2) |
+| `stick` | `id`, `points`, `hand`, `representation` | exactly 1 or 2, as selected by `representation` |
 | `drumZone` | `id`, `points`, `zoneType` | outline polygon (at least 3) |
 | `hit` | `id`, `points`, `zoneType`, `timeMs`; optional `hand` | one contact point |
+
+For a stick, `representation: "keypoint-only"` requires exactly one tip point.
+It is usable as a pose keypoint but **must not be exported as a zero-area YOLO
+box**. `representation: "tip-tail-padded"` requires exactly two points. Its box
+is the tip/tail extent expanded by `0.01` normalized frame units on every side,
+then clamped to `[0, 1]`. `deriveStickLabelBox(label)` implements that rule and
+returns `null` for a keypoint-only label.
 
 `hand` is optional on a hit because kick and other foot-triggered events do not
 have a left/right hand. It is required on a stick label. `timeMs` is relative
@@ -48,6 +55,8 @@ consumer for browser and Node tooling:
 - `createDrumDatasetAnnotationFromTrackerSample(sample, labels)` carries a
   tracker sample's frame identity, license, and local-only consent into a
   reviewed annotation.
+- `deriveStickLabelBox(label)` applies the fixed two-point padding rule and
+  refuses to manufacture a box from one point.
 
 [`src/core/drum.ts`](../../src/core/drum.ts) re-exports the typed positional
 `createDrumDatasetAnnotation(frameId, labels, license)` API from that same
@@ -63,15 +72,19 @@ each geometric object, so it is not automatically valid YOLO ground truth.
 
 After a human or labeling tool supplies explicit geometric labels, call
 `createDrumDatasetAnnotationFromTrackerSample`. The bridge never guesses labels
-from the coarse selector. This makes the two schemas complementary instead of
-two contradictory export formats.
+from the coarse selector. Before copying provenance it runs the same
+`validateDatasetRecord` contract as the tracker producer, including raw-media
+scanning and canonical `createdAt` plus non-negative integer `seq` identity
+checks. It therefore cannot emit collision-prone `unknown-time`/`unknown-seq`
+frame ids. This makes the two schemas complementary instead of contradictory.
 
 ## YOLO export mapping
 
 - Class ids: `stick-tip`, `stick`, and one class per trainable `zoneType`.
-- Bounding boxes come from the label points: a tight box around a tip/tail for
-  sticks and the polygon bounds for a drum zone.
-- Optional pose keypoints are the stick tip and tail.
+- A `keypoint-only` stick contributes a tip keypoint only; it has no object box.
+- A `tip-tail-padded` stick produces a box with the fixed `0.01` padding rule.
+- Drum-zone boxes use the polygon bounds.
+- Optional pose keypoints are the stick tip and, when present, tail.
 - `hit` labels supply timing/zone evaluation targets; they are not object boxes.
 
 ## Privacy and licensing
@@ -85,8 +98,10 @@ two contradictory export formats.
 
 ## Testing
 
-- `pnpm test` covers valid labels, reviewed negative frames, every per-kind
-  rejection, unexpected fields, malformed JSON, and the tracker-sample bridge.
+- `pnpm test` runs one fixture corpus through both Ajv's draft-07 validator and
+  the runtime validator, covering whitespace, representation/cardinality,
+  reviewed negatives, unexpected fields, malformed JSON, raw-media rejection,
+  and collision-safe tracker identity.
 - `pnpm typecheck` pins the discriminated TypeScript label union.
 - `pnpm verify` checks the JSON Schema's `oneOf` definitions, required fields,
   coordinate bounds, and runtime exports.

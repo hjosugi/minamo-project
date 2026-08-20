@@ -85,6 +85,13 @@ pnpm test
   `allowBuilds` map in `pnpm-workspace.yaml`; changes to that allow-list require
   supply-chain review.
 
+### JSON Schema test validator
+
+- `ajv` `8.17.1` (MIT) is a development-only validator used to run the #122
+  fixture corpus against the published draft-07 drum annotation schema. It is
+  imported only by `tests/run-tests.mjs`, is absent from browser/runtime chunks,
+  executes no install script, and receives no camera or audio data.
+
 ### Inox2D browser renderer
 
 - `third_party/inochi2d-wasm/Cargo.toml` pins both official Inox2D git crates

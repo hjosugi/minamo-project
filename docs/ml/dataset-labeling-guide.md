@@ -52,7 +52,9 @@ explicit labeling, use
 `createDrumDatasetAnnotationFromTrackerSample(sample, labels)` from
 `shared/drum-dataset.js` to produce a validated `minamo.drum-dataset.v1`
 annotation while preserving frame identity, license, and local-only consent.
-The bridge never infers geometry from the coarse tracker label. See
+The bridge never infers geometry from the coarse tracker label and rejects a
+sample with malformed `createdAt`/`seq` identity or any raw-media-bearing field.
+See
 [drum-dataset-schema.md](drum-dataset-schema.md).
 
 ## Baseline evaluation
