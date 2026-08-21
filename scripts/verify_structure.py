@@ -425,6 +425,7 @@ def validate_dependency_guardrails() -> None:
     package = json.loads(read('package.json'))
     ci = read('.github/workflows/ci.yml')
     release_workflow = read('.github/workflows/release.yml')
+    mediapipe_canary_workflow = read('.github/workflows/mediapipe-canary.yml')
     release_smoke = read('scripts/release-smoke.mjs')
     mediapipe_canary = read('scripts/mediapipe-canary-smoke.mjs')
     mediapipe_privacy_guard = read('scripts/mediapipe-privacy-guard.mjs')
@@ -462,6 +463,11 @@ def validate_dependency_guardrails() -> None:
         add_error('package.json', 'MediaPipe package/API/privacy check script must remain wired')
     if 'pnpm check:mediapipe' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must inspect the installed MediaPipe bundle on dependency PRs')
+    if mediapipe_canary_workflow.count("if: github.event_name != 'push'") != 2:
+        add_error(
+            '.github/workflows/mediapipe-canary.yml',
+            'push checks must validate only the pinned package; nightly install and smoke belong to schedule/manual runs',
+        )
     if release_workflow.count('Resolve immutable release tag') != 1:
         add_error('.github/workflows/release.yml', 'release tag must be resolved exactly once')
     release_preflight = re.search(

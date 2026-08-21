@@ -38,8 +38,10 @@ jobs:
       - name: Canary smoke on the pinned version (sanity)
         run: node scripts/mediapipe-canary-smoke.mjs
       - name: Install the tasks-vision nightly release
+        if: github.event_name != 'push'
         # Pre-release builds ship under the `nightly` dist-tag. -w targets the
         # pnpm workspace root explicitly.
         run: pnpm add -w "@mediapipe/tasks-vision@nightly"
       - name: Canary smoke on the nightly release
+        if: github.event_name != 'push'
         run: node scripts/mediapipe-canary-smoke.mjs
