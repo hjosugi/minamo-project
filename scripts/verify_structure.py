@@ -1900,7 +1900,7 @@ def validate_desktop_contracts() -> None:
     for needle in [
         'tauri-plugin-dialog = "2.7.1"',
         'tauri-plugin-process = "2.3.1"',
-        'tauri-plugin-updater = "2.10.1"',
+        'tauri-plugin-updater = { version = "2.10.1", default-features = false, features = ["rustls-tls"] }',
         'MAX_NATIVE_AVATAR_BYTES',
         'tauri::ipc::Response',
     ]:
