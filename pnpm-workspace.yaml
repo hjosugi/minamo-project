@@ -4,3 +4,10 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+# Fixed versions for security advisories in the dependency tree.
+overrides:
+  "@vitest/mocker@>=4.0.0 <4.1.12": "4.1.12"
+  "brace-expansion@>=5.0.0 <5.0.12": "5.0.12"
+  "fast-uri@>=3.0.0 <3.1.9": "3.1.9"
+  "source-map-js@>=1.0.0 <1.2.2": "1.2.2"
