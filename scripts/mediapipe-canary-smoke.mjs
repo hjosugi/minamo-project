@@ -11,22 +11,55 @@
 //   4. the browser bundles contain no known ODML telemetry endpoint/sender.
 //
 // A change to any of these fails the scheduled canary early, pointing at
-// docs/mediapipe-1.0-migration.md. Run against an installed
-// @mediapipe/tasks-vision (the canary CI job installs the @nightly dist-tag).
+// docs/mediapipe-1.0-migration.md. By default it runs against the installed
+// @mediapipe/tasks-vision, exactly as the PR and release gates (`pnpm
+// check:mediapipe`) do, and exits 1 on any failed check.
+//
+// Optional flags, used only by the scheduled canary (.github/workflows/
+// mediapipe-canary.yml); the default behaviour above is unchanged without them:
+//   --package-dir <dir>  scan an unpacked package (e.g. from `npm pack`)
+//                        instead of the installed one.
+//   --json               print one machine-readable report on stdout instead of
+//                        the human lines. Failed checks are data in that mode,
+//                        so it exits 0 once a scan completed; it exits non-zero
+//                        only when the scan itself could not run. The report is
+//                        judged by scripts/mediapipe-canary-compare.mjs.
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { findForbiddenMediaPipeTelemetry } from './mediapipe-privacy-guard.mjs';
 
 const require = createRequire(import.meta.url);
 
+const args = process.argv.slice(2);
+const jsonMode = args.includes('--json');
+const packageDirFlag = args.indexOf('--package-dir');
+if (packageDirFlag !== -1 && !args[packageDirFlag + 1]) {
+  console.error('--package-dir needs a directory argument');
+  process.exit(2);
+}
+
 // exports blocks ./package.json, so locate the package via its main entry.
-const pkgDir = dirname(require.resolve('@mediapipe/tasks-vision'));
+const pkgDir =
+  packageDirFlag !== -1
+    ? resolve(args[packageDirFlag + 1])
+    : dirname(require.resolve('@mediapipe/tasks-vision'));
 const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
 
 const problems = [];
 const ok = [];
-const check = (condition, label) => (condition ? ok : problems).push(label);
+// Stable machine-readable ids of the failed checks (--json). They default to
+// the human label; a check that can fail for several independent reasons (the
+// privacy scan) passes one id per reason so each can be baselined on its own.
+const failureIds = [];
+const check = (condition, label, ids = [label]) => {
+  if (condition) {
+    ok.push(label);
+  } else {
+    problems.push(label);
+    failureIds.push(...ids);
+  }
+};
 
 // 1) ESM entrypoint the tracker imports.
 const moduleEntry = pkg.module || pkg.exports?.['.']?.import || pkg.exports?.['.']?.default;
@@ -89,7 +122,15 @@ const telemetrySummary = telemetryFindings
 check(
   telemetryFindings.length === 0,
   `privacy: no ODML telemetry endpoint/sender${telemetrySummary ? ` (${telemetrySummary})` : ''}`,
+  telemetryFindings.map(({ file, marker }) => `privacy: ${marker} in ${file}`),
 );
+
+if (jsonMode) {
+  console.log(
+    JSON.stringify({ package: '@mediapipe/tasks-vision', version: pkg.version, ok, failures: failureIds }, null, 2),
+  );
+  process.exit(0);
+}
 
 console.log(`@mediapipe/tasks-vision@${pkg.version} canary smoke:`);
 for (const line of ok) console.log(`  ok    ${line}`);

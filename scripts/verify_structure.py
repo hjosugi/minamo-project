@@ -463,11 +463,41 @@ def validate_dependency_guardrails() -> None:
         add_error('package.json', 'MediaPipe package/API/privacy check script must remain wired')
     if 'pnpm check:mediapipe' not in ci:
         add_error('.github/workflows/ci.yml', 'CI must inspect the installed MediaPipe bundle on dependency PRs')
-    if mediapipe_canary_workflow.count("if: github.event_name != 'push'") != 2:
+    # Push runs validate only the pinned package (`pinned` job); fetching and
+    # scanning the published nightly/latest releases (`canary` job) belongs to
+    # schedule and manual runs.
+    canary_pinned = re.search(
+        r'^  pinned:\n(?P<body>.*?)(?=^  canary:\n)',
+        mediapipe_canary_workflow,
+        re.MULTILINE | re.DOTALL,
+    )
+    canary_scan = re.search(r'^  canary:\n(?P<body>.*)', mediapipe_canary_workflow, re.MULTILINE | re.DOTALL)
+    if not canary_pinned or not canary_scan:
         add_error(
             '.github/workflows/mediapipe-canary.yml',
-            'push checks must validate only the pinned package; nightly install and smoke belong to schedule/manual runs',
+            'canary workflow must keep a pinned job and a canary job',
         )
+    else:
+        if "github.event_name != 'push'" in canary_pinned.group('body'):
+            add_error(
+                '.github/workflows/mediapipe-canary.yml',
+                'the pinned-package sanity job must run on push as well',
+            )
+        if "    if: github.event_name != 'push'" not in canary_scan.group('body'):
+            add_error(
+                '.github/workflows/mediapipe-canary.yml',
+                'push checks must validate only the pinned package; nightly/latest scans belong to schedule/manual runs',
+            )
+        if 'continue-on-error' in mediapipe_canary_workflow:
+            add_error(
+                '.github/workflows/mediapipe-canary.yml',
+                'the canary must not hide failures with continue-on-error; compare against the baseline instead',
+            )
+        if 'scripts/mediapipe-canary-compare.mjs' not in canary_scan.group('body'):
+            add_error(
+                '.github/workflows/mediapipe-canary.yml',
+                'the canary job must compare the scan with scripts/mediapipe-canary-baseline.json',
+            )
     if release_workflow.count('Resolve immutable release tag') != 1:
         add_error('.github/workflows/release.yml', 'release tag must be resolved exactly once')
     release_preflight = re.search(
