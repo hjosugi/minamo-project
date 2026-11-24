@@ -56,8 +56,20 @@ not enough to approve PR #358.
 - Normal pull-request CI and `scripts/release-smoke.mjs` run that command.
   `scripts/verify_structure.py` also verifies the command remains wired and
   that the blocked markers remain present in the guard.
-- The weekly nightly canary uses the same guard, so privacy regressions are
-  reported before a version bump is proposed.
+- The weekly canary (`.github/workflows/mediapipe-canary.yml`) scans the npm
+  `nightly` and stable `latest` releases with the same guard and compares the
+  result with `scripts/mediapipe-canary-baseline.json`. The baseline lists the
+  known findings (the four telemetry markers in each of the three browser
+  bundles, and the missing no-SIMD WASM files) as accepted *while Minamo stays
+  pinned to 0.10.35*; that is a policy statement approved by the owner on
+  2026-11-24, not an exemption for the shipped app. The canary goes red only
+  when a failing check appears that is not in the baseline, when a baselined
+  finding disappears (upstream changed something: revisit this decision and the
+  checklist below, then update the baseline on purpose), or when fetching or
+  scanning fails. Otherwise it stays green, and the job summary always shows the
+  resolved version and every finding. Its comparison logic is covered by
+  `tests/mediapipe-canary-compare.test.mjs`. The PR and release gate above does
+  not use the baseline and stays zero-tolerance.
 
 Do not delete, rename, or weaken a privacy marker to make a dependency update
 green. A change to Minamo's telemetry policy requires its own product/privacy

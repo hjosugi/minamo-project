@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "policy": "Findings accepted WHILE MINAMO STAYS PINNED to @mediapipe/tasks-vision 0.10.35. This is a policy statement approved by the repository owner, not an exemption for the shipped app: the pinned version is still guarded with zero tolerance by `pnpm check:mediapipe` (PR CI and release.yml), and no marker is weakened. It only tells the advisory scheduled canary which known failures of upstream releases are expected, so that a new failure, or a known one disappearing, stands out. Edit it only with the owner's approval, like any privacy-policy change.",
+  "pinnedVersion": "0.10.35",
+  "decisions": {
+    "stay-pinned-2026-11-24": {
+      "date": "2026-11-24",
+      "summary": "Owner decision: stay pinned to 0.10.35 and report the telemetry sender and the missing no-SIMD files upstream.",
+      "doc": "docs/mediapipe-1.0-migration.md"
+    }
+  },
+  "targets": {
+    "nightly": {
+      "accepted": [
+        { "check": "wasm asset: wasm/vision_wasm_nosimd_internal.js", "reason": "no-SIMD wasm fallback dropped upstream in 1.2.2 and later; 0.10.35 still ships it", "decision": "stay-pinned-2026-11-24" },
+        { "check": "wasm asset: wasm/vision_wasm_nosimd_internal.wasm", "reason": "no-SIMD wasm fallback dropped upstream in 1.2.2 and later; 0.10.35 still ships it", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-metrics-endpoint in vision_bundle.cjs", "reason": "1.x bundle contains the ODML metrics endpoint (odml.pa.googleapis.com/v1/log)", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-api-key-header in vision_bundle.cjs", "reason": "1.x bundle sends the x-goog-api-key header to the ODML logger", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-logger-api-key-bridge in vision_bundle.cjs", "reason": "1.x bundle embeds the logger API-key bridge", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-network-logging-sender in vision_bundle.cjs", "reason": "1.x bundle contains the network logging sender", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-metrics-endpoint in vision_bundle.js", "reason": "1.x bundle contains the ODML metrics endpoint (odml.pa.googleapis.com/v1/log)", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-api-key-header in vision_bundle.js", "reason": "1.x bundle sends the x-goog-api-key header to the ODML logger", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-logger-api-key-bridge in vision_bundle.js", "reason": "1.x bundle embeds the logger API-key bridge", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-network-logging-sender in vision_bundle.js", "reason": "1.x bundle contains the network logging sender", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-metrics-endpoint in vision_bundle.mjs", "reason": "1.x bundle contains the ODML metrics endpoint (odml.pa.googleapis.com/v1/log)", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-api-key-header in vision_bundle.mjs", "reason": "1.x bundle sends the x-goog-api-key header to the ODML logger", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-logger-api-key-bridge in vision_bundle.mjs", "reason": "1.x bundle embeds the logger API-key bridge", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-network-logging-sender in vision_bundle.mjs", "reason": "1.x bundle contains the network logging sender", "decision": "stay-pinned-2026-11-24" }
+      ]
+    },
+    "latest": {
+      "accepted": [
+        { "check": "wasm asset: wasm/vision_wasm_nosimd_internal.js", "reason": "no-SIMD wasm fallback dropped upstream in 1.2.2 and later; 0.10.35 still ships it", "decision": "stay-pinned-2026-11-24" },
+        { "check": "wasm asset: wasm/vision_wasm_nosimd_internal.wasm", "reason": "no-SIMD wasm fallback dropped upstream in 1.2.2 and later; 0.10.35 still ships it", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-metrics-endpoint in vision_bundle.cjs", "reason": "1.x bundle contains the ODML metrics endpoint (odml.pa.googleapis.com/v1/log)", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-api-key-header in vision_bundle.cjs", "reason": "1.x bundle sends the x-goog-api-key header to the ODML logger", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-logger-api-key-bridge in vision_bundle.cjs", "reason": "1.x bundle embeds the logger API-key bridge", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-network-logging-sender in vision_bundle.cjs", "reason": "1.x bundle contains the network logging sender", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-metrics-endpoint in vision_bundle.js", "reason": "1.x bundle contains the ODML metrics endpoint (odml.pa.googleapis.com/v1/log)", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-api-key-header in vision_bundle.js", "reason": "1.x bundle sends the x-goog-api-key header to the ODML logger", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-logger-api-key-bridge in vision_bundle.js", "reason": "1.x bundle embeds the logger API-key bridge", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-network-logging-sender in vision_bundle.js", "reason": "1.x bundle contains the network logging sender", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-metrics-endpoint in vision_bundle.mjs", "reason": "1.x bundle contains the ODML metrics endpoint (odml.pa.googleapis.com/v1/log)", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: odml-api-key-header in vision_bundle.mjs", "reason": "1.x bundle sends the x-goog-api-key header to the ODML logger", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-logger-api-key-bridge in vision_bundle.mjs", "reason": "1.x bundle embeds the logger API-key bridge", "decision": "stay-pinned-2026-11-24" },
+        { "check": "privacy: mediapipe-network-logging-sender in vision_bundle.mjs", "reason": "1.x bundle contains the network logging sender", "decision": "stay-pinned-2026-11-24" }
+      ]
+    }
+  }
+}

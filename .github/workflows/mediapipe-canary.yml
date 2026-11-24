@@ -2,8 +2,19 @@ name: mediapipe-canary
 
 # Early-warning canary for upcoming @mediapipe/tasks-vision releases (#272,
 # PR #358). The tracker depends on both the Face / Hand / Pose API surface and a
-# telemetry-free local-only runtime. This scheduled job installs the nightly
-# release and checks both contracts without changing the exact production pin.
+# telemetry-free local-only runtime. This scheduled job scans the `nightly` and
+# stable `latest` releases and compares the result with the committed baseline
+# (scripts/mediapipe-canary-baseline.json) without changing the exact
+# production pin.
+#
+# The baseline records the findings that are accepted WHILE MINAMO STAYS PINNED
+# to 0.10.35 (owner decision, docs/mediapipe-1.0-migration.md). The job is red
+# only when a failing check appears that the baseline does not accept, when a
+# baselined finding disappears (upstream changed something: revisit the
+# decision), or when fetching or scanning the package fails. Otherwise it is
+# green and the step summary says the known findings persist. The full result is
+# always written to the step summary. The PR and release gates
+# (`pnpm check:mediapipe`) are not affected and remain zero-tolerance.
 
 on:
   schedule:
@@ -13,6 +24,8 @@ on:
   push:
     paths:
       - 'scripts/mediapipe-canary-smoke.mjs'
+      - 'scripts/mediapipe-canary-compare.mjs'
+      - 'scripts/mediapipe-canary-baseline.json'
       - 'scripts/mediapipe-privacy-guard.mjs'
       - '.github/workflows/mediapipe-canary.yml'
       - 'docs/mediapipe-1.0-migration.md'
@@ -22,7 +35,7 @@ permissions:
   contents: read
 
 jobs:
-  canary:
+  pinned:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -37,11 +50,32 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Canary smoke on the pinned version (sanity)
         run: node scripts/mediapipe-canary-smoke.mjs
-      - name: Install the tasks-vision nightly release
-        if: github.event_name != 'push'
-        # Pre-release builds ship under the `nightly` dist-tag. -w targets the
-        # pnpm workspace root explicitly.
-        run: pnpm add -w "@mediapipe/tasks-vision@nightly"
-      - name: Canary smoke on the nightly release
-        if: github.event_name != 'push'
-        run: node scripts/mediapipe-canary-smoke.mjs
+
+  canary:
+    # Push runs validate only the pinned package above; scanning the published
+    # releases belongs to schedule and manual runs.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [nightly, latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Fetch the ${{ matrix.target }} release without running its scripts
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/canary-pack" "$RUNNER_TEMP/canary-pkg"
+          cd "$RUNNER_TEMP/canary-pack"
+          tarball="$(npm pack --ignore-scripts --silent "@mediapipe/tasks-vision@${TARGET}")"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/canary-pkg" --strip-components=1
+      - name: Scan the ${{ matrix.target }} release
+        run: node scripts/mediapipe-canary-smoke.mjs --package-dir "$RUNNER_TEMP/canary-pkg" --json > "$RUNNER_TEMP/canary-report.json"
+      - name: Compare with the accepted baseline
+        env:
+          TARGET: ${{ matrix.target }}
+        run: node scripts/mediapipe-canary-compare.mjs --target "$TARGET" --report "$RUNNER_TEMP/canary-report.json"

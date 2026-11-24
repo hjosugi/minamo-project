@@ -50,8 +50,19 @@ build、type、unit test、従来のpackage／API canaryが通っても、PR #35
   検査した後、root browser bundleを既知のODML endpoint／sender markerで走査します。
 - 通常のpull-request CIと`scripts/release-smoke.mjs`がこのcommandを実行します。
   `scripts/verify_structure.py`はcommandの配線とblocked markerの維持も検査します。
-- 週次nightly canaryも同じguardを使うため、version bumpの前にprivacy regressionを
-  報告します。
+- 週次canary（`.github/workflows/mediapipe-canary.yml`）は、npmの`nightly`と
+  stableの`latest`を同じguardで走査し、結果を
+  `scripts/mediapipe-canary-baseline.json`と比較します。baselineには既知のfinding
+  （3つのbrowser bundleそれぞれに含まれる4つのtelemetry marker、およびno-SIMD
+  WASMファイルの欠落）を「Minamoが0.10.35に固定されている間は許容」として記録します。
+  これは2026-11-24にownerが承認したpolicy宣言であり、出荷アプリへの免除ではありません。
+  canaryがredになるのは、baselineにない失敗checkが現れたとき、baseline済みの
+  findingが消えたとき（upstreamが何かを変えたため、この判断と下記チェックリストを
+  見直したうえでbaselineを意図的に更新します）、またはpackageの取得／走査自体が
+  失敗したときだけです。それ以外はgreenのままで、job summaryには常に解決された
+  versionと全findingが表示されます。比較ロジックは
+  `tests/mediapipe-canary-compare.test.mjs`で検証します。上記のPR／release gateは
+  baselineを使わず、許容ゼロのままです。
 
 依存関係更新をgreenにするためにprivacy markerを削除、改名、弱化してはいけません。
 Minamoのtelemetry policy変更には、別のproduct/privacy判断とuser-consent設計が必要です。
