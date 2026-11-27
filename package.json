@@ -38,7 +38,7 @@
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-process": "2.4.0",
     "@tauri-apps/plugin-updater": "2.14.1",
-    "ag-psd": "^31.0.2",
+    "ag-psd": "^34.2.3",
     "qrcode": "1.5.4",
     "three": "^0.187.0"
   },
