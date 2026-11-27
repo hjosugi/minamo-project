@@ -30,8 +30,8 @@ importers:
         specifier: 2.14.1
         version: 2.14.1
       ag-psd:
-        specifier: ^31.0.2
-        version: 31.0.2
+        specifier: ^34.2.3
+        version: 34.2.3
       qrcode:
         specifier: 1.5.4
         version: 1.5.4
@@ -638,8 +638,8 @@ packages:
   '@vitest/spy@5.1.1':
     resolution: {integrity: sha512-6K8C6alQG1/Yc8/ZI22iJS7JEsxPdVzqtqDq+/xM4Z0mGVykemMVjLhqMy/q6/IHYG3kKD8hKSwRen/ZdyI9vQ==}
 
-  ag-psd@31.0.2:
-    resolution: {integrity: sha512-5s5PvqbomPIIJ9YjL6robz55rT4RYPiQkww4brisyZEb5jzlHB1EKh47IJg7gIFj0RUrD0cMgdntM907qaZjXA==}
+  ag-psd@34.2.3:
+    resolution: {integrity: sha512-jSkiiHatGEk/jyc1sTCOlH7kynnjQqmHiA9xjfD1Gf7nnLkKH/Sl3q/qnELOaxRV7enyDRBty3WO26gUOkzYpQ==}
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
@@ -1574,7 +1574,7 @@ snapshots:
 
   '@vitest/spy@5.1.1': {}
 
-  ag-psd@31.0.2:
+  ag-psd@34.2.3:
     dependencies:
       base64-js: 1.5.1
       pako: 2.1.0
